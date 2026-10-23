@@ -90,12 +90,38 @@ Endpoints utiles :
 
 ```bash
 pnpm test:unit
-# Policy Guard + transitions + web passif + exports PDF/CSV/JSON + SignatureProvider mock + BullMQ (si Redis up)
+# Policy Guard + transitions + web passif + exports + SignatureProvider mock + audit chain + BullMQ (si Redis)
 
 pnpm --filter @atlas/api run test:e2e
 pnpm smoke
 # Postgres + Redis requis ; exit 77 si infra absente ; 0 = OK
 ```
+
+### Suite d’acceptation (AC plan)
+
+Mappe les critères `AC-01`…`AC-12` de `docs/plan-realisation.md` (Project Atlas) :
+
+```bash
+# Après migrate + seed (Postgres recommandé pour smoke isolation + audit DB)
+pnpm db:migrate && pnpm db:seed
+pnpm test:acceptance
+```
+
+Couverture automatisée :
+
+| AC | Ce que la suite vérifie |
+|----|-------------------------|
+| AC-02 / 03 / 04 | Sans owner / seule approbation A / seul abonnement → `REJECT` |
+| AC-05 | Policy Guard déterministe (aucun LLM) |
+| AC-06 | Expiration, révocation token, scope mismatch / révoqué |
+| AC-07 | `verify_chain` OK + détection d’une UPDATE simulée du journal |
+| AC-08 | Exports JSON/CSV/PDF marqués FICTIF |
+| AC-09 | RBAC : support/billing ne peuvent pas approuver ; 5 rôles |
+| AC-10 | Mission réelle sans route → `BLOCKED` ; démo → `A_SKIPPED_DEMO` |
+| AC-01 / 11 / 12 | Transitions parcours, module hors jeton, marqueurs démo |
+| + | Hors périmètre, cancel, rate limit, isolation tenants (si DB) |
+
+Admin : `GET /v1/admin/audit/verify` (rôles admin/ops).
 
 ## Parcours démo synthétique
 
@@ -103,7 +129,7 @@ pnpm smoke
 2. Autorisation propriétaire (SignatureProvider **mock**) → `A_SKIPPED_DEMO`.
 3. Policy Guard `ALLOW` → BullMQ → preuves DNS/HTTP sur `example.com` (scope) → `REPORT_AVAILABLE`.
 4. Télécharger JSON/CSV/PDF (marqués synthétiques).
-5. Admin : file d’approbation ; import stub hiérarchie `isStub`.
+5. Admin (`admin@a.atlas.local`) : **Importer stub hiérarchie** pour un tenant → débloque `NO_APPROVAL_ROUTE` en démo (`isStub`) ; `approver@…` traite la file.
 
 Mission **réelle** sans policy de routage → `BLOCKED` / `NO_APPROVAL_ROUTE`.
 
