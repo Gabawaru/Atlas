@@ -75,11 +75,6 @@ class OwnerAuthDto {
   signerLabel!: string;
 }
 
-class ChatDto {
-  @IsString()
-  message!: string;
-}
-
 @Controller()
 @UseGuards(AuthGuard)
 export class MissionsController {
@@ -198,13 +193,5 @@ export class MissionsController {
     }
   }
 
-  @Post("conversation")
-  chat(@Body() body: ChatDto) {
-    return this.missions.guidedConversation(body.message);
-  }
-
-  @Get("ux-needs")
-  uxNeeds() {
-    return this.missions.guidedConversation("").suggestions;
-  }
+  // conversation + ux-needs → AssistantModule (propose, n'exécute jamais)
 }

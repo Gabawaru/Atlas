@@ -44,6 +44,7 @@ pnpm demo:smoke
 | Admin SAV | `GET/POST /v1/admin/tickets`, `PATCH …/tickets/:id/status` — support≠approver |
 | Remédiation | `GET /v1/findings`, `PATCH /v1/findings/:id/remediation` |
 | Vuln feeds | `GET /v1/vuln/feeds`, `GET /v1/software-components`, `POST /v1/vuln/match` — voir `docs/referentiels-vulnerabilites.md` |
+| Assistant | `POST /v1/conversation`, `GET /v1/assistant/usage` — mock/API, plafonds, non-bypass — `docs/assistant-conversationnel.md` |
 | RLS | Migration `*_rls_tenant` ; `PrismaService.asTenant` / bypass |
 | BullMQ | Retry 3×, DLQ `atlas-control-passive-dlq`, kill → failed |
 

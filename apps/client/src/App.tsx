@@ -212,6 +212,10 @@ export function App() {
       res.recommendedConnectors?.length
         ? `Connecteurs suggérés : ${res.recommendedConnectors.join(", ")}`
         : null,
+      res.executed === false
+        ? "Exécution : non (assistant ≠ Policy Guard)"
+        : null,
+      res.llm ? `Provider LLM : ${res.llm}` : null,
       `(${res.disclaimer})`,
     ].filter(Boolean);
     setChatReply(lines.join("\n\n"));

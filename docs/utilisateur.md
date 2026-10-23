@@ -13,7 +13,7 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 ## Ce que vous pouvez faire
 
 1. **Connexion** locale (pas d’OIDC réel).
-2. **Conversation guidée** (LLM **mock**) sur les 5 besoins UX — l’IA propose, elle n’exécute rien.
+2. **Conversation guidée** (LLM **mock** par défaut ; API optionnelle via env) — plafonds tokens/€ par plan ; l’IA propose, elle n’exécute rien (Policy Guard).
 3. **Cinq besoins** : seule la présence web est **utilisable** ; les autres affichent **non branché** ou **bientôt** (jamais « terminé » à tort).
 4. **Connecteurs** : présence web (réel MVP) ; GitHub lecture seule = **stub mock OAuth** révocable, non production.
 5. **Actifs** : domaine/URL (ex. `example.com`). Marqueur FICTIF possible.

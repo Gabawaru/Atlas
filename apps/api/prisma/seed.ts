@@ -14,6 +14,7 @@ async function main() {
   await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
 
   await prisma.auditEvent.deleteMany();
+  await prisma.llmUsageLog.deleteMany();
   await prisma.supportTicket.deleteMany();
   await prisma.vulnFeedCache.deleteMany();
   await prisma.softwareComponent.deleteMany();
@@ -132,6 +133,8 @@ async function main() {
       name: "Starter FICTIF",
       modulesEntitled: [MODULE_WEB_PASSIVE],
       maxUsers: 5,
+      llmTokenCapMonthly: 200_000,
+      llmEuroCapCentsMonthly: 500, // 5,00 € estimés / mois
     },
   });
 

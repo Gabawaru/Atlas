@@ -28,6 +28,7 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | SAV / tickets | Minimal (états, lien tenant/mission, RBAC support ≠ approver) | SLA, escalade, impersonation journalisée |
 | Remédiation findings | Statuts client FICTIFS | Workflow retest / preuves / intégration ticketing |
 | Feeds vulns | OSV/NVD/KEV passifs + fixtures CI ; confiance ≠ gravité | Live NVD clé API, couverture élargie, preuves runtime |
+| Assistant LLM | Mock + API opt-in env ; plafonds tokens/€ ; journal sans contenu | Broker multi-modèles, budgets fins, redaction avancée |
 | Juridique | Docs hors certification | Cadre juridique séparé — pas d’auto-certif |
 
 ## Non négociable même en évolution
