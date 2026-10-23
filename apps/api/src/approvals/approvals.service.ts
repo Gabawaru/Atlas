@@ -27,12 +27,35 @@ export class ApprovalsService {
           include: {
             scopeVersions: { orderBy: { version: "desc" }, take: 1 },
             ownerAuths: true,
+            tenant: true,
           },
         },
         decisions: true,
       },
       orderBy: { createdAt: "asc" },
     });
+  }
+
+  async listTenants() {
+    return this.prisma.tenant.findMany({
+      orderBy: { slug: "asc" },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        syntheticDemo: true,
+        status: true,
+        _count: { select: { missions: true } },
+      },
+    });
+  }
+
+  async listApproverUserIds(orgId: string): Promise<string[]> {
+    const rows = await this.prisma.staffMembership.findMany({
+      where: { orgId, staffRole: "approver" },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
   }
 
   async decide(
@@ -53,7 +76,7 @@ export class ApprovalsService {
     if (!req) throw new NotFoundException();
     if (req.status === "blocked_no_route") {
       throw new BadRequestException(
-        "NO_APPROVAL_ROUTE — configurez le routage avant décision.",
+        "NO_APPROVAL_ROUTE — importez le stub de routage (admin) pour débloquer la démo.",
       );
     }
 
@@ -101,26 +124,85 @@ export class ApprovalsService {
 
   /**
    * Import stub hiérarchie — clairement marqué isStub.
+   * Peut cibler un tenant (débloque ce tenant en démo) ou être org-wide.
    * N'invente PAS une hiérarchie réelle d'entreprise A.
    */
-  async importStubHierarchy(orgId: string, approverUserIds: string[]) {
+  async importStubHierarchy(
+    orgId: string,
+    approverUserIds: string[],
+    tenantId?: string | null,
+  ) {
+    if (tenantId) {
+      const tenant = await this.prisma.tenant.findFirst({
+        where: { id: tenantId, orgId },
+      });
+      if (!tenant) {
+        throw new BadRequestException("Tenant introuvable pour cette org");
+      }
+    }
+
     const group = await this.prisma.staffGroup.create({
       data: {
         orgId,
-        name: "[STUB] Groupe approbateurs fictifs",
+        name: tenantId
+          ? `[STUB] Approbateurs fictifs — tenant ${tenantId.slice(0, 8)}`
+          : "[STUB] Groupe approbateurs fictifs (org-wide)",
         isStub: true,
         memberIds: approverUserIds,
       },
     });
     const policy = await this.prisma.approvalRoutingPolicy.create({
       data: {
-        orgWide: true,
+        tenantId: tenantId ?? null,
+        orgWide: !tenantId,
         modulePattern: "*",
         staffGroupId: group.id,
         enabled: true,
         isStub: true,
       },
     });
+
+    // Débloque les demandes bloquées faute de route pour ce tenant / org
+    if (tenantId) {
+      await this.prisma.approvalRequest.updateMany({
+        where: {
+          status: "blocked_no_route",
+          mission: { tenantId },
+        },
+        data: { status: "pending" },
+      });
+    } else {
+      await this.prisma.approvalRequest.updateMany({
+        where: { status: "blocked_no_route" },
+        data: { status: "pending" },
+      });
+    }
+
+    // Missions réelles BLOCKED pour NO_APPROVAL_ROUTE → repasser en A_APPROVAL_PENDING si encore pertinentes
+    const blocked = await this.prisma.mission.findMany({
+      where: {
+        status: "BLOCKED",
+        blockedReason: { contains: "NO_APPROVAL_ROUTE" },
+        ...(tenantId ? { tenantId } : {}),
+      },
+    });
+    for (const m of blocked) {
+      await this.prisma.mission.update({
+        where: { id: m.id },
+        data: {
+          status: "A_APPROVAL_PENDING",
+          blockedReason: null,
+        },
+      });
+      await this.audit.append({
+        tenantId: m.tenantId,
+        action: "mission.unblocked_after_stub_route",
+        objectType: "mission",
+        objectId: m.id,
+        payload: { via: "import-stub", isStub: true },
+      });
+    }
+
     await this.audit.append({
       actorId: null,
       action: "approval_routing.stub_imported",
@@ -129,8 +211,17 @@ export class ApprovalsService {
       payload: {
         warning:
           "Stub uniquement — ne représente pas la hiérarchie réelle entreprise A",
+        tenantId: tenantId ?? null,
+        orgWide: !tenantId,
+        unblockedMissions: blocked.length,
       },
     });
-    return { group, policy };
+    return {
+      group,
+      policy,
+      unblockedMissions: blocked.map((m) => m.id),
+      disclaimer:
+        "Import stub FICTIF — débloque le routage en démo uniquement, pas une org chart réelle.",
+    };
   }
 }

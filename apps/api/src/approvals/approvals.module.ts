@@ -10,5 +10,6 @@ import { AuthModule } from "../auth/auth.module";
   imports: [AuthModule, MissionsModule],
   controllers: [ApprovalsController],
   providers: [ApprovalsService, PrismaService, AuditService],
+  exports: [ApprovalsService],
 })
 export class ApprovalsModule {}

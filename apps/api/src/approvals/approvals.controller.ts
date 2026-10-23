@@ -1,9 +1,19 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { IsIn, IsOptional, IsString } from "class-validator";
 import { AuthGuard } from "../auth/auth.guard";
 import { AuthService } from "../auth/auth.service";
 import type { AuthUser } from "../auth/auth.types";
 import { ApprovalsService } from "./approvals.service";
+import { AuditService } from "../audit/audit.service";
 
 class DecideDto {
   @IsIn(["approved", "rejected", "returned"])
@@ -17,6 +27,11 @@ class DecideDto {
 class StubImportDto {
   @IsString()
   orgId!: string;
+
+  /** Si fourni : débloque ce tenant en démo ; sinon org-wide */
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 
 @Controller("admin")
@@ -25,6 +40,7 @@ export class ApprovalsController {
   constructor(
     @Inject(ApprovalsService) private readonly approvals: ApprovalsService,
     @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   @Get("approvals")
@@ -48,6 +64,12 @@ export class ApprovalsController {
     return this.approvals.decide(id, req.user, body.decision, body.comment);
   }
 
+  @Get("tenants")
+  tenants(@Req() req: { user: AuthUser }) {
+    this.auth.requireStaff(req.user, ["admin", "ops", "support", "approver"]);
+    return this.approvals.listTenants();
+  }
+
   @Get("routing")
   routing(@Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin", "ops", "approver"]);
@@ -55,8 +77,24 @@ export class ApprovalsController {
   }
 
   @Post("routing/import-stub")
-  importStub(@Body() body: StubImportDto, @Req() req: { user: AuthUser }) {
+  async importStub(
+    @Body() body: StubImportDto,
+    @Req() req: { user: AuthUser },
+  ) {
     this.auth.requireStaff(req.user, ["admin"]);
-    return this.approvals.importStubHierarchy(body.orgId, [req.user.userId]);
+    // Inclure tous les staff « approver » + l'admin courant (groupe stub démo)
+    const approvers = await this.approvals.listApproverUserIds(body.orgId);
+    const memberIds = [...new Set([req.user.userId, ...approvers])];
+    return this.approvals.importStubHierarchy(
+      body.orgId,
+      memberIds,
+      body.tenantId,
+    );
+  }
+
+  @Get("audit/verify")
+  async verifyAudit(@Req() req: { user: AuthUser }) {
+    this.auth.requireStaff(req.user, ["admin", "ops"]);
+    return this.audit.verifyChain();
   }
 }

@@ -236,14 +236,25 @@ async function main() {
     },
   });
 
+  const { AUDIT_GENESIS, hashAuditEvent } = await import(
+    "../src/audit/audit-chain"
+  );
+  const seedPayload = { synthetic: true };
+  const seedHash = hashAuditEvent({
+    prevHash: AUDIT_GENESIS,
+    tenantId: tenantDemo.id,
+    action: "seed.completed",
+    objectType: "system",
+    payload: seedPayload,
+  });
   await prisma.auditEvent.create({
     data: {
       tenantId: tenantDemo.id,
       action: "seed.completed",
       objectType: "system",
-      payload: { synthetic: true },
-      prevHash: "GENESIS",
-      hash: "seed-bootstrap",
+      payload: seedPayload,
+      prevHash: AUDIT_GENESIS,
+      hash: seedHash,
     },
   });
 

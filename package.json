@@ -13,6 +13,7 @@
     "test": "pnpm -r run test",
     "test:unit": "pnpm --filter @atlas/shared run test && pnpm --filter @atlas/policy-guard run test && pnpm --filter @atlas/api run test:unit",
     "test:e2e": "pnpm --filter @atlas/api run test:e2e",
+    "test:acceptance": "pnpm --filter @atlas/api run test:acceptance",
     "db:migrate": "pnpm --filter @atlas/api run db:migrate",
     "db:seed": "pnpm --filter @atlas/api run db:seed",
     "db:generate": "pnpm --filter @atlas/api run db:generate",

@@ -1,13 +1,17 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { createHash } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import {
+  AUDIT_GENESIS,
+  hashAuditEvent,
+  verifyAuditChain,
+} from "./audit-chain";
 
 @Injectable()
 export class AuditService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   /**
-   * Append-only : aucune mise à jour / suppression exposée.
+   * Append-only : aucune méthode update/delete exposée.
    */
   async append(event: {
     tenantId?: string | null;
@@ -18,17 +22,21 @@ export class AuditService {
     payload?: unknown;
     requestId?: string;
   }) {
-    const last = await this.prisma.auditEvent.findFirst({
-      orderBy: { createdAt: "desc" },
+    const tip = await this.prisma.auditEvent.findFirst({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { hash: true },
     });
-    const prevHash = last?.hash ?? "GENESIS";
-    const body = JSON.stringify({
+    const prevHash = tip?.hash ?? AUDIT_GENESIS;
+    const hash = hashAuditEvent({
       prevHash,
-      ...event,
-      ts: new Date().toISOString(),
+      tenantId: event.tenantId ?? null,
+      actorId: event.actorId ?? null,
+      action: event.action,
+      objectType: event.objectType ?? null,
+      objectId: event.objectId ?? null,
+      payload: event.payload ?? null,
+      requestId: event.requestId ?? null,
     });
-    const hash = createHash("sha256").update(body).digest("hex");
     return this.prisma.auditEvent.create({
       data: {
         tenantId: event.tenantId ?? null,
@@ -42,5 +50,12 @@ export class AuditService {
         hash,
       },
     });
+  }
+
+  async verifyChain() {
+    const events = await this.prisma.auditEvent.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    return verifyAuditChain(events);
   }
 }
