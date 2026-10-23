@@ -38,6 +38,7 @@ model Tenant {
   connectorGrants ConnectorGrant[]
   supportTickets SupportTicket[]
   softwareComponents SoftwareComponent[]
+  llmUsageLogs   LlmUsageLog[]
 }
 
 model User {
@@ -90,6 +91,10 @@ model Plan {
   name             String
   modulesEntitled  String[]
   maxUsers         Int    @default(10)
+  /// Plafond tokens LLM / mois calendaire (assistant) — 0 = illimité démo (à éviter en prod)
+  llmTokenCapMonthly     Int @default(200000)
+  /// Plafond € estimés en centimes / mois (assistant)
+  llmEuroCapCentsMonthly Int @default(500)
   subscriptions    Subscription[]
 }
 
@@ -391,6 +396,30 @@ model Report {
   exportsMarkedSynthetic  Boolean  @default(true)
   createdAt               DateTime @default(now())
   mission                 Mission  @relation(fields: [missionId], references: [id])
+}
+
+/// Journal d'usage LLM — métadonnées seulement (pas de prompt/réponse complets)
+model LlmUsageLog {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  actorId            String?
+  provider           String   // mock | api
+  model              String?
+  /// Tokens estimés (prompt+completion) — jamais le contenu
+  promptTokens       Int      @default(0)
+  completionTokens   Int      @default(0)
+  estimatedEuroCents Int      @default(0)
+  intent             String?
+  /// Hash tronqué du message (pas le texte)
+  messageFingerprint String?
+  messageChars       Int      @default(0)
+  /// Toujours false — l'assistant n'exécute pas
+  executed           Boolean  @default(false)
+  capped             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
 }
 
 /// Append-only : pas de update/delete applicatif
