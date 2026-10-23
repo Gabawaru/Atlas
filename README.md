@@ -24,6 +24,7 @@ apps/client/src-tauri  Stub documenté Tauri (desktop reporté)
 packages/shared   Types, états mission, transitions
 packages/policy-guard  evaluateExecution() déterministe + tests sans LLM
 docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
+docs/             Guides FR + exemples de rapports FICTIFS
 ```
 
 ## Prérequis
@@ -32,20 +33,49 @@ docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
 - [pnpm](https://pnpm.io) 9 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
 - Docker (Postgres + Redis) — Redis **requis** pour la file d’exécution
 
-## Installation reproductible
+## Checklist install reproductible (testée)
+
+Cocher dans l’ordre — commandes exactes validées sur ce dépôt :
 
 ```bash
+# 0) Prérequis
+node -v                    # >= 20
+corepack enable && corepack prepare pnpm@9.15.0 --activate
+docker compose version     # ou Docker Desktop / engine
+
+# 1) Config (aucun secret réel)
 cp .env.example .env
+
+# 2) Infra
 docker compose up -d
+# Attendre healthy : postgres :5432, redis :6379
+
+# 3) Dépendances + packages partagés
 pnpm install
 pnpm --filter @atlas/shared build
 pnpm --filter @atlas/policy-guard build
+
+# 4) Base de données
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
+
+# 5) Vérification automatisée (option tout-en-un)
+pnpm demo:smoke
+# équivalent : build packages + migrate + seed + test:unit + test:acceptance + smoke
 ```
 
-Comptes locaux seedés (mot de passe `atlas-demo`) — **fictifs** :
+**Attendu `demo:smoke` / `smoke` :** message `Smoke e2e OK` (exit 0). Exit **77** = Postgres ou Redis injoignable.
+
+### Lancer les UIs après install
+
+```bash
+pnpm dev:api      # http://localhost:3001/v1/health
+pnpm dev:admin    # http://localhost:3000
+pnpm dev:client   # http://localhost:3002
+```
+
+Comptes seed (mot de passe `atlas-demo`) — **fictifs** :
 
 | Email | Rôle |
 |-------|------|
@@ -56,96 +86,78 @@ Comptes locaux seedés (mot de passe `atlas-demo`) — **fictifs** :
 | `ops@a.atlas.local` | Staff ops |
 | `admin@a.atlas.local` | Staff admin |
 
-Actif seed : `example.com` (domaine de documentation IANA) pour **preuves DNS/HTTP réelles** dans le scope, tout en marquant la mission / les exports **FICTIF**.
+Actif seed : `example.com` (preuves DNS/HTTP publiques dans le scope ; missions/exports marqués **FICTIF**).
 
-## Lancer
-
-```bash
-pnpm dev:api      # http://localhost:3001/v1/health  (nécessite Redis)
-pnpm dev:admin    # http://localhost:3000
-pnpm dev:client   # http://localhost:3002
-```
-
-Variables : voir `.env.example` (aucun secret réel).
-
-- `REDIS_URL` — file BullMQ
-- `ATLAS_FORCE_MOCK_NETWORK=true` — mocks réseau (CI offline) ; **absent/false** = sondes DNS/HTTP/TLS réelles sur cibles du scope uniquement
+Variables : `.env.example` — `REDIS_URL`, `ATLAS_FORCE_MOCK_NETWORK` (mocks réseau CI).
 
 ## Exécution & rapports
 
-1. Policy Guard `ALLOW` → job `JobRun` mis en file **BullMQ** (`atlas-control-passive`)
-2. Progression (`progressPercent` / `progressMessage`), **cancel** et **kill**
-3. Module `web.passive.presence.v1` : DNS A/AAAA, HTTP HEAD (ou GET tronqué), métadonnées TLS, `evidenceHash` — allowlist scope stricte, rate limit
-4. Rapport : **bilan décideur** + **détail technique** + exports **JSON / CSV / PDF** (en-tête `X-Atlas-Synthetic` si FICTIF)
-5. Autorisation propriétaire via **SignatureProvider** mock pluggable (`mock://…` — pas eIDAS)
+1. Policy Guard `ALLOW` → job BullMQ `atlas-control-passive`
+2. Progression, **cancel**, **kill**, rate limit
+3. Module `web.passive.presence.v1` — DNS/HTTP/TLS passifs, allowlist scope
+4. Bilans décideur / technique + exports JSON/CSV/PDF
+5. SignatureProvider **mock** (pas eIDAS)
 
-Endpoints utiles :
+Endpoints : `POST …/execute|cancel|kill`, `GET …/jobs/:id`, `GET …/reports/:id/export?format=…`
 
-- `POST /v1/missions/:id/execute` — enqueue + attend la fin (MVP)
-- `POST /v1/missions/:id/cancel` / `…/kill`
-- `GET /v1/missions/:id/jobs/:jobId`
-- `GET /v1/missions/:id/reports/:reportId/export?format=json|csv|pdf`
+Exemple versionné : [`docs/exemples/`](docs/exemples/) (`pnpm docs:exemple-rapport` pour régénérer).
 
 ## Tests
 
 ```bash
 pnpm test:unit
-# Policy Guard + transitions + web passif + exports + SignatureProvider mock + audit chain + BullMQ (si Redis)
-
 pnpm --filter @atlas/api run test:e2e
-pnpm smoke
-# Postgres + Redis requis ; exit 77 si infra absente ; 0 = OK
+pnpm test:acceptance    # AC-01…AC-12
+pnpm smoke              # Postgres + Redis
+pnpm demo:smoke         # checklist vérif complète
 ```
 
 ### Suite d’acceptation (AC plan)
 
-Mappe les critères `AC-01`…`AC-12` de `docs/plan-realisation.md` (Project Atlas) :
-
 ```bash
-# Après migrate + seed (Postgres recommandé pour smoke isolation + audit DB)
 pnpm db:migrate && pnpm db:seed
 pnpm test:acceptance
 ```
 
-Couverture automatisée :
-
-| AC | Ce que la suite vérifie |
-|----|-------------------------|
+| AC | Vérifié |
+|----|---------|
 | AC-02 / 03 / 04 | Sans owner / seule approbation A / seul abonnement → `REJECT` |
-| AC-05 | Policy Guard déterministe (aucun LLM) |
-| AC-06 | Expiration, révocation token, scope mismatch / révoqué |
-| AC-07 | `verify_chain` OK + détection d’une UPDATE simulée du journal |
-| AC-08 | Exports JSON/CSV/PDF marqués FICTIF |
-| AC-09 | RBAC : support/billing ne peuvent pas approuver ; 5 rôles |
-| AC-10 | Mission réelle sans route → `BLOCKED` ; démo → `A_SKIPPED_DEMO` |
-| AC-01 / 11 / 12 | Transitions parcours, module hors jeton, marqueurs démo |
+| AC-05 | Policy Guard sans LLM |
+| AC-06 | Expiration, révocation, scope |
+| AC-07 | `verify_chain` + UPDATE simulée détectée |
+| AC-08 | Exports JSON/CSV/PDF FICTIF |
+| AC-09 | RBAC 5 rôles ; support/billing ≠ approver |
+| AC-10 | Sans route → `BLOCKED` ; démo → `A_SKIPPED_DEMO` |
+| AC-01 / 11 / 12 | Transitions, module hors jeton, marqueurs démo |
 | + | Hors périmètre, cancel, rate limit, isolation tenants (si DB) |
-
-Admin : `GET /v1/admin/audit/verify` (rôles admin/ops).
 
 ## Parcours démo synthétique
 
-1. Client : login `owner@demo.atlas.local` → conversation → mission FICTIVE présence web.
-2. Autorisation propriétaire (SignatureProvider **mock**) → `A_SKIPPED_DEMO`.
-3. Policy Guard `ALLOW` → BullMQ → preuves DNS/HTTP sur `example.com` (scope) → `REPORT_AVAILABLE`.
-4. Télécharger JSON/CSV/PDF (marqués synthétiques).
-5. Admin (`admin@a.atlas.local`) : **Importer stub hiérarchie** pour un tenant → débloque `NO_APPROVAL_ROUTE` en démo (`isStub`) ; `approver@…` traite la file.
+1. Client `owner@demo.atlas.local` → mission FICTIVE présence web  
+2. Signature mock → `A_SKIPPED_DEMO`  
+3. BullMQ → preuves sur `example.com` → `REPORT_AVAILABLE`  
+4. Exports JSON/CSV/PDF  
+5. Admin : import stub hiérarchie (`isStub`) pour débloquer `NO_APPROVAL_ROUTE`  
 
-Mission **réelle** sans policy de routage → `BLOCKED` / `NO_APPROVAL_ROUTE`.
+## Documentation (FR)
+
+| Doc | Public |
+|-----|--------|
+| [`docs/utilisateur.md`](docs/utilisateur.md) | Client terrain |
+| [`docs/administrateur.md`](docs/administrateur.md) | Staff entreprise A |
+| [`docs/developpeur.md`](docs/developpeur.md) | Contributeurs |
+| [`docs/limites-et-evolution.md`](docs/limites-et-evolution.md) | Limites honnêtes + suite |
+| [`docs/sauvegarde-maj-incidents.md`](docs/sauvegarde-maj-incidents.md) | Backup, maj, incidents MVP |
+| [`docs/exemples/`](docs/exemples/) | Rapport FICTIF versionné |
+| [`docs/tauri-stub.md`](docs/tauri-stub.md) | Desktop reporté |
 
 ## Hors scope de ce MVP (honnête)
 
-- OIDC / SSO réel (auth locale seedée seulement)
-- Prestataire e-sign / eIDAS réel (interface pluggable + **mock** seulement)
-- Hiérarchie d’approbation **réelle** entreprise A (config métier)
+- OIDC / SSO réel ; e-sign / eIDAS réel (mock seulement)
+- Hiérarchie d’approbation **réelle** A
 - Connecteurs authentifiés, réseau interne, CVE feeds, PSP
-- Shell Tauri empaqueté (stub documenté)
-- Workers multi-hôtes / haute dispo BullMQ ; RLS Postgres durcie
+- Shell Tauri empaqueté ; HA BullMQ ; RLS Postgres durcie
 - Analyse de contrats, scans agressifs
-
-## Documentation produit
-
-Les docs d’exigences / architecture / workflow vivent dans le contexte projet Atlas. Point d’entrée technique : ce fichier + `docs/tauri-stub.md`.
 
 ---
 

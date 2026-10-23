@@ -18,7 +18,9 @@
     "db:seed": "pnpm --filter @atlas/api run db:seed",
     "db:generate": "pnpm --filter @atlas/api run db:generate",
     "lint": "pnpm -r run lint --if-present",
-    "smoke": "pnpm --filter @atlas/api run smoke"
+    "smoke": "pnpm --filter @atlas/api run smoke",
+    "demo:smoke": "bash apps/api/scripts/demo-smoke.sh",
+    "docs:exemple-rapport": "pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts"
   },
   "engines": {
     "node": ">=20"
