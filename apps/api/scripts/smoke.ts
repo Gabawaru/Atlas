@@ -423,6 +423,42 @@ async function main() {
       );
     }
 
+    // Ops : versions + maintenance ON bloque (flag exposé)
+    const opsLogin = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "ops@a.atlas.local",
+        password: "atlas-demo",
+      }),
+    }).then((r) => r.json());
+    const opsHeaders = {
+      Authorization: `Bearer ${opsLogin.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const opsStatus = await fetch(`${BASE}/admin/ops/status`, {
+      headers: opsHeaders,
+    }).then((r) => r.json());
+    if (!opsStatus?.currentVersion?.version) {
+      throw new Error(`ops status version manquante: ${JSON.stringify(opsStatus)}`);
+    }
+    const maintOn = await fetch(`${BASE}/admin/ops/maintenance`, {
+      method: "POST",
+      headers: opsHeaders,
+      body: JSON.stringify({
+        active: true,
+        reason: "[FICTIF] Smoke maintenance",
+      }),
+    }).then((r) => r.json());
+    if (!maintOn.maintenanceMode) {
+      throw new Error(`maintenance ON attendu: ${JSON.stringify(maintOn)}`);
+    }
+    await fetch(`${BASE}/admin/ops/maintenance`, {
+      method: "POST",
+      headers: opsHeaders,
+      body: JSON.stringify({ active: false }),
+    });
+
     // Assistant : propose sans exécuter
     const chat = await fetch(`${BASE}/conversation`, {
       method: "POST",
@@ -440,7 +476,7 @@ async function main() {
     }
 
     console.log(
-      "✅ Smoke e2e OK — BullMQ + SAV + vulns + assistant + billing (≠ pentest)",
+      "✅ Smoke e2e OK — BullMQ + SAV + vulns + assistant + billing + ops maintenance",
     );
     process.exitCode = 0;
   } catch (e) {

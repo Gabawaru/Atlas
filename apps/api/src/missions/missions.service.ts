@@ -29,6 +29,7 @@ import {
 } from "../signatures/signature-provider";
 import { ConnectorsService } from "../connectors/connectors.service";
 import { DeployService } from "../deploy/deploy.service";
+import { OpsService } from "../ops/ops.service";
 import { readFile } from "node:fs/promises";
 
 @Injectable()
@@ -44,6 +45,8 @@ export class MissionsService {
     private readonly connectors: ConnectorsService,
     @Inject(DeployService)
     private readonly deploy: DeployService,
+    @Inject(OpsService)
+    private readonly ops: OpsService,
   ) {}
 
   async listForTenant(tenantId: string) {
@@ -633,7 +636,7 @@ export class MissionsService {
       connectorRequired: connectorGuard.connectorRequired,
       connectorPresent: connectorGuard.connectorPresent,
       connectorActive: connectorGuard.connectorActive,
-      killSwitch: false,
+      killSwitch: await this.ops.isMaintenanceOn(),
     });
 
     await this.audit.append({

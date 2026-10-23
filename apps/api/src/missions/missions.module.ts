@@ -8,6 +8,7 @@ import { QueueModule } from "../queue/queue.module";
 import { SignaturesModule } from "../signatures/signatures.module";
 import { ConnectorsModule } from "../connectors/connectors.module";
 import { DeployModule } from "../deploy/deploy.module";
+import { OpsModule } from "../ops/ops.module";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DeployModule } from "../deploy/deploy.module";
     SignaturesModule,
     ConnectorsModule,
     DeployModule,
+    OpsModule,
   ],
   controllers: [MissionsController],
   providers: [MissionsService, PrismaService, AuditService],

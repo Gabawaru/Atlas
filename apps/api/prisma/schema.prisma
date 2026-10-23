@@ -481,6 +481,42 @@ model LlmUsageLog {
   @@index([tenantId, createdAt])
 }
 
+/// Catalogue versions produit (notes de release) — FICTIF en seed
+model ProductVersion {
+  id           String   @id @default(cuid())
+  version      String   @unique
+  /// stable | preview
+  channel      String   @default("stable")
+  title        String
+  releaseNotes String
+  releasedAt   DateTime @default(now())
+  /// Une seule version courante (health + admin)
+  current      Boolean  @default(false)
+}
+
+/// Config ops globale (singleton id=default) — mode maintenance bloque les exécutions
+model OpsRuntimeConfig {
+  id                String    @id @default("default")
+  maintenanceMode   Boolean   @default(false)
+  maintenanceReason String?
+  maintenanceSetAt  DateTime?
+  maintenanceSetBy  String?
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Journal ops (maintenance, versions, notes) — distinct de l'audit chaîné
+model OpsJournalEntry {
+  id        String   @id @default(cuid())
+  /// maintenance_on | maintenance_off | version_published | note
+  kind      String
+  message   String
+  actorId   String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 /// Append-only : pas de update/delete applicatif
 model AuditEvent {
   id         String   @id @default(cuid())
