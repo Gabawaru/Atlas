@@ -3,12 +3,22 @@ import { AuthModule } from "./auth/auth.module";
 import { MissionsModule } from "./missions/missions.module";
 import { ApprovalsModule } from "./approvals/approvals.module";
 import { AssetsModule } from "./assets/assets.module";
+import { QueueModule } from "./queue/queue.module";
+import { SignaturesModule } from "./signatures/signatures.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
 @Module({
-  imports: [AuthModule, MissionsModule, ApprovalsModule, AssetsModule],
+  imports: [
+    AuthModule,
+    SignaturesModule,
+    QueueModule,
+    MissionsModule,
+    ApprovalsModule,
+    AssetsModule,
+  ],
   controllers: [HealthController],
   providers: [PrismaService],
 })
 export class AppModule {}
+

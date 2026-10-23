@@ -2,7 +2,7 @@
 
 Assistant conversationnel de **pentest autorisé** (entreprise A), accessible aux non-spécialistes.
 
-Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard déterministe (sans LLM), machine d’états mission, présence web passive bornée, consoles client & admin minimales, seeds fictives.
+Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard déterministe (sans LLM), machine d’états mission, présence web passive bornée, file BullMQ, exports rapport, consoles client & admin minimales, seeds fictives.
 
 ## Principes non négociables
 
@@ -17,20 +17,20 @@ Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard dé
 ## Structure
 
 ```
-apps/api          NestJS — auth locale, missions, admin approvals, module web passif
+apps/api          NestJS — auth locale, missions, BullMQ, exports, SignatureProvider mock
 apps/admin        Next.js — file d’approbation + config routage (stub)
-apps/client       React (Vite) — 5 besoins UX, conversation mock, mission, bilans
+apps/client       React (Vite) — 5 besoins UX, conversation mock, mission, bilans + exports
 apps/client/src-tauri  Stub documenté Tauri (desktop reporté)
 packages/shared   Types, états mission, transitions
 packages/policy-guard  evaluateExecution() déterministe + tests sans LLM
-docker-compose.yml     Postgres 16 + Redis 7
+docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
 ```
 
 ## Prérequis
 
 - Node.js ≥ 20
 - [pnpm](https://pnpm.io) 9 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
-- Docker (pour Postgres + Redis)
+- Docker (Postgres + Redis) — Redis **requis** pour la file d’exécution
 
 ## Installation reproductible
 
@@ -56,57 +56,70 @@ Comptes locaux seedés (mot de passe `atlas-demo`) — **fictifs** :
 | `ops@a.atlas.local` | Staff ops |
 | `admin@a.atlas.local` | Staff admin |
 
+Actif seed : `example.com` (domaine de documentation IANA) pour **preuves DNS/HTTP réelles** dans le scope, tout en marquant la mission / les exports **FICTIF**.
+
 ## Lancer
 
 ```bash
-# terminaux séparés, ou :
-pnpm dev:api      # http://localhost:3001/v1/health
+pnpm dev:api      # http://localhost:3001/v1/health  (nécessite Redis)
 pnpm dev:admin    # http://localhost:3000
 pnpm dev:client   # http://localhost:3002
 ```
 
 Variables : voir `.env.example` (aucun secret réel).
 
+- `REDIS_URL` — file BullMQ
+- `ATLAS_FORCE_MOCK_NETWORK=true` — mocks réseau (CI offline) ; **absent/false** = sondes DNS/HTTP/TLS réelles sur cibles du scope uniquement
+
+## Exécution & rapports
+
+1. Policy Guard `ALLOW` → job `JobRun` mis en file **BullMQ** (`atlas-control-passive`)
+2. Progression (`progressPercent` / `progressMessage`), **cancel** et **kill**
+3. Module `web.passive.presence.v1` : DNS A/AAAA, HTTP HEAD (ou GET tronqué), métadonnées TLS, `evidenceHash` — allowlist scope stricte, rate limit
+4. Rapport : **bilan décideur** + **détail technique** + exports **JSON / CSV / PDF** (en-tête `X-Atlas-Synthetic` si FICTIF)
+5. Autorisation propriétaire via **SignatureProvider** mock pluggable (`mock://…` — pas eIDAS)
+
+Endpoints utiles :
+
+- `POST /v1/missions/:id/execute` — enqueue + attend la fin (MVP)
+- `POST /v1/missions/:id/cancel` / `…/kill`
+- `GET /v1/missions/:id/jobs/:jobId`
+- `GET /v1/missions/:id/reports/:reportId/export?format=json|csv|pdf`
+
 ## Tests
 
 ```bash
-# Unitaires (toujours, sans Docker) — Policy Guard + états mission + web passif
 pnpm test:unit
+# Policy Guard + transitions + web passif + exports PDF/CSV/JSON + SignatureProvider mock + BullMQ (si Redis up)
 
-# E2e logique sans DB
 pnpm --filter @atlas/api run test:e2e
-
-# Smoke Docker (Postgres requis) — parcours démo → rapport
 pnpm smoke
-# code 77 = infra absente (skip soft) ; 0 = OK ; 1 = échec
+# Postgres + Redis requis ; exit 77 si infra absente ; 0 = OK
 ```
 
 ## Parcours démo synthétique
 
 1. Client : login `owner@demo.atlas.local` → conversation → mission FICTIVE présence web.
-2. Autorisation propriétaire (stub signature) → `A_SKIPPED_DEMO` (pas d’approbateur réel requis).
-3. Policy Guard `ALLOW` → contrôle passif mock → `REPORT_AVAILABLE` (bilan décideur + technique).
-4. Admin : file d’approbation pour missions réelles routées ; import stub hiérarchie clairement marqué `isStub`.
+2. Autorisation propriétaire (SignatureProvider **mock**) → `A_SKIPPED_DEMO`.
+3. Policy Guard `ALLOW` → BullMQ → preuves DNS/HTTP sur `example.com` (scope) → `REPORT_AVAILABLE`.
+4. Télécharger JSON/CSV/PDF (marqués synthétiques).
+5. Admin : file d’approbation ; import stub hiérarchie `isStub`.
 
-Mission **réelle** sans policy de routage → statut `BLOCKED` / `NO_APPROVAL_ROUTE`.
-
-## Module de contrôle MVP
-
-`web.passive.presence.v1` : résolution DNS + HEAD HTTP sur hôtes du **scope approuvé uniquement**, rate limit, cancel. Pas de fuzzing, pas de crawl agressif, pas hors périmètre.
+Mission **réelle** sans policy de routage → `BLOCKED` / `NO_APPROVAL_ROUTE`.
 
 ## Hors scope de ce MVP (honnête)
 
 - OIDC / SSO réel (auth locale seedée seulement)
-- Signatures eIDAS / prestataire e-sign réel (stub `isStubSignature`)
+- Prestataire e-sign / eIDAS réel (interface pluggable + **mock** seulement)
 - Hiérarchie d’approbation **réelle** entreprise A (config métier)
 - Connecteurs authentifiés, réseau interne, CVE feeds, PSP
 - Shell Tauri empaqueté (stub documenté)
-- Redis/BullMQ workers distribués (Redis dans compose pour la suite ; exécution sync in-process au MVP)
-- PDF/CSV exports complets (JSON bilan présent)
+- Workers multi-hôtes / haute dispo BullMQ ; RLS Postgres durcie
+- Analyse de contrats, scans agressifs
 
 ## Documentation produit
 
-Les docs d’exigences / architecture / workflow vivent dans le contexte projet Atlas (hors ce README). Point d’entrée technique : ce fichier + `docs/tauri-stub.md`.
+Les docs d’exigences / architecture / workflow vivent dans le contexte projet Atlas. Point d’entrée technique : ce fichier + `docs/tauri-stub.md`.
 
 ---
 

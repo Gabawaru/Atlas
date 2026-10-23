@@ -175,8 +175,11 @@ model OwnerAuthorization {
   status               String   // valid | revoked | pending
   signerLabel          String
   signatureArtifactRef String?
-  /// Stub signature — PAS une signature eIDAS réelle
+  /// Stub / mock — PAS une signature eIDAS réelle
   isStubSignature      Boolean  @default(true)
+  signatureProvider    String?
+  signatureEnvelopeId  String?
+  signatureStatus      String?
   revokedAt            DateTime?
   createdAt            DateTime @default(now())
   mission              Mission  @relation(fields: [missionId], references: [id])
@@ -242,6 +245,10 @@ model JobRun {
   gateReason            String?
   cancelRequested       Boolean  @default(false)
   rateLimitPerMinute    Int      @default(30)
+  progressPercent       Int      @default(0)
+  progressMessage       String?
+  bullJobId             String?
+  killedAt              DateTime?
   evidenceJson          Json?
   startedAt             DateTime?
   finishedAt            DateTime?
@@ -264,15 +271,18 @@ model Finding {
 }
 
 model Report {
-  id              String   @id @default(cuid())
-  missionId       String
-  executiveSummary String
-  technicalDetail String
+  id                      String   @id @default(cuid())
+  missionId               String
+  executiveSummary        String
+  technicalDetail         String
   /// FICTIF — exemple de rapport
-  synthetic       Boolean  @default(true)
-  exportJson      Json?
-  createdAt       DateTime @default(now())
-  mission         Mission  @relation(fields: [missionId], references: [id])
+  synthetic               Boolean  @default(true)
+  exportJson              Json?
+  exportCsv               String?
+  exportPdfPath           String?
+  exportsMarkedSynthetic  Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  mission                 Mission  @relation(fields: [missionId], references: [id])
 }
 
 /// Append-only : pas de update/delete applicatif

@@ -144,12 +144,13 @@ async function main() {
     },
   });
 
+  // example.com = domaine de documentation IANA (résolution DNS/HTTP publique réelle)
   const asset = await prisma.asset.create({
     data: {
       tenantId: tenantDemo.id,
       type: "domain",
-      value: "demo.atlas.local",
-      normalized: "demo.atlas.local",
+      value: "example.com",
+      normalized: "example.com",
       verified: true,
       synthetic: true,
     },

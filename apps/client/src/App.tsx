@@ -17,10 +17,19 @@ type Mission = {
   blockedReason?: string | null;
   synthetic: boolean;
   findings?: { title: string; summary: string; severity: string }[];
+  jobRuns?: {
+    id: string;
+    status: string;
+    progressPercent: number;
+    progressMessage?: string | null;
+  }[];
   reports?: {
+    id: string;
     executiveSummary: string;
     technicalDetail: string;
     synthetic: boolean;
+    exportCsv?: string | null;
+    exportPdfPath?: string | null;
   }[];
 };
 
@@ -92,7 +101,7 @@ export function App() {
       headers,
       body: JSON.stringify({
         type: "domain",
-        value: "demo.atlas.local",
+        value: "example.com",
         synthetic: true,
       }),
     });
@@ -253,6 +262,17 @@ export function App() {
         </div>
       )}
 
+      {latestReport?.jobRuns?.[0] && (
+        <section>
+          <h2>Progression job</h2>
+          <p className="muted">
+            {latestReport.jobRuns[0].status} —{" "}
+            {latestReport.jobRuns[0].progressPercent}%{" "}
+            {latestReport.jobRuns[0].progressMessage}
+          </p>
+        </section>
+      )}
+
       {latestReport?.reports?.[0] && (
         <section className="report">
           <h2>Bilan décideur</h2>
@@ -266,6 +286,30 @@ export function App() {
               </strong>
               <div className="muted">{f.summary}</div>
             </div>
+          ))}
+          <p className="muted">Exports (marqués FICTIF si synthétique) :</p>
+          {(["json", "csv", "pdf"] as const).map((fmt) => (
+            <a
+              key={fmt}
+              href={`${API}/v1/missions/${latestReport.id}/reports/${latestReport.reports![0].id}/export?format=${fmt}`}
+              style={{ marginRight: "0.75rem" }}
+              onClick={(e) => {
+                e.preventDefault();
+                void fetch(
+                  `${API}/v1/missions/${latestReport.id}/reports/${latestReport.reports![0].id}/export?format=${fmt}`,
+                  { headers: { Authorization: `Bearer ${token}` } },
+                ).then(async (r) => {
+                  const blob = await r.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `atlas-report.${fmt}`;
+                  a.click();
+                });
+              }}
+            >
+              Télécharger {fmt.toUpperCase()}
+            </a>
           ))}
         </section>
       )}

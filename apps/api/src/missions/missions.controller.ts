@@ -5,10 +5,13 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
 import { IsArray, IsBoolean, IsOptional, IsString, MinLength } from "class-validator";
+import type { Response } from "express";
 import { AuthGuard } from "../auth/auth.guard";
 import { AuthService } from "../auth/auth.service";
 import type { AuthUser } from "../auth/auth.types";
@@ -85,6 +88,55 @@ export class MissionsController {
   cancel(@Param("id") id: string, @Req() req: { user: AuthUser }) {
     this.auth.requireTenant(req.user);
     return this.missions.requestCancel(id);
+  }
+
+  @Post("missions/:id/kill")
+  kill(@Param("id") id: string, @Req() req: { user: AuthUser }) {
+    this.auth.requireTenant(req.user, ["owner", "operator"]);
+    return this.missions.kill(id);
+  }
+
+  @Get("missions/:id/jobs/:jobId")
+  job(
+    @Param("id") id: string,
+    @Param("jobId") jobId: string,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.missions.getJob(id, jobId, req.user.tenantId);
+  }
+
+  @Get("missions/:id/reports/:reportId/export")
+  async exportReport(
+    @Param("id") id: string,
+    @Param("reportId") reportId: string,
+    @Query("format") format: string,
+    @Req() req: { user: AuthUser },
+    @Res() res: Response,
+  ) {
+    this.auth.requireTenant(req.user);
+    const fmt =
+      format === "csv" || format === "pdf" || format === "json"
+        ? format
+        : "json";
+    const file = await this.missions.getReportExport(
+      id,
+      reportId,
+      fmt,
+      req.user.tenantId,
+    );
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${file.filename}"`,
+    );
+    if (file.synthetic) {
+      res.setHeader("X-Atlas-Synthetic", "true");
+    }
+    if (Buffer.isBuffer(file.body)) {
+      res.send(file.body);
+    } else {
+      res.send(file.body);
+    }
   }
 
   @Post("conversation")

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import { hashScope, evaluateExecution } from "@atlas/policy-guard";
 import {
   MODULE_WEB_PASSIVE,
@@ -16,19 +17,24 @@ import {
   assertTransition,
   nextAfterAuthValid,
 } from "../mission/mission-state";
-import {
-  runWebPassivePresence,
-  WEB_PASSIVE_MODULE_ID,
-} from "../control/web-passive";
+import { WEB_PASSIVE_MODULE_ID } from "../control/web-passive";
 import type { AuthUser } from "../auth/auth.types";
+import { ControlQueueService } from "../queue/control-queue.service";
+import {
+  SIGNATURE_PROVIDER,
+  type SignatureProvider,
+} from "../signatures/signature-provider";
+import { readFile } from "node:fs/promises";
 
 @Injectable()
 export class MissionsService {
-  private cancelFlags = new Map<string, boolean>();
-
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(ControlQueueService)
+    private readonly controlQueue: ControlQueueService,
+    @Inject(SIGNATURE_PROVIDER)
+    private readonly signatures: SignatureProvider,
   ) {}
 
   async listForTenant(tenantId: string) {
@@ -39,6 +45,7 @@ export class MissionsService {
         findings: true,
         reports: true,
         scopeVersions: { orderBy: { version: "desc" }, take: 1 },
+        jobRuns: { orderBy: { createdAt: "desc" }, take: 3 },
       },
     });
   }
@@ -51,7 +58,7 @@ export class MissionsService {
         ownerAuths: true,
         approvalReqs: { include: { decisions: true } },
         tokens: true,
-        jobRuns: true,
+        jobRuns: { orderBy: { createdAt: "desc" } },
         findings: true,
         reports: true,
       },
@@ -167,7 +174,11 @@ export class MissionsService {
     return updated;
   }
 
-  async submitOwnerAuth(missionId: string, user: AuthUser, signerLabel: string) {
+  async submitOwnerAuth(
+    missionId: string,
+    user: AuthUser,
+    signerLabel: string,
+  ) {
     const mission = await this.get(missionId, user.tenantId);
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope manquant");
@@ -176,17 +187,57 @@ export class MissionsService {
       await this.transition(missionId, "AUTH_PENDING", user);
     }
 
+    const documentHash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          missionId,
+          scopeHash: scope.scopeHash,
+          signerLabel,
+        }),
+      )
+      .digest("hex");
+
+    const envelope = await this.signatures.createEnvelope(documentHash, [
+      {
+        email: user.email,
+        name: signerLabel,
+      },
+    ]);
+    const status = await this.signatures.getStatus(envelope.envelopeId);
+    const artifact = await this.signatures.fetchArtifact(envelope.envelopeId);
+
     await this.prisma.ownerAuthorization.create({
       data: {
         missionId,
         scopeVersionId: scope.id,
         scopeHash: scope.scopeHash,
-        status: "valid",
+        status: status === "signed" ? "valid" : "pending",
         signerLabel,
-        signatureArtifactRef: `stub://signature/${missionId}`,
-        isStubSignature: true,
+        signatureArtifactRef: artifact.artifactRef,
+        isStubSignature: artifact.isMock,
+        signatureProvider: envelope.provider,
+        signatureEnvelopeId: envelope.envelopeId,
+        signatureStatus: status,
       },
     });
+
+    await this.audit.append({
+      tenantId: mission.tenantId,
+      actorId: user.userId,
+      action: "signature.envelope",
+      objectType: "owner_authorization",
+      objectId: missionId,
+      payload: {
+        provider: envelope.provider,
+        envelopeId: envelope.envelopeId,
+        isMock: artifact.isMock,
+        contentHash: artifact.contentHash,
+      },
+    });
+
+    if (status !== "signed") {
+      return this.get(missionId, user.tenantId);
+    }
 
     await this.transition(missionId, "AUTH_VALID", user);
 
@@ -220,9 +271,6 @@ export class MissionsService {
       },
       include: { staffGroup: true },
     });
-    // Route OK si un groupe avec au moins un membre est configuré.
-    // Un groupe isStub compte comme « configuré » (import stub explicite),
-    // mais n'est PAS présenté comme hiérarchie réelle entreprise A.
     return policies.some(
       (p) => p.staffGroup && p.staffGroup.memberIds.length > 0,
     );
@@ -309,7 +357,7 @@ export class MissionsService {
         ? true
         : approval?.decision === "approved",
       approvalScopeHash: mission.synthetic
-        ? scope?.scopeHash ?? null
+        ? (scope?.scopeHash ?? null)
         : (approval?.scopeHash ?? null),
       approvalRouteConfigured: mission.synthetic ? true : routeOk,
       isRealMission: mission.isRealMission,
@@ -343,9 +391,7 @@ export class MissionsService {
     }
 
     await this.transition(missionId, "QUEUED", user);
-    await this.transition(missionId, "RUNNING", user);
 
-    this.cancelFlags.set(missionId, false);
     const job = await this.prisma.jobRun.create({
       data: {
         missionId,
@@ -353,126 +399,108 @@ export class MissionsService {
         moduleId: WEB_PASSIVE_MODULE_ID,
         authorizationTokenId: token!.id,
         scopeHash: scope!.scopeHash,
-        status: "running",
+        status: "queued",
         gateDecision: "ALLOW",
         gateReason: gate.reason,
         rateLimitPerMinute: 30,
-        startedAt: new Date(),
+        progressPercent: 0,
+        progressMessage: "Mise en file BullMQ",
       },
     });
 
-    try {
-      const allowedHosts = new Set(
-        assets.map((a) => a.normalized.toLowerCase()),
-      );
-      const evidence = await runWebPassivePresence(
-        assets.map((a) =>
-          a.type === "url"
-            ? { host: a.normalized, url: a.value }
-            : { host: a.normalized },
-        ),
-        {
-          allowedHosts,
-          rateLimitPerMinute: 30,
-          isCancelled: () => this.cancelFlags.get(missionId) === true,
-          // En démo / CI sans réseau : lookup mock si synthetic
-          ...(mission.synthetic
-            ? {
-                lookupFn: async () => ["203.0.113.10"],
-                fetchFn: async () => ({
-                  status: 200,
-                  headers: {
-                    server: "atlas-synthetic/1.0",
-                    "content-type": "text/html",
-                  },
-                }),
-                sleepFn: async () => undefined,
-              }
-            : {}),
-        },
-      );
+    const { bullJobId } = await this.controlQueue.enqueue({
+      jobRunId: job.id,
+      missionId,
+      tenantId: mission.tenantId,
+      actorUserId: user.userId,
+      scopeHash: scope!.scopeHash,
+      rateLimitPerMinute: 30,
+      syntheticMission: mission.synthetic,
+      // Preuves DNS/HTTP réelles par défaut ; mock seulement si forcé (offline CI)
+      forceMockNetwork: process.env.ATLAS_FORCE_MOCK_NETWORK === "true",
+      targets: assets.map((a) =>
+        a.type === "url"
+          ? { host: a.normalized, url: a.value }
+          : { host: a.normalized },
+      ),
+      allowedHosts: assets.map((a) => a.normalized.toLowerCase()),
+    });
 
-      if (this.cancelFlags.get(missionId)) {
-        await this.prisma.jobRun.update({
-          where: { id: job.id },
-          data: {
-            status: "cancelled",
-            finishedAt: new Date(),
-            evidenceJson: evidence as object,
-            cancelRequested: true,
-          },
-        });
-        await this.transition(missionId, "CANCELLING", user);
-        await this.transition(missionId, "CANCELLED", user);
-        return { gate, cancelled: true };
-      }
+    await this.controlQueue.waitForJob(job.id, 120_000);
 
-      await this.prisma.jobRun.update({
-        where: { id: job.id },
-        data: {
-          status: "completed",
-          finishedAt: new Date(),
-          evidenceJson: evidence as object,
-        },
-      });
-
-      await this.prisma.finding.create({
-        data: {
-          missionId,
-          jobRunId: job.id,
-          severity: "info",
-          title: "Présence web passive observée",
-          summary:
-            "Contrôle passif DNS/HTTP sur le périmètre approuvé (données " +
-            (mission.synthetic ? "FICTIVES" : "collectées") +
-            ").",
-          technical: JSON.stringify(evidence, null, 2),
-          synthetic: mission.synthetic,
-        },
-      });
-
-      await this.prisma.report.create({
-        data: {
-          missionId,
-          synthetic: mission.synthetic,
-          executiveSummary: mission.synthetic
-            ? "[FICTIF] Bilan décideur : exposition web de démonstration uniquement — aucune cible réelle."
-            : "Bilan décideur : observation passive de la présence web sur le périmètre autorisé.",
-          technicalDetail:
-            "Module web.passive.presence.v1 — DNS lookup + HEAD HTTP bornés, rate-limités, annulables.",
-          exportJson: {
-            module: WEB_PASSIVE_MODULE_ID,
-            evidence,
-            disclaimer: mission.synthetic
-              ? "Données de démonstration — aucune cible réelle"
-              : undefined,
-          } as object,
-        },
-      });
-
-      await this.transition(missionId, "COMPLETED", user);
-      await this.transition(missionId, "REPORT_AVAILABLE", user);
-    } catch (e) {
-      await this.prisma.jobRun.update({
-        where: { id: job.id },
-        data: {
-          status: "failed",
-          finishedAt: new Date(),
-          gateReason: e instanceof Error ? e.message : String(e),
-        },
-      });
-      await this.transition(missionId, "FAILED", user);
-    }
-
-    return { gate, mission: await this.get(missionId) };
+    return {
+      gate,
+      bullJobId,
+      mission: await this.get(missionId),
+    };
   }
 
   requestCancel(missionId: string) {
-    this.cancelFlags.set(missionId, true);
-    return { cancelRequested: true };
+    return this.controlQueue.requestCancel(missionId);
   }
 
-  /** Conversation guidée — LLM mock (pas d'autorité d'exécution) */
+  kill(missionId: string) {
+    return this.controlQueue.kill(missionId);
+  }
+
+  async getJob(missionId: string, jobRunId: string, tenantId?: string) {
+    const job = await this.prisma.jobRun.findFirst({
+      where: {
+        id: jobRunId,
+        missionId,
+        ...(tenantId
+          ? { mission: { tenantId } }
+          : {}),
+      },
+    });
+    if (!job) throw new NotFoundException("Job introuvable");
+    return job;
+  }
+
+  async getReportExport(
+    missionId: string,
+    reportId: string,
+    format: "json" | "csv" | "pdf",
+    tenantId?: string,
+  ) {
+    const report = await this.prisma.report.findFirst({
+      where: {
+        id: reportId,
+        missionId,
+        ...(tenantId ? { mission: { tenantId } } : {}),
+      },
+      include: { mission: true },
+    });
+    if (!report) throw new NotFoundException("Rapport introuvable");
+
+    if (format === "json") {
+      return {
+        contentType: "application/json",
+        body: JSON.stringify(report.exportJson ?? {}, null, 2),
+        filename: `${reportId}.json`,
+        synthetic: report.synthetic || report.exportsMarkedSynthetic,
+      };
+    }
+    if (format === "csv") {
+      return {
+        contentType: "text/csv; charset=utf-8",
+        body: report.exportCsv ?? "",
+        filename: `${reportId}.csv`,
+        synthetic: report.synthetic || report.exportsMarkedSynthetic,
+      };
+    }
+    if (!report.exportPdfPath) {
+      throw new NotFoundException("PDF non généré");
+    }
+    const buf = await readFile(report.exportPdfPath);
+    return {
+      contentType: "application/pdf",
+      body: buf,
+      filename: `${reportId}.pdf`,
+      synthetic: report.synthetic || report.exportsMarkedSynthetic,
+    };
+  }
+
   guidedConversation(message: string) {
     const lower = message.toLowerCase();
     const suggestions = UX_NEEDS.map((n) => ({
@@ -485,7 +513,11 @@ export class MissionsService {
     }));
     let reply =
       "Je peux vous guider sur les 5 besoins. Je propose un plan ; je n'exécute rien sans autorisations humaines et Policy Guard.";
-    if (lower.includes("web") || lower.includes("internet") || lower.includes("dns")) {
+    if (
+      lower.includes("web") ||
+      lower.includes("internet") ||
+      lower.includes("dns")
+    ) {
       reply =
         "Pour « Que voit-on de nous sur Internet ? », le module MVP est la présence web passive (DNS/HTTP publics). Abonnement ≠ autorisation de tester.";
     }
