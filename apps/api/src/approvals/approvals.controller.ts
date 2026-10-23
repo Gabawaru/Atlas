@@ -70,6 +70,18 @@ export class ApprovalsController {
     return this.approvals.listTenants();
   }
 
+  @Get("entitlements")
+  entitlements(@Req() req: { user: AuthUser }) {
+    this.auth.requireStaff(req.user, [
+      "admin",
+      "ops",
+      "support",
+      "approver",
+      "billing",
+    ]);
+    return this.approvals.entitlementMatrix();
+  }
+
   @Get("routing")
   routing(@Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin", "ops", "approver"]);

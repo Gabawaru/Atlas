@@ -50,6 +50,101 @@ export class ApprovalsService {
     });
   }
 
+  /**
+   * Matrice pédagogique : abonnement / entitlement ≠ autorisation de test.
+   * Lecture seule pour staff — ne confond jamais licence et RoE.
+   */
+  async entitlementMatrix() {
+    const tenants = await this.prisma.tenant.findMany({
+      orderBy: { slug: "asc" },
+      include: {
+        subscriptions: {
+          include: { plan: true },
+          orderBy: { startsAt: "desc" },
+          take: 1,
+        },
+        missions: {
+          orderBy: { updatedAt: "desc" },
+          take: 5,
+          include: {
+            ownerAuths: {
+              where: { status: { in: ["valid", "pending", "revoked"] } },
+              orderBy: { createdAt: "desc" },
+              take: 2,
+            },
+            scopeVersions: { orderBy: { version: "desc" }, take: 1 },
+            tokens: { orderBy: { issuedAt: "desc" }, take: 1 },
+          },
+        },
+      },
+    });
+
+    return {
+      principle:
+        "Abonnement = droit d'utiliser le logiciel. Autorisation de test = RoE signé (2 parties) + Policy Guard. Les deux sont distincts.",
+      legend: {
+        subscriptionActive: "Licence produit active (insuffisante seule)",
+        ownerAuthValid: "Autorisation propriétaire liée au scope_hash courant",
+        canExecuteHint:
+          "Indice uniquement — l'exécution réelle passe encore par Policy Guard",
+      },
+      rows: tenants.map((t) => {
+        const sub = t.subscriptions[0];
+        const subscriptionActive =
+          sub?.status === "active" || sub?.status === "trialing";
+        return {
+          tenantId: t.id,
+          slug: t.slug,
+          name: t.name,
+          subscription: sub
+            ? {
+                status: sub.status,
+                plan: sub.plan.code,
+                modulesEntitled: sub.plan.modulesEntitled,
+              }
+            : null,
+          subscriptionActive,
+          missions: t.missions.map((m) => {
+            const scope = m.scopeVersions[0];
+            const owner = m.ownerAuths.find((o) => o.status === "valid");
+            const pending = m.ownerAuths.find((o) => o.status === "pending");
+            const token = m.tokens[0];
+            const ownerAuthValid =
+              Boolean(owner) &&
+              owner!.scopeHash === scope?.scopeHash &&
+              !owner!.revokedAt;
+            const canExecuteHint =
+              subscriptionActive &&
+              ownerAuthValid &&
+              Boolean(token && !token.revokedAt) &&
+              ["A_APPROVED", "A_SKIPPED_DEMO", "QUEUED", "AUTH_VALID"].includes(
+                m.status,
+              );
+            return {
+              missionId: m.id,
+              title: m.title,
+              status: m.status,
+              synthetic: m.synthetic,
+              scopeVersion: scope?.version ?? null,
+              scopeHash: scope?.scopeHash?.slice(0, 12) ?? null,
+              exclusions: scope?.exclusions ?? [],
+              ownerAuthStatus: owner?.status ?? pending?.status ?? "none",
+              dualSignature:
+                Boolean(owner?.ownerSignedAt || pending?.ownerSignedAt) &&
+                Boolean(
+                  owner?.counterpartySignedAt || pending?.counterpartySignedAt,
+                ),
+              ownerAuthValid,
+              tokenPresent: Boolean(token && !token.revokedAt),
+              subscriptionAloneInsufficient: true,
+              canExecuteHint,
+            };
+          }),
+        };
+      }),
+    };
+  }
+
   async listApproverUserIds(orgId: string): Promise<string[]> {
     const rows = await this.prisma.staffMembership.findMany({
       where: { orgId, staffRole: "approver" },

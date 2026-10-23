@@ -1,12 +1,15 @@
 /**
- * Module MVP : présence web passive (DNS/HTTP publics).
+ * Module MVP : présence web passive (DNS/HTTP/TLS publics).
  * Preuves réelles par défaut ; jamais hors périmètre ; rate limit + cancel.
- * Pas de fuzzing, pas de crawl agressif, pas de login.
+ * Pas de fuzzing, pas de crawl agressif, pas de login, pas de découverte brute.
  */
 import { createHash } from "node:crypto";
 import { connect as tlsConnect } from "node:tls";
 
 export const WEB_PASSIVE_MODULE_ID = "web.passive.presence.v1";
+
+/** Sous-domaines courants sondés uniquement si le domaine parent est au scope */
+export const COMMON_IN_SCOPE_SUBDOMAINS = ["www", "mail", "api"] as const;
 
 export interface WebPassiveTarget {
   host: string;
@@ -17,8 +20,22 @@ export interface WebPassiveDnsEvidence {
   resolved: boolean;
   addresses: string[];
   aaaa?: string[];
+  ns?: string[];
+  mx?: string[];
+  txtSample?: string[];
   lookupMs?: number;
   error?: string;
+}
+
+export interface WebPassiveSecurityHeaders {
+  hsts?: string;
+  csp?: string;
+  xFrameOptions?: string;
+  xContentTypeOptions?: string;
+  referrerPolicy?: string;
+  permissionsPolicy?: string;
+  /** Headers de base absents (observation, pas d'attaque) */
+  missing: string[];
 }
 
 export interface WebPassiveHttpEvidence {
@@ -29,6 +46,7 @@ export interface WebPassiveHttpEvidence {
   server?: string;
   contentType?: string;
   hsts?: string;
+  securityHeaders?: WebPassiveSecurityHeaders;
   bodySha256?: string;
   bodyBytesSampled?: number;
   observedAt?: string;
@@ -39,9 +57,11 @@ export interface WebPassiveTlsEvidence {
   protocol?: string;
   authorized?: boolean;
   subjectCN?: string;
+  subjectSANs?: string[];
   issuerCN?: string;
   validFrom?: string;
   validTo?: string;
+  daysRemaining?: number;
   fingerprint256?: string;
   error?: string;
 }
@@ -67,11 +87,18 @@ export interface WebPassiveProgress {
 
 export interface WebPassiveOptions {
   allowedHosts: Set<string>;
+  /** Hôtes exclus du RoE — refus même si autrement in-scope */
+  exclusions?: Set<string>;
   rateLimitPerMinute: number;
   isCancelled: () => boolean;
   onProgress?: (p: WebPassiveProgress) => void | Promise<void>;
-  /** Injection tests uniquement */
-  lookupFn?: (host: string) => Promise<{ a: string[]; aaaa: string[] }>;
+  lookupFn?: (host: string) => Promise<{
+    a: string[];
+    aaaa: string[];
+    ns?: string[];
+    mx?: string[];
+    txt?: string[];
+  }>;
   fetchFn?: (url: string) => Promise<{
     status: number;
     headers: Record<string, string>;
@@ -80,6 +107,8 @@ export interface WebPassiveOptions {
   }>;
   tlsFn?: (host: string) => Promise<WebPassiveTlsEvidence>;
   sleepFn?: (ms: number) => Promise<void>;
+  /** default true — sondes www/mail/api in-scope ; false en fixtures unitaires */
+  expandCommonSubdomains?: boolean;
 }
 
 export function normalizeHost(value: string): string {
@@ -93,14 +122,34 @@ export function normalizeHost(value: string): string {
   return value.toLowerCase().replace(/\.$/, "").split("/")[0]!;
 }
 
+export function isExcluded(
+  host: string,
+  exclusions: Set<string> | undefined,
+): boolean {
+  if (!exclusions || exclusions.size === 0) return false;
+  const h = normalizeHost(host);
+  const excl = [...exclusions].map((e) => normalizeHost(e));
+  // Exact ou sous-domaine d'une exclusion — pas l'inverse (exclure mail.x ne bloque pas x)
+  return excl.some((e) => h === e || h.endsWith(`.${e}`));
+}
+
 /**
  * Allowlist stricte : hôte exact ou sous-domaine d'un domaine du scope.
- * Refuse les IP littérales hors liste et les hosts non listés.
+ * Refuse exclusions RoE, IP hors liste et hosts non listés.
  */
-export function assertInScope(host: string, allowedHosts: Set<string>): void {
+export function assertInScope(
+  host: string,
+  allowedHosts: Set<string>,
+  exclusions?: Set<string>,
+): void {
   const h = normalizeHost(host);
   if (!h || h.includes(" ") || h.includes("..")) {
     throw new Error(`TARGET_OUT_OF_SCOPE: hôte invalide « ${h} »`);
+  }
+  if (isExcluded(h, exclusions)) {
+    throw new Error(
+      `TARGET_OUT_OF_SCOPE: ${h} exclu par le RoE (exclusions) — refus déterministe.`,
+    );
   }
   const normalizedAllow = new Set(
     [...allowedHosts].map((a) => normalizeHost(a)),
@@ -115,29 +164,113 @@ export function assertInScope(host: string, allowedHosts: Set<string>): void {
   }
 }
 
+/**
+ * Élargit les cibles avec sous-domaines courants UNIQUEMENT si le parent
+ * est un domaine « apex » au scope (au moins 2 labels après le TLD, ex. example.com)
+ * et que le FQDN n'est pas exclu. Pas de découverte brute.
+ * Désactivable via expandCommonSubdomains=false (tests unitaires bornés).
+ */
+export function expandPassiveTargets(
+  targets: WebPassiveTarget[],
+  allowedHosts: Set<string>,
+  exclusions?: Set<string>,
+  expandCommonSubdomains = true,
+): WebPassiveTarget[] {
+  const seen = new Set<string>();
+  const out: WebPassiveTarget[] = [];
+  const push = (t: WebPassiveTarget) => {
+    const h = normalizeHost(t.host || t.url || "");
+    if (!h || seen.has(h)) return;
+    try {
+      assertInScope(h, allowedHosts, exclusions);
+    } catch {
+      return;
+    }
+    seen.add(h);
+    out.push(t.url ? t : { host: h });
+  };
+
+  for (const t of targets) push(t);
+
+  if (expandCommonSubdomains) {
+    // Uniquement à partir des cibles apex explicitement fournies (pas brute-force DNS)
+    for (const t of targets) {
+      const root = normalizeHost(t.host || t.url || "");
+      const labels = root.split(".").filter(Boolean);
+      if (labels.length < 2 || /^\d+\.\d+\.\d+\.\d+$/.test(root)) continue;
+      for (const label of COMMON_IN_SCOPE_SUBDOMAINS) {
+        push({ host: `${label}.${root}` });
+      }
+    }
+  }
+  return out;
+}
+
+function extractSecurityHeaders(
+  headers: Record<string, string>,
+): WebPassiveSecurityHeaders {
+  const hsts = headers["strict-transport-security"];
+  const csp = headers["content-security-policy"];
+  const xFrameOptions = headers["x-frame-options"];
+  const xContentTypeOptions = headers["x-content-type-options"];
+  const referrerPolicy = headers["referrer-policy"];
+  const permissionsPolicy =
+    headers["permissions-policy"] ?? headers["feature-policy"];
+  const missing: string[] = [];
+  if (!hsts) missing.push("strict-transport-security");
+  if (!csp) missing.push("content-security-policy");
+  if (!xFrameOptions) missing.push("x-frame-options");
+  if (!xContentTypeOptions) missing.push("x-content-type-options");
+  if (!referrerPolicy) missing.push("referrer-policy");
+  return {
+    hsts,
+    csp,
+    xFrameOptions,
+    xContentTypeOptions,
+    referrerPolicy,
+    permissionsPolicy,
+    missing,
+  };
+}
+
 function hashEvidence(payload: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(payload))
     .digest("hex");
 }
 
-async function realDnsLookup(
-  host: string,
-): Promise<{ a: string[]; aaaa: string[] }> {
+async function realDnsLookup(host: string): Promise<{
+  a: string[];
+  aaaa: string[];
+  ns?: string[];
+  mx?: string[];
+  txt?: string[];
+}> {
   const dns = await import("node:dns/promises");
-  const [a, aaaa] = await Promise.all([
+  const [a, aaaa, ns, mx, txt] = await Promise.all([
     dns.resolve4(host).catch(() => [] as string[]),
     dns.resolve6(host).catch(() => [] as string[]),
+    dns.resolveNs(host).catch(() => [] as string[]),
+    dns
+      .resolveMx(host)
+      .then((rows) => rows.map((r) => r.exchange))
+      .catch(() => [] as string[]),
+    dns
+      .resolveTxt(host)
+      .then((rows) => rows.map((r) => r.join("")).slice(0, 5))
+      .catch(() => [] as string[]),
   ]);
   if (a.length === 0 && aaaa.length === 0) {
-    // fallback lookup unique
-    const all = await dns.lookup(host, { all: true });
+    const all = await dns.lookup(host, { all: true }).catch(() => []);
     return {
       a: all.filter((x) => x.family === 4).map((x) => x.address),
       aaaa: all.filter((x) => x.family === 6).map((x) => x.address),
+      ns,
+      mx,
+      txt,
     };
   }
-  return { a, aaaa };
+  return { a, aaaa, ns, mx, txt };
 }
 
 async function realHttpProbe(url: string): Promise<{
@@ -146,7 +279,6 @@ async function realHttpProbe(url: string): Promise<{
   bodySha256?: string;
   bodyBytesSampled?: number;
 }> {
-  // HEAD d'abord (passif) ; si refusé, un GET tronqué unique
   let res = await fetch(url, {
     method: "HEAD",
     redirect: "manual",
@@ -194,13 +326,27 @@ async function realTlsProbe(host: string): Promise<WebPassiveTlsEvidence> {
         }
         const cn = (v: string | string[] | undefined) =>
           Array.isArray(v) ? v[0] : v;
+        let daysRemaining: number | undefined;
+        if (cert.valid_to) {
+          const end = new Date(cert.valid_to).getTime();
+          daysRemaining = Math.floor((end - Date.now()) / (24 * 3600 * 1000));
+        }
+        const sansRaw = cert.subjectaltname ?? "";
+        const subjectSANs = sansRaw
+          ? sansRaw
+              .split(",")
+              .map((s) => s.trim().replace(/^DNS:/i, ""))
+              .filter(Boolean)
+          : undefined;
         resolve({
           protocol: proto ?? undefined,
           authorized,
           subjectCN: cn(cert.subject?.CN),
+          subjectSANs,
           issuerCN: cn(cert.issuer?.CN),
           validFrom: cert.valid_from,
           validTo: cert.valid_to,
+          daysRemaining,
           fingerprint256: cert.fingerprint256,
         });
       },
@@ -216,7 +362,7 @@ async function realTlsProbe(host: string): Promise<WebPassiveTlsEvidence> {
 }
 
 /**
- * Contrôle passif borné : DNS + HTTP (+ TLS si https), rate-limité, annulable.
+ * Contrôle passif borné : DNS + HTTP headers + TLS, rate-limité, annulable.
  */
 export async function runWebPassivePresence(
   targets: WebPassiveTarget[],
@@ -231,14 +377,26 @@ export async function runWebPassivePresence(
   const fetchImpl = opts.fetchFn ?? realHttpProbe;
   const tlsImpl = opts.tlsFn ?? realTlsProbe;
 
-  const total = targets.length;
-  for (let i = 0; i < targets.length; i++) {
+  // Refus immédiat si une cible fournie est hors périmètre (avant élargissement)
+  for (const t of targets) {
+    const host = normalizeHost(t.host || t.url || "");
+    assertInScope(host, opts.allowedHosts, opts.exclusions);
+  }
+
+  const expanded = expandPassiveTargets(
+    targets,
+    opts.allowedHosts,
+    opts.exclusions,
+    opts.expandCommonSubdomains !== false,
+  );
+  const total = expanded.length;
+  for (let i = 0; i < expanded.length; i++) {
     if (opts.isCancelled()) {
       break;
     }
-    const target = targets[i]!;
+    const target = expanded[i]!;
     const host = normalizeHost(target.host || target.url || "");
-    assertInScope(host, opts.allowedHosts);
+    assertInScope(host, opts.allowedHosts, opts.exclusions);
 
     await opts.onProgress?.({
       current: i + 1,
@@ -263,6 +421,9 @@ export async function runWebPassivePresence(
         resolved: rec.a.length + rec.aaaa.length > 0,
         addresses: rec.a,
         aaaa: rec.aaaa,
+        ns: rec.ns,
+        mx: rec.mx,
+        txtSample: rec.txt,
         lookupMs: Date.now() - t0,
       };
     } catch (e) {
@@ -276,10 +437,11 @@ export async function runWebPassivePresence(
 
     const url = target.url ?? `https://${host}/`;
     const urlHost = normalizeHost(url);
-    assertInScope(urlHost, opts.allowedHosts);
+    assertInScope(urlHost, opts.allowedHosts, opts.exclusions);
 
     try {
       const http = await fetchImpl(url);
+      const securityHeaders = extractSecurityHeaders(http.headers);
       entryCore.http = {
         ok: http.status > 0 && http.status < 500,
         method: http.bodySha256 ? "GET" : "HEAD",
@@ -287,7 +449,8 @@ export async function runWebPassivePresence(
         status: http.status,
         server: http.headers["server"],
         contentType: http.headers["content-type"],
-        hsts: http.headers["strict-transport-security"],
+        hsts: securityHeaders.hsts,
+        securityHeaders,
         bodySha256: http.bodySha256,
         bodyBytesSampled: http.bodyBytesSampled,
         observedAt: new Date().toISOString(),

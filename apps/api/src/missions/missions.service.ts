@@ -8,6 +8,8 @@ import { createHash } from "node:crypto";
 import { hashScope, evaluateExecution } from "@atlas/policy-guard";
 import {
   MODULE_WEB_PASSIVE,
+  PASSIVE_ROE_METHODS,
+  type MachineReadableRoe,
   type MissionStatus,
   UX_NEEDS,
 } from "@atlas/shared";
@@ -49,6 +51,7 @@ export class MissionsService {
         findings: true,
         reports: true,
         scopeVersions: { orderBy: { version: "desc" }, take: 1 },
+        ownerAuths: { orderBy: { createdAt: "desc" }, take: 2 },
         jobRuns: { orderBy: { createdAt: "desc" }, take: 3 },
       },
     });
@@ -79,6 +82,9 @@ export class MissionsService {
       assetIds: string[];
       synthetic?: boolean;
       periodDays?: number;
+      exclusions?: string[];
+      methods?: string[];
+      notes?: string;
     },
   ) {
     if (!user.tenantId) throw new BadRequestException("tenant requis");
@@ -89,6 +95,14 @@ export class MissionsService {
     if (moduleIds.length === 0) {
       moduleIds.push(MODULE_WEB_PASSIVE);
     }
+
+    const methods =
+      body.methods && body.methods.length > 0
+        ? body.methods
+        : [...PASSIVE_ROE_METHODS, ...moduleIds];
+    const exclusions = (body.exclusions ?? []).map((e) =>
+      e.toLowerCase().trim(),
+    );
 
     const synthetic = body.synthetic ?? false;
     const periodStart = new Date();
@@ -111,7 +125,8 @@ export class MissionsService {
     const scopePayload = {
       missionId: mission.id,
       assetIds: body.assetIds,
-      methods: moduleIds,
+      methods,
+      exclusions,
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
     };
@@ -122,7 +137,9 @@ export class MissionsService {
         missionId: mission.id,
         version: 1,
         assetIds: body.assetIds,
-        methods: moduleIds,
+        methods,
+        exclusions,
+        notes: body.notes ?? null,
         periodStart,
         periodEnd,
         scopeHash,
@@ -138,10 +155,141 @@ export class MissionsService {
       action: "mission.created",
       objectType: "mission",
       objectId: mission.id,
-      payload: { synthetic, scopeHash },
+      payload: { synthetic, scopeHash, exclusions },
     });
 
     return this.get(mission.id, user.tenantId);
+  }
+
+  /** RoE machine-readable de la dernière ScopeVersion */
+  async getRoe(missionId: string, tenantId?: string): Promise<MachineReadableRoe> {
+    const mission = await this.get(missionId, tenantId);
+    const scope = mission.scopeVersions[0];
+    if (!scope) throw new BadRequestException("Scope / RoE manquant");
+    return {
+      version: scope.version,
+      scopeHash: scope.scopeHash,
+      assetIds: scope.assetIds,
+      exclusions: scope.exclusions ?? [],
+      methods: scope.methods,
+      periodStart: scope.periodStart.toISOString(),
+      periodEnd: scope.periodEnd.toISOString(),
+      notes: scope.notes,
+      revoked: Boolean(scope.revokedAt),
+    };
+  }
+
+  /**
+   * Nouvelle version de périmètre (RoE). Invalide autorisations + jetons liés.
+   * Toute modification → re-signature des deux parties.
+   */
+  async updateRoe(
+    missionId: string,
+    user: AuthUser,
+    body: {
+      assetIds: string[];
+      methods?: string[];
+      exclusions?: string[];
+      notes?: string;
+      periodStart?: string;
+      periodEnd?: string;
+    },
+  ) {
+    const mission = await this.get(missionId, user.tenantId);
+    const prev = mission.scopeVersions[0];
+    if (!prev) throw new BadRequestException("Scope manquant");
+
+    const methods =
+      body.methods && body.methods.length > 0
+        ? body.methods
+        : prev.methods;
+    const exclusions = (body.exclusions ?? prev.exclusions ?? []).map((e) =>
+      e.toLowerCase().trim(),
+    );
+    const periodStart = body.periodStart
+      ? new Date(body.periodStart)
+      : prev.periodStart;
+    const periodEnd = body.periodEnd
+      ? new Date(body.periodEnd)
+      : prev.periodEnd;
+
+    const nextVersion = prev.version + 1;
+    const scopePayload = {
+      missionId,
+      assetIds: body.assetIds,
+      methods,
+      exclusions,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+    };
+    const scopeHash = await hashScope(scopePayload);
+
+    await this.prisma.scopeVersion.update({
+      where: { id: prev.id },
+      data: { revokedAt: new Date() },
+    });
+
+    await this.prisma.scopeVersion.create({
+      data: {
+        missionId,
+        version: nextVersion,
+        assetIds: body.assetIds,
+        methods,
+        exclusions,
+        notes: body.notes ?? prev.notes,
+        periodStart,
+        periodEnd,
+        scopeHash,
+      },
+    });
+
+    await this.prisma.ownerAuthorization.updateMany({
+      where: { missionId, status: { in: ["valid", "pending"] } },
+      data: { status: "revoked", revokedAt: new Date() },
+    });
+    await this.prisma.authorizationToken.updateMany({
+      where: { missionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    const status = mission.status as MissionStatus;
+    if (
+      status === "AUTH_VALID" ||
+      status === "AUTH_PENDING" ||
+      status === "A_APPROVAL_PENDING" ||
+      status === "A_APPROVED" ||
+      status === "A_SKIPPED_DEMO" ||
+      status === "BLOCKED"
+    ) {
+      await this.prisma.mission.update({
+        where: { id: missionId },
+        data: { status: "PREP_READY", blockedReason: null },
+      });
+      await this.audit.append({
+        tenantId: mission.tenantId,
+        actorId: user.userId,
+        action: "mission.transition",
+        objectType: "mission",
+        objectId: missionId,
+        payload: { from: status, to: "PREP_READY", reason: "roe.updated" },
+      });
+    }
+
+    await this.audit.append({
+      tenantId: mission.tenantId,
+      actorId: user.userId,
+      action: "roe.updated",
+      objectType: "scope_version",
+      objectId: missionId,
+      payload: {
+        fromVersion: prev.version,
+        toVersion: nextVersion,
+        scopeHash,
+        invalidatedAuths: true,
+      },
+    });
+
+    return this.get(missionId, user.tenantId);
   }
 
   async transition(
@@ -178,6 +326,16 @@ export class MissionsService {
     return updated;
   }
 
+  private readonly ATLAS_COUNTERPARTY = {
+    email: "ops@a.atlas.local",
+    name: "Atlas Ops (contrepartie mock)",
+  };
+
+  /**
+   * Signature propriétaire (1re partie). Contrepartie A requise ensuite.
+   * En mission synthétique : auto-complète la 2e partie pour la démo,
+   * tout en journalisant les deux signatures mock.
+   */
   async submitOwnerAuth(
     missionId: string,
     user: AuthUser,
@@ -186,6 +344,11 @@ export class MissionsService {
     const mission = await this.get(missionId, user.tenantId);
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope manquant");
+    if (scope.revokedAt) {
+      throw new BadRequestException(
+        "Périmètre révoqué — mettez à jour le RoE puis re-signez.",
+      );
+    }
 
     if (mission.status === "PREP_READY") {
       await this.transition(missionId, "AUTH_PENDING", user);
@@ -196,46 +359,119 @@ export class MissionsService {
         JSON.stringify({
           missionId,
           scopeHash: scope.scopeHash,
+          version: scope.version,
+          exclusions: scope.exclusions,
+          methods: scope.methods,
           signerLabel,
         }),
       )
       .digest("hex");
 
     const envelope = await this.signatures.createEnvelope(documentHash, [
+      { email: user.email, name: signerLabel, role: "owner" },
       {
-        email: user.email,
-        name: signerLabel,
+        email: this.ATLAS_COUNTERPARTY.email,
+        name: this.ATLAS_COUNTERPARTY.name,
+        role: "counterparty",
       },
     ]);
-    const status = await this.signatures.getStatus(envelope.envelopeId);
+
+    await this.signatures.completeSigner(envelope.envelopeId, user.email);
+    const statusAfterOwner = await this.signatures.getStatus(
+      envelope.envelopeId,
+    );
     const artifact = await this.signatures.fetchArtifact(envelope.envelopeId);
 
-    await this.prisma.ownerAuthorization.create({
+    const authRow = await this.prisma.ownerAuthorization.create({
       data: {
         missionId,
         scopeVersionId: scope.id,
         scopeHash: scope.scopeHash,
-        status: status === "signed" ? "valid" : "pending",
+        status: "pending",
         signerLabel,
+        counterpartyLabel: this.ATLAS_COUNTERPARTY.name,
+        counterpartyEmail: this.ATLAS_COUNTERPARTY.email,
+        ownerSignedAt: new Date(),
         signatureArtifactRef: artifact.artifactRef,
         isStubSignature: artifact.isMock,
         signatureProvider: envelope.provider,
         signatureEnvelopeId: envelope.envelopeId,
-        signatureStatus: status,
+        signatureStatus: statusAfterOwner,
       },
     });
 
     await this.audit.append({
       tenantId: mission.tenantId,
       actorId: user.userId,
-      action: "signature.envelope",
+      action: "signature.owner",
       objectType: "owner_authorization",
-      objectId: missionId,
+      objectId: authRow.id,
       payload: {
         provider: envelope.provider,
         envelopeId: envelope.envelopeId,
         isMock: artifact.isMock,
-        contentHash: artifact.contentHash,
+        parties: 2,
+        scopeHash: scope.scopeHash,
+        scopeVersion: scope.version,
+      },
+    });
+
+    // Démo synthétique : contrepartie mock auto pour boucler le parcours
+    if (mission.synthetic) {
+      return this.completeCounterSignature(missionId, user, {
+        autoDemo: true,
+      });
+    }
+
+    return this.get(missionId, user.tenantId);
+  }
+
+  /** 2e partie du circuit mock (contrepartie A) */
+  async completeCounterSignature(
+    missionId: string,
+    user: AuthUser,
+    opts?: { autoDemo?: boolean },
+  ) {
+    const mission = await this.get(missionId, user.tenantId);
+    const scope = mission.scopeVersions[0];
+    const pending = mission.ownerAuths.find(
+      (o) => o.status === "pending" && !o.revokedAt,
+    );
+    if (!scope || !pending?.signatureEnvelopeId) {
+      throw new BadRequestException(
+        "Aucune autorisation en attente de contrepartie.",
+      );
+    }
+
+    const status = await this.signatures.completeSigner(
+      pending.signatureEnvelopeId,
+      this.ATLAS_COUNTERPARTY.email,
+    );
+    const artifact = await this.signatures.fetchArtifact(
+      pending.signatureEnvelopeId,
+    );
+
+    await this.prisma.ownerAuthorization.update({
+      where: { id: pending.id },
+      data: {
+        status: status === "signed" ? "valid" : "pending",
+        counterpartySignedAt: new Date(),
+        signatureStatus: status,
+        signatureArtifactRef: artifact.artifactRef,
+      },
+    });
+
+    await this.audit.append({
+      tenantId: mission.tenantId,
+      actorId: user.userId,
+      action: "signature.counterparty",
+      objectType: "owner_authorization",
+      objectId: pending.id,
+      payload: {
+        autoDemo: Boolean(opts?.autoDemo),
+        isMock: artifact.isMock,
+        signedBy: artifact.signedBy,
+        scopeHash: scope.scopeHash,
       },
     });
 
@@ -436,6 +672,7 @@ export class MissionsService {
           : { host: a.normalized },
       ),
       allowedHosts: assets.map((a) => a.normalized.toLowerCase()),
+      exclusions: (scope!.exclusions ?? []).map((e) => e.toLowerCase()),
     });
 
     await this.controlQueue.waitForJob(job.id, 120_000);

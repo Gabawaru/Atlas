@@ -4,6 +4,31 @@ export const MODULE_WEB_PASSIVE = "web.passive.presence.v1" as const;
 
 export type ModuleId = typeof MODULE_WEB_PASSIVE | string;
 
+/** Méthodes passives autorisables dans un RoE (pas de scan agressif) */
+export const PASSIVE_ROE_METHODS = [
+  "dns.lookup",
+  "dns.records",
+  "tls.certificate",
+  "http.headers",
+  "http.presence",
+] as const;
+
+export type PassiveRoeMethod = (typeof PASSIVE_ROE_METHODS)[number];
+
+/** RoE machine-readable lié à une ScopeVersion */
+export interface MachineReadableRoe {
+  version: number;
+  scopeHash: string;
+  assetIds: string[];
+  /** FQDN / hôtes exclus (refus déterministe même si sous-domaine du scope) */
+  exclusions: string[];
+  methods: string[];
+  periodStart: string;
+  periodEnd: string;
+  notes?: string | null;
+  revoked: boolean;
+}
+
 /** Rôles staff entreprise A — séparés, non confondus avec abonnement */
 export type StaffRole = "admin" | "support" | "billing" | "ops" | "approver";
 
