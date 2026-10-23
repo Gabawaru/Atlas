@@ -35,6 +35,7 @@ model Tenant {
   secretRefs     SecretRef[]
   auditEvents    AuditEvent[]
   routingPolicies ApprovalRoutingPolicy[]
+  connectorGrants ConnectorGrant[]
 }
 
 model User {
@@ -124,6 +125,27 @@ model SecretRef {
   purpose   String
   createdAt DateTime @default(now())
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+/// Instance de connecteur (permissions révocables) — jamais de secret en clair
+model ConnectorGrant {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  connectorId        String
+  status             String    @default("active") // active | revoked
+  grantedPermissions String[]
+  grantedScopes      String[]
+  /// Réf mock OAuth / lease — pas un access token GitHub réel
+  externalRef        String?
+  /// true = stub non production (ex. GitHub read-only mock)
+  isStub             Boolean   @default(false)
+  /// true = connecteur de contrôle réellement utilisable en MVP
+  productionReady    Boolean   @default(false)
+  connectedAt        DateTime  @default(now())
+  revokedAt          DateTime?
+  tenant             Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, connectorId, status])
 }
 
 model Mission {

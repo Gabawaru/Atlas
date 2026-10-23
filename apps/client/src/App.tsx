@@ -6,10 +6,31 @@ type Need = {
   id: string;
   label: string;
   mvpReady: boolean;
+  status?: string;
+  statusLabel?: string;
   note: string;
+  connectorIds?: string[];
 };
 
 type Asset = { id: string; value: string; normalized: string; synthetic: boolean };
+type ConnectorGrant = {
+  id: string;
+  connectorId: string;
+  status: string;
+  isStub: boolean;
+  productionReady: boolean;
+  catalog?: { label: string; statusLabel: string } | null;
+};
+type CatalogEntry = {
+  id: string;
+  label: string;
+  description: string;
+  productionReady: boolean;
+  isStub: boolean;
+  statusLabel: string;
+  disclaimer?: string;
+};
+
 type Mission = {
   id: string;
   title: string;
@@ -28,10 +49,14 @@ type Mission = {
     executiveSummary: string;
     technicalDetail: string;
     synthetic: boolean;
-    exportCsv?: string | null;
-    exportPdfPath?: string | null;
   }[];
 };
+
+function needBadge(status?: string) {
+  if (status === "usable") return "Utilisable";
+  if (status === "coming_soon") return "Bientôt";
+  return "Non branché";
+}
 
 export function App() {
   const [email, setEmail] = useState("owner@demo.atlas.local");
@@ -40,11 +65,14 @@ export function App() {
   const [needs, setNeeds] = useState<Need[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [grants, setGrants] = useState<ConnectorGrant[]>([]);
   const [selectedNeed, setSelectedNeed] = useState("web_presence");
   const [chat, setChat] = useState("Que voit-on de nous sur Internet ?");
   const [chatReply, setChatReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
   const headers = useMemo(
     () =>
@@ -72,14 +100,18 @@ export function App() {
 
   async function refresh() {
     if (!token) return;
-    const [n, a, m] = await Promise.all([
+    const [n, a, m, c, g] = await Promise.all([
       fetch(`${API}/v1/ux-needs`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
+      fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
+      fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
     ]);
     setNeeds(n);
     setAssets(a);
     setMissions(m);
+    setCatalog(Array.isArray(c) ? c : []);
+    setGrants(Array.isArray(g) ? g : []);
   }
 
   useEffect(() => {
@@ -92,7 +124,16 @@ export function App() {
       headers,
       body: JSON.stringify({ message: chat }),
     }).then((r) => r.json());
-    setChatReply(`${res.reply}\n\n(${res.disclaimer})`);
+    const lines = [
+      res.reply,
+      res.recommendedNeed ? `Besoin orienté : ${res.recommendedNeed}` : null,
+      res.recommendedConnectors?.length
+        ? `Connecteurs suggérés : ${res.recommendedConnectors.join(", ")}`
+        : null,
+      `(${res.disclaimer})`,
+    ].filter(Boolean);
+    setChatReply(lines.join("\n\n"));
+    if (res.recommendedNeed) setSelectedNeed(res.recommendedNeed);
   }
 
   async function addAsset() {
@@ -108,10 +149,42 @@ export function App() {
     await refresh();
   }
 
+  async function connectConnector(connectorId: string) {
+    setInfo(null);
+    setError(null);
+    const res = await fetch(`${API}/v1/connectors/connect`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ connectorId }),
+    }).then((r) => r.json());
+    if (res.warning) setInfo(res.warning);
+    await refresh();
+  }
+
+  async function revokeGrant(grantId: string) {
+    setInfo(null);
+    await fetch(`${API}/v1/connectors/${grantId}/revoke`, {
+      method: "POST",
+      headers,
+    });
+    setInfo("Connecteur révoqué — Policy Guard refusera les exécutions dépendantes.");
+    await refresh();
+  }
+
   async function createAndRunDemo() {
     setBusy(true);
     setError(null);
     try {
+      if (selectedNeed !== "web_presence") {
+        setError("Seul le besoin « présence web » est exécutable dans ce MVP.");
+        return;
+      }
+      const webGrant = grants.find(
+        (g) => g.connectorId === "web.passive.presence" && g.status === "active",
+      );
+      if (!webGrant) {
+        await connectConnector("web.passive.presence");
+      }
       if (assets.length === 0) {
         await addAsset();
       }
@@ -152,18 +225,19 @@ export function App() {
   }
 
   const latestReport = missions.find((m) => m.reports && m.reports.length > 0);
+  const selected = needs.find((n) => n.id === selectedNeed);
 
   return (
     <div className="shell">
       <p className="brand">Atlas</p>
       <p className="tagline">
-        Assistant de pentest autorisé — conversation guidée, contrôles
-        déterministes, jamais d&apos;auto-autorisation par l&apos;IA.
+        Assistant de pentest autorisé — conversation guidée, connecteurs
+        révocables, contrôles déterministes. L&apos;IA ne s&apos;auto-accorde
+        pas de droits.
       </p>
       <div className="banner">
-        <strong>Données de démonstration</strong> — aucune cible réelle. Abonnement ≠
-        autorisation de tester. Client web React ; shell Tauri documenté (stub) pour
-        le desktop multi-OS.
+        <strong>Données de démonstration</strong> — aucune cible réelle.
+        Abonnement ≠ autorisation. États UX honnêtes : pas de faux « terminé ».
       </div>
 
       {!token ? (
@@ -186,7 +260,9 @@ export function App() {
         <div className="grid two">
           <section>
             <h2>Conversation guidée</h2>
-            <p className="muted">LLM mock — propositions seulement.</p>
+            <p className="muted">
+              LLM mock — oriente vers modules/connecteurs, jamais d&apos;exécution.
+            </p>
             <textarea
               rows={3}
               value={chat}
@@ -207,19 +283,69 @@ export function App() {
                   <input
                     type="radio"
                     name="need"
-                    disabled={!n.mvpReady}
                     checked={selectedNeed === n.id}
                     onChange={() => setSelectedNeed(n.id)}
                   />{" "}
-                  {n.label}
+                  {n.label}{" "}
+                  <span className="muted">[{needBadge(n.status)}]</span>
                 </label>
-                <div className="muted">{n.note}</div>
+                <div className="muted">{n.statusLabel ?? n.note}</div>
               </div>
             ))}
+            {selected && !selected.mvpReady && (
+              <p className="muted">
+                Ce besoin n&apos;est pas exécutable : {selected.statusLabel}. Aucune
+                mission ne sera lancée sous un faux statut « terminé ».
+              </p>
+            )}
           </section>
 
           <section>
-            <h2>Actifs connectés</h2>
+            <h2>Connecteurs</h2>
+            <p className="muted">
+              Permissions révocables. Stub GitHub = mock OAuth non production.
+            </p>
+            <ul>
+              {catalog.map((c) => {
+                const grant = grants.find(
+                  (g) => g.connectorId === c.id && g.status === "active",
+                );
+                return (
+                  <li key={c.id} className="need">
+                    <strong>
+                      {c.label}{" "}
+                      {c.isStub && <span className="muted">[STUB]</span>}
+                      {!c.productionReady && !c.isStub && (
+                        <span className="muted">[non prod]</span>
+                      )}
+                    </strong>
+                    <div className="muted">{c.statusLabel}</div>
+                    {c.disclaimer && (
+                      <div className="muted">{c.disclaimer}</div>
+                    )}
+                    {grant ? (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void revokeGrant(grant.id)}
+                      >
+                        Révoquer
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => void connectConnector(c.id)}
+                      >
+                        {c.isStub ? "Connecter (mock OAuth)" : "Connecter"}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <h2>Actifs</h2>
             <ul>
               {assets.map((a) => (
                 <li key={a.id}>
@@ -233,21 +359,16 @@ export function App() {
             </button>
 
             <h2>Mission</h2>
-            <p className="muted">
-              Démo synthétique : circuit A skippable. Mission réelle sans
-              approbateur configuré → BLOCKED.
-            </p>
             <button
               type="button"
               disabled={busy || selectedNeed !== "web_presence"}
               onClick={() => void createAndRunDemo()}
             >
-              {busy ? "Exécution…" : "Demander mission démo + bilans"}
+              {busy ? "Exécution…" : "Mission démo présence web"}
             </button>
             <button type="button" className="ghost" onClick={() => void refresh()}>
               Rafraîchir
             </button>
-
             <ul>
               {missions.slice(0, 5).map((m) => (
                 <li key={m.id}>
@@ -279,41 +400,10 @@ export function App() {
           <p>{latestReport.reports[0].executiveSummary}</p>
           <h2>Détail technique</h2>
           <p>{latestReport.reports[0].technicalDetail}</p>
-          {latestReport.findings?.map((f) => (
-            <div key={f.title} className="need">
-              <strong>
-                [{f.severity}] {f.title}
-              </strong>
-              <div className="muted">{f.summary}</div>
-            </div>
-          ))}
-          <p className="muted">Exports (marqués FICTIF si synthétique) :</p>
-          {(["json", "csv", "pdf"] as const).map((fmt) => (
-            <a
-              key={fmt}
-              href={`${API}/v1/missions/${latestReport.id}/reports/${latestReport.reports![0].id}/export?format=${fmt}`}
-              style={{ marginRight: "0.75rem" }}
-              onClick={(e) => {
-                e.preventDefault();
-                void fetch(
-                  `${API}/v1/missions/${latestReport.id}/reports/${latestReport.reports![0].id}/export?format=${fmt}`,
-                  { headers: { Authorization: `Bearer ${token}` } },
-                ).then(async (r) => {
-                  const blob = await r.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `atlas-report.${fmt}`;
-                  a.click();
-                });
-              }}
-            >
-              Télécharger {fmt.toUpperCase()}
-            </a>
-          ))}
         </section>
       )}
 
+      {info && <p className="muted">{info}</p>}
       {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
     </div>
   );

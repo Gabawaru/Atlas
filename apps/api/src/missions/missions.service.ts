@@ -24,6 +24,8 @@ import {
   SIGNATURE_PROVIDER,
   type SignatureProvider,
 } from "../signatures/signature-provider";
+import { ConnectorsService } from "../connectors/connectors.service";
+import { CONNECTOR_CATALOG } from "../connectors/connector.types";
 import { readFile } from "node:fs/promises";
 
 @Injectable()
@@ -35,6 +37,8 @@ export class MissionsService {
     private readonly controlQueue: ControlQueueService,
     @Inject(SIGNATURE_PROVIDER)
     private readonly signatures: SignatureProvider,
+    @Inject(ConnectorsService)
+    private readonly connectors: ConnectorsService,
   ) {}
 
   async listForTenant(tenantId: string) {
@@ -344,6 +348,11 @@ export class MissionsService {
       where: { id: { in: scope?.assetIds ?? [] } },
     });
 
+    const connectorGuard = await this.connectors.guardStateForModule(
+      mission.tenantId,
+      WEB_PASSIVE_MODULE_ID,
+    );
+
     const gate = evaluateExecution({
       now: new Date(),
       moduleId: WEB_PASSIVE_MODULE_ID,
@@ -371,6 +380,9 @@ export class MissionsService {
       tokenModuleIds: token?.moduleIds ?? [],
       scopeRevoked: !!scope?.revokedAt,
       targetInApprovedScope: assets.length > 0,
+      connectorRequired: connectorGuard.connectorRequired,
+      connectorPresent: connectorGuard.connectorPresent,
+      connectorActive: connectorGuard.connectorActive,
       killSwitch: false,
     });
 
@@ -507,26 +519,102 @@ export class MissionsService {
       id: n.id,
       label: n.label,
       mvpReady: n.mvpReady,
-      note: n.mvpReady
-        ? "Disponible en MVP (présence web passive)."
-        : "Hors profondeur MVP — stub UX uniquement, non exécutable.",
+      status: n.status,
+      statusLabel: n.statusLabel,
+      connectorIds: [...n.connectorIds],
+      note: n.statusLabel,
     }));
+
+    const connectors = CONNECTOR_CATALOG.map((c) => ({
+      id: c.id,
+      label: c.label,
+      productionReady: c.productionReady,
+      isStub: c.isStub,
+      statusLabel: c.statusLabel,
+    }));
+
+    let intent: string = "general";
     let reply =
-      "Je peux vous guider sur les 5 besoins. Je propose un plan ; je n'exécute rien sans autorisations humaines et Policy Guard.";
+      "Je guide vers les modules et connecteurs disponibles. Je n'exécute rien : Policy Guard + autorisations humaines décident.";
+    let recommendedConnectors: string[] = [];
+    let recommendedNeed: string | null = null;
+    let canExecuteHint = false;
+
     if (
       lower.includes("web") ||
       lower.includes("internet") ||
-      lower.includes("dns")
+      lower.includes("dns") ||
+      lower.includes("présence") ||
+      lower.includes("presence")
     ) {
+      intent = "web_presence";
+      recommendedNeed = "web_presence";
+      recommendedConnectors = ["web.passive.presence"];
+      canExecuteHint = true;
       reply =
-        "Pour « Que voit-on de nous sur Internet ? », le module MVP est la présence web passive (DNS/HTTP publics). Abonnement ≠ autorisation de tester.";
+        "Besoin « présence web » : connectez le connecteur « Présence web passive », liez des actifs du scope, obtenez les autorisations, puis lancez une mission. L'abonnement seul ne suffit pas ; je ne contourne pas le Policy Guard.";
+    } else if (
+      lower.includes("github") ||
+      lower.includes("git") ||
+      lower.includes("logiciel") ||
+      lower.includes("code")
+    ) {
+      intent = "systems_software";
+      recommendedNeed = "systems_software";
+      recommendedConnectors = ["github.read_only"];
+      reply =
+        "Pour le code / logiciels : un stub GitHub lecture seule (mock OAuth) existe — clairement non production. Il n'autorise aucune exécution de contrôle. Pas de faux « terminé ».";
+    } else if (
+      lower.includes("réseau") ||
+      lower.includes("reseau") ||
+      lower.includes("network") ||
+      lower.includes("interne")
+    ) {
+      intent = "internal_network";
+      recommendedNeed = "internal_network";
+      reply =
+        "Réseau interne : non branché dans ce MVP (aucun module). Je ne peux pas lancer de scan. Statut honnête : « non branché ».";
+    } else if (
+      lower.includes("config") ||
+      lower.includes("iam") ||
+      lower.includes("accès") ||
+      lower.includes("acces")
+    ) {
+      intent = "configs_access";
+      recommendedNeed = "configs_access";
+      reply =
+        "Configs / accès : non branché. Aucun connecteur IAM. Je refuse d'inventer une capacité.";
+    } else if (
+      lower.includes("vuln") ||
+      lower.includes("cve") ||
+      lower.includes("corriger")
+    ) {
+      intent = "vuln_tracking";
+      recommendedNeed = "vuln_tracking";
+      reply =
+        "Suivi des vulnérabilités : bientôt (hors ITSM). Pas d'exécution automatique depuis cette conversation.";
+    } else if (
+      lower.includes("exécuter") ||
+      lower.includes("executer") ||
+      lower.includes("lance") ||
+      lower.includes("scan")
+    ) {
+      intent = "execute_request";
+      reply =
+        "Je ne lance pas d'exécution. Passez par une mission autorisée ; le Policy Guard refuse sans owner auth, approbation A (si réelle), jeton, scope et connecteur actif.";
     }
+
     return {
       reply,
+      intent,
+      recommendedNeed,
+      recommendedConnectors,
+      canExecuteHint,
       llm: "mock",
       disclaimer:
-        "L'IA ne s'auto-accorde pas de droits. Aucune exécution depuis cette conversation.",
+        "L'IA ne s'auto-accorde pas de droits et ne contourne pas le Policy Guard. Aucune exécution depuis cette conversation.",
       suggestions,
+      connectors,
     };
   }
 }

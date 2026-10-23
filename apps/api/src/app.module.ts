@@ -5,6 +5,7 @@ import { ApprovalsModule } from "./approvals/approvals.module";
 import { AssetsModule } from "./assets/assets.module";
 import { QueueModule } from "./queue/queue.module";
 import { SignaturesModule } from "./signatures/signatures.module";
+import { ConnectorsModule } from "./connectors/connectors.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
@@ -13,6 +14,7 @@ import { PrismaService } from "./prisma/prisma.service";
     AuthModule,
     SignaturesModule,
     QueueModule,
+    ConnectorsModule,
     MissionsModule,
     ApprovalsModule,
     AssetsModule,

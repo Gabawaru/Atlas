@@ -24,6 +24,7 @@ async function main() {
   await prisma.approvalRoutingPolicy.deleteMany();
   await prisma.staffGroup.deleteMany();
   await prisma.secretRef.deleteMany();
+  await prisma.connectorGrant.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.plan.deleteMany();
@@ -153,6 +154,20 @@ async function main() {
       normalized: "example.com",
       verified: true,
       synthetic: true,
+    },
+  });
+
+  // Connecteur présence web actif (MVP réel) — révocable
+  await prisma.connectorGrant.create({
+    data: {
+      tenantId: tenantDemo.id,
+      connectorId: "web.passive.presence",
+      status: "active",
+      grantedPermissions: ["control:web.passive.execute"],
+      grantedScopes: ["assets:domain", "assets:url"],
+      externalRef: "web-passive-grant:seed",
+      isStub: false,
+      productionReady: true,
     },
   });
 

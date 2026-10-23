@@ -14,11 +14,13 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 
 1. **Connexion** locale (pas d’OIDC réel).
 2. **Conversation guidée** (LLM **mock**) sur les 5 besoins UX — l’IA propose, elle n’exécute rien.
-3. **Actifs** : ajouter un domaine/URL (ex. `example.com` en démo). Marqueur FICTIF possible.
-4. **Mission démo** : besoin « Analyser la présence web » → demande de mission synthétique.
-5. **Autorisation propriétaire** : signature via **SignatureProvider mock** (pas eIDAS).
-6. **Exécution** : après Policy Guard `ALLOW`, contrôle passif DNS/HTTP dans le **périmètre** uniquement.
-7. **Bilans** : décideur + détail technique ; téléchargement **JSON / CSV / PDF** (en-tête synthétique si FICTIF).
+3. **Cinq besoins** : seule la présence web est **utilisable** ; les autres affichent **non branché** ou **bientôt** (jamais « terminé » à tort).
+4. **Connecteurs** : présence web (réel MVP) ; GitHub lecture seule = **stub mock OAuth** révocable, non production.
+5. **Actifs** : domaine/URL (ex. `example.com`). Marqueur FICTIF possible.
+6. **Mission démo** : besoin présence web uniquement → mission synthétique.
+7. **Autorisation propriétaire** : signature via **SignatureProvider mock** (pas eIDAS).
+8. **Exécution** : Policy Guard (connecteur actif requis) → DNS/HTTP dans le **périmètre** uniquement.
+9. **Bilans** : décideur + détail technique ; exports JSON/CSV/PDF.
 
 ## Ce que vous ne pouvez pas faire (honnête)
 

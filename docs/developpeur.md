@@ -34,6 +34,7 @@ pnpm demo:smoke
 | `packages/policy-guard` | `evaluateExecution` — **sans LLM** |
 | `packages/shared` | États mission, types |
 | `docs/` | Guides FR + exemples de rapports |
+| `apps/api/src/connectors` | Catalogue + grants révocables (web réel, GitHub stub) |
 
 ## Tests
 

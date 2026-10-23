@@ -32,6 +32,9 @@ function base(overrides: Partial<PolicyEvaluationInput> = {}): PolicyEvaluationI
     tokenModuleIds: [MODULE_WEB_PASSIVE],
     scopeRevoked: false,
     targetInApprovedScope: true,
+    connectorRequired: true,
+    connectorPresent: true,
+    connectorActive: true,
     killSwitch: false,
     ...overrides,
   };
@@ -125,5 +128,21 @@ describe("Policy Guard (sans LLM)", () => {
     const r = evaluateExecution(base({ subscriptionActive: false }));
     assert.equal(r.decision, "REJECT");
     assert.equal(r.code, "SUBSCRIPTION_INACTIVE");
+  });
+
+  it("REJECT si connecteur requis révoqué", () => {
+    const r = evaluateExecution(
+      base({ connectorRequired: true, connectorPresent: true, connectorActive: false }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "CONNECTOR_REVOKED");
+  });
+
+  it("REJECT si connecteur requis manquant", () => {
+    const r = evaluateExecution(
+      base({ connectorRequired: true, connectorPresent: false }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "CONNECTOR_MISSING");
   });
 });

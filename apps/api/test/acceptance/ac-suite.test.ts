@@ -60,6 +60,9 @@ function gate(overrides: Partial<Parameters<typeof evaluateExecution>[0]> = {}) 
     tokenModuleIds: [MODULE_WEB_PASSIVE],
     scopeRevoked: false,
     targetInApprovedScope: true,
+    connectorRequired: true,
+    connectorPresent: true,
+    connectorActive: true,
     killSwitch: false,
     ...overrides,
   });

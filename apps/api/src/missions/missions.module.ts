@@ -6,9 +6,10 @@ import { AuditService } from "../audit/audit.service";
 import { AuthModule } from "../auth/auth.module";
 import { QueueModule } from "../queue/queue.module";
 import { SignaturesModule } from "../signatures/signatures.module";
+import { ConnectorsModule } from "../connectors/connectors.module";
 
 @Module({
-  imports: [AuthModule, QueueModule, SignaturesModule],
+  imports: [AuthModule, QueueModule, SignaturesModule, ConnectorsModule],
   controllers: [MissionsController],
   providers: [MissionsService, PrismaService, AuditService],
   exports: [MissionsService],

@@ -129,6 +129,13 @@ async function main() {
       throw new Error("assets seed manquants");
     }
 
+    // Connecteur présence web (idempotent si seed déjà actif)
+    await fetch(`${BASE}/connectors/connect`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ connectorId: "web.passive.presence" }),
+    });
+
     const mission = await fetch(`${BASE}/missions`, {
       method: "POST",
       headers,

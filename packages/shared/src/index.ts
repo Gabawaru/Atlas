@@ -94,6 +94,8 @@ export type PolicyRejectCode =
   | "MODULE_NOT_IN_TOKEN"
   | "MODULE_OUT_OF_SCOPE"
   | "TARGET_OUT_OF_SCOPE"
+  | "CONNECTOR_MISSING"
+  | "CONNECTOR_REVOKED"
   | "POLICY_DENY"
   | "SYNTHETIC_ONLY";
 
@@ -121,6 +123,10 @@ export interface PolicyEvaluationInput {
   tokenModuleIds: string[];
   scopeRevoked: boolean;
   targetInApprovedScope: boolean;
+  /** Connecteur requis pour le module (ex. présence web) */
+  connectorRequired?: boolean;
+  connectorPresent?: boolean;
+  connectorActive?: boolean;
   killSwitch?: boolean;
 }
 
@@ -130,42 +136,63 @@ export interface PolicyEvaluationResult {
   reason: string;
 }
 
+/** État UX honnête — jamais « terminé » si non branché */
+export type UxNeedStatus = "usable" | "not_wired" | "coming_soon";
+
 export const UX_NEEDS = [
   {
     id: "web_presence",
     label: "Analyser la présence web",
     description: "Comprendre l'exposition internet (sites, DNS, surface publique).",
     moduleIds: [MODULE_WEB_PASSIVE],
+    connectorIds: ["web.passive.presence"],
     mvpReady: true,
+    status: "usable" as UxNeedStatus,
+    statusLabel: "Utilisable — présence web passive",
   },
   {
     id: "internal_network",
     label: "Évaluer le réseau interne",
     description: "Cartographier le réseau privé sous autorisation.",
-    moduleIds: [],
+    moduleIds: [] as string[],
+    connectorIds: [] as string[],
     mvpReady: false,
+    status: "not_wired" as UxNeedStatus,
+    statusLabel: "Non branché — aucun module réseau MVP",
   },
   {
     id: "systems_software",
     label: "Vérifier systèmes et logiciels",
     description: "Versions, patchs, logiciels vulnérables.",
-    moduleIds: [],
+    moduleIds: [] as string[],
+    connectorIds: ["github.read_only"],
     mvpReady: false,
+    status: "coming_soon" as UxNeedStatus,
+    statusLabel: "Bientôt — stub GitHub lecture seule (non production)",
   },
   {
     id: "configs_access",
     label: "Contrôler configs et accès",
     description: "Durcissement, comptes, permissions.",
-    moduleIds: [],
+    moduleIds: [] as string[],
+    connectorIds: [] as string[],
     mvpReady: false,
+    status: "not_wired" as UxNeedStatus,
+    statusLabel: "Non branché — pas de connecteur IAM/config",
   },
   {
     id: "vuln_tracking",
     label: "Suivre et corriger les vulnérabilités",
     description: "Prioriser, assigner, retester, clôturer.",
-    moduleIds: [],
+    moduleIds: [] as string[],
+    connectorIds: [] as string[],
     mvpReady: false,
+    status: "coming_soon" as UxNeedStatus,
+    statusLabel: "Bientôt — suivi local minimal hors ITSM",
   },
 ] as const;
 
 export type UxNeedId = (typeof UX_NEEDS)[number]["id"];
+
+export const CONNECTOR_WEB_PASSIVE = "web.passive.presence" as const;
+export const CONNECTOR_GITHUB_RO = "github.read_only" as const;

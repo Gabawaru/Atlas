@@ -149,6 +149,21 @@ export function evaluateExecution(
     );
   }
 
+  if (input.connectorRequired) {
+    if (!input.connectorPresent) {
+      return reject(
+        "CONNECTOR_MISSING",
+        "Connecteur requis absent — connectez le module avant exécution (hors LLM).",
+      );
+    }
+    if (!input.connectorActive) {
+      return reject(
+        "CONNECTOR_REVOKED",
+        "Connecteur révoqué — permissions coupées, exécution refusée.",
+      );
+    }
+  }
+
   return {
     decision: "ALLOW",
     reason: "Tous les garde-fous déterministes sont satisfaits.",
