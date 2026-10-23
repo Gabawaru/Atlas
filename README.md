@@ -115,6 +115,9 @@ Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) sur `push` / `pu
 
 Variables CI (alignées `.env.example`) : `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (valeur CI uniquement), `ATLAS_FORCE_MOCK_NETWORK=true`.
 
+**RLS Postgres :** politiques FORCE multi-tenant ; rôle `atlas` sans SUPERUSER/BYPASSRLS ; seed/API en `app.bypass_rls=on` ; isolation via `PrismaService.asTenant`.  
+**BullMQ :** retry 3× + backoff, DLQ `atlas-control-passive-dlq`, kill → failed + DLQ.
+
 En local, la même séquence équivaut à la checklist ci-dessus + `pnpm test:unit` / `pnpm test:acceptance` (ou `pnpm demo:smoke`). `act` n’est pas requis pour valider ce dépôt.
 
 ## Tests

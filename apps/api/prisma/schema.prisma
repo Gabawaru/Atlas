@@ -279,6 +279,8 @@ model JobRun {
   progressMessage       String?
   bullJobId             String?
   killedAt              DateTime?
+  deadLetteredAt        DateTime?
+  attemptCount          Int      @default(0)
   evidenceJson          Json?
   startedAt             DateTime?
   finishedAt            DateTime?
