@@ -321,6 +321,12 @@ async function main() {
       throw new Error(`vuln/match principle attendu, reçu ${JSON.stringify(matched)}`);
     }
 
+    // Modes déploiement
+    const deployMode = await fetch(`${BASE}/deploy/mode`).then((r) => r.json());
+    if (!deployMode?.mode || !deployMode?.componentMap?.length) {
+      throw new Error(`deploy/mode invalide: ${JSON.stringify(deployMode)}`);
+    }
+
     // Assistant : propose sans exécuter
     const chat = await fetch(`${BASE}/conversation`, {
       method: "POST",

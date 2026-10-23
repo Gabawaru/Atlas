@@ -27,6 +27,7 @@ import {
   type SignatureProvider,
 } from "../signatures/signature-provider";
 import { ConnectorsService } from "../connectors/connectors.service";
+import { DeployService } from "../deploy/deploy.service";
 import { readFile } from "node:fs/promises";
 
 @Injectable()
@@ -40,6 +41,8 @@ export class MissionsService {
     private readonly signatures: SignatureProvider,
     @Inject(ConnectorsService)
     private readonly connectors: ConnectorsService,
+    @Inject(DeployService)
+    private readonly deploy: DeployService,
   ) {}
 
   async listForTenant(tenantId: string) {
@@ -570,6 +573,8 @@ export class MissionsService {
 
     const scope = mission.scopeVersions[0];
     const token = mission.tokens.find((t) => !t.revokedAt);
+    // Garde-fou mode déploiement / offline (avant Policy Guard)
+    this.deploy.assertExecutionAllowed(Boolean(token && !token.revokedAt));
     const owner = mission.ownerAuths.find((o) => o.status === "valid");
     const approval = mission.approvalReqs
       .flatMap((r) => r.decisions)

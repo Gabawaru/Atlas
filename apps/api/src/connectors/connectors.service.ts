@@ -12,12 +12,14 @@ import {
   CONNECTOR_CATALOG,
   getCatalogEntry,
 } from "./connector.types";
+import { DeployService } from "../deploy/deploy.service";
 
 @Injectable()
 export class ConnectorsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(DeployService) private readonly deploy: DeployService,
   ) {}
 
   catalog() {
@@ -141,7 +143,23 @@ export class ConnectorsService {
       },
     });
 
-    return { grant: updated, alreadyRevoked: false };
+    // Offline : pas de fausse confirmation distante — file de sync
+    const sync = await this.deploy.recordRevokeIntent(
+      user.tenantId,
+      "revoke_connector",
+      {
+        grantId,
+        connectorId: grant.connectorId,
+        localApplied: true,
+      },
+      user.userId,
+    );
+
+    return {
+      grant: updated,
+      alreadyRevoked: false,
+      deploySync: sync,
+    };
   }
 
   async findActive(tenantId: string, connectorId: string) {

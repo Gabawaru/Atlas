@@ -4,9 +4,10 @@ import { ConnectorsController } from "./connectors.controller";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthModule } from "../auth/auth.module";
+import { DeployModule } from "../deploy/deploy.module";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, DeployModule],
   controllers: [ConnectorsController],
   providers: [ConnectorsService, PrismaService, AuditService],
   exports: [ConnectorsService],
