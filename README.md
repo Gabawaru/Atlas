@@ -102,6 +102,21 @@ Endpoints : `POST …/execute|cancel|kill`, `GET …/jobs/:id`, `GET …/reports
 
 Exemple versionné : [`docs/exemples/`](docs/exemples/) (`pnpm docs:exemple-rapport` pour régénérer).
 
+## CI (GitHub Actions)
+
+Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) sur `push` / `pull_request` vers `main` (et pushes `cursor/**`) :
+
+1. pnpm 9.15 + Node 20  
+2. Services **Postgres 16** + **Redis 7** (healthchecks)  
+3. `pnpm install --frozen-lockfile`  
+4. Build `@atlas/shared` + `@atlas/policy-guard`  
+5. `pnpm db:generate` + `pnpm db:migrate` + `pnpm db:seed`  
+6. `pnpm test:unit` puis `pnpm test:acceptance`  
+
+Variables CI (alignées `.env.example`) : `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (valeur CI uniquement), `ATLAS_FORCE_MOCK_NETWORK=true`.
+
+En local, la même séquence équivaut à la checklist ci-dessus + `pnpm test:unit` / `pnpm test:acceptance` (ou `pnpm demo:smoke`). `act` n’est pas requis pour valider ce dépôt.
+
 ## Tests
 
 ```bash
