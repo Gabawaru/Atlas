@@ -14,6 +14,9 @@ async function main() {
   await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
 
   await prisma.auditEvent.deleteMany();
+  await prisma.opsJournalEntry.deleteMany();
+  await prisma.productVersion.deleteMany();
+  await prisma.opsRuntimeConfig.deleteMany();
   await prisma.purgeRun.deleteMany();
   await prisma.syncJournalEntry.deleteMany();
   await prisma.llmUsageLog.deleteMany();
@@ -405,17 +408,51 @@ async function main() {
     },
   });
 
+  await prisma.opsRuntimeConfig.create({
+    data: { id: "default", maintenanceMode: false },
+  });
+  await prisma.productVersion.create({
+    data: {
+      version: "0.1.0-mvp",
+      channel: "stable",
+      title: "MVP scaffold Atlas (FICTIF)",
+      releaseNotes:
+        "Scaffold multi-tenant, Policy Guard, présence web passive, licences stub, rétention. Pas d'OIDC / e-sign / hiérarchie réelle.",
+      current: false,
+      releasedAt: new Date("2026-10-20T00:00:00.000Z"),
+    },
+  });
+  await prisma.productVersion.create({
+    data: {
+      version: "0.1.1-mvp",
+      channel: "stable",
+      title: "Licences + ops maintenance (FICTIF)",
+      releaseNotes:
+        "Catalogue plans/abonnements, mode maintenance (kill-switch), journal ops, notes de release.",
+      current: true,
+      releasedAt: new Date("2026-10-23T18:00:00.000Z"),
+    },
+  });
+  await prisma.opsJournalEntry.create({
+    data: {
+      kind: "version_published",
+      message: "Seed : version courante 0.1.1-mvp",
+      payload: { version: "0.1.1-mvp", synthetic: true },
+    },
+  });
+
   console.log("✅ Seed OK");
   console.log("Comptes locaux (mot de passe: atlas-demo) :");
   console.log("  owner@demo.atlas.local     — client owner");
   console.log("  approver@a.atlas.local     — staff approver");
   console.log("  support@a.atlas.local      — staff support (ne peut pas approve)");
   console.log("  billing@a.atlas.local      — staff billing (licences, pas de données sécu)");
-  console.log("  ops@a.atlas.local          — staff ops");
+  console.log("  ops@a.atlas.local          — staff ops (versions / maintenance)");
   console.log("  admin@a.atlas.local        — staff admin");
   console.log("Plans: atlas-starter-fictif, atlas-pro-fictif");
   console.log("Tenant sans routage A (test BLOCKED): acme-sans-route");
   console.log("Tenant licence expirée (endsAt passé): licence-expiree");
+  console.log("Version courante seed: 0.1.1-mvp · maintenance OFF");
 }
 
 main()

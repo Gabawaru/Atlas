@@ -42,6 +42,7 @@ pnpm demo:smoke
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation (sécu ; pas billing) |
 | Billing / licences | `GET/POST /v1/admin/billing/…` — plans, activate/expire, payment stub — `docs/licences-abonnements.md` |
+| Ops / versions | `GET/POST /v1/admin/ops/…` — versions, maintenance (kill-switch), journal — `docs/versions-et-maintenance.md` |
 | Admin SAV | `GET/POST /v1/admin/tickets`, `PATCH …/tickets/:id/status` — support≠approver |
 | Remédiation | `GET /v1/findings`, `PATCH /v1/findings/:id/remediation` |
 | Vuln feeds | `GET /v1/vuln/feeds`, `GET /v1/software-components`, `POST /v1/vuln/match` — voir `docs/referentiels-vulnerabilites.md` |

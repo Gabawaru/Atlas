@@ -28,7 +28,10 @@ export function evaluateExecution(
   input: PolicyEvaluationInput,
 ): PolicyEvaluationResult {
   if (input.killSwitch) {
-    return reject("POLICY_DENY", "Kill-switch ops actif.");
+    return reject(
+      "POLICY_DENY",
+      "Mode maintenance / kill-switch ops actif — exécution bloquée.",
+    );
   }
 
   // Abonnement = droit logiciel uniquement ; nécessaire mais insuffisant

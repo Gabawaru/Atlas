@@ -85,6 +85,34 @@ type BillingSub = {
   commerciallyActive: boolean;
 };
 
+type OpsStatus = {
+  principle: string;
+  maintenanceMode: boolean;
+  maintenanceReason: string | null;
+  currentVersion: {
+    version: string;
+    title: string;
+    channel: string;
+  } | null;
+};
+
+type ProductVersionRow = {
+  id: string;
+  version: string;
+  title: string;
+  channel: string;
+  releaseNotes: string;
+  current: boolean;
+  releasedAt: string;
+};
+
+type OpsJournalRow = {
+  id: string;
+  kind: string;
+  message: string;
+  createdAt: string;
+};
+
 export default function AdminHome() {
   const [email, setEmail] = useState("approver@a.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
@@ -109,6 +137,12 @@ export default function AdminHome() {
   const [billingSubs, setBillingSubs] = useState<BillingSub[]>([]);
   const [billingPrinciple, setBillingPrinciple] = useState<string | null>(null);
   const [activatePlanCode, setActivatePlanCode] = useState("atlas-starter-fictif");
+  const [opsStatus, setOpsStatus] = useState<OpsStatus | null>(null);
+  const [opsVersions, setOpsVersions] = useState<ProductVersionRow[]>([]);
+  const [opsJournal, setOpsJournal] = useState<OpsJournalRow[]>([]);
+  const [maintReason, setMaintReason] = useState(
+    "[FICTIF] Fenêtre de maintenance démo",
+  );
   const [ticketSubject, setTicketSubject] = useState(
     "[FICTIF] Incident démo — accès rapport",
   );
@@ -152,6 +186,26 @@ export default function AdminHome() {
     const canBilling = roles.some((r) =>
       ["billing", "admin", "ops"].includes(r),
     );
+    const canOps = roles.some((r) =>
+      ["ops", "admin", "support"].includes(r),
+    );
+
+    if (canOps) {
+      const [st, vers, journal] = await Promise.all([
+        fetch(`${API}/v1/admin/ops/status`, { headers: headers() }).then((x) =>
+          x.json(),
+        ),
+        fetch(`${API}/v1/admin/ops/versions`, { headers: headers() }).then(
+          (x) => x.json(),
+        ),
+        fetch(`${API}/v1/admin/ops/journal?limit=15`, {
+          headers: headers(),
+        }).then((x) => x.json()),
+      ]);
+      if (st?.principle) setOpsStatus(st);
+      setOpsVersions(Array.isArray(vers) ? vers : []);
+      setOpsJournal(Array.isArray(journal) ? journal : []);
+    }
 
     if (canBilling) {
       const [plans, subs, billingTenants] = await Promise.all([
@@ -342,7 +396,41 @@ export default function AdminHome() {
   const canMutateBilling = user?.staffRoles?.some((r) =>
     ["billing", "admin"].includes(r),
   );
+  const canOps = user?.staffRoles?.some((r) =>
+    ["ops", "admin", "support"].includes(r),
+  );
+  const canMutateOps = user?.staffRoles?.some((r) =>
+    ["ops", "admin"].includes(r),
+  );
   const blockedCount = queue.filter((q) => q.status === "blocked_no_route").length;
+
+  async function setMaintenance(active: boolean) {
+    setError(null);
+    setMsg(null);
+    const res = await fetch(`${API}/v1/admin/ops/maintenance`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        active,
+        reason: active ? maintReason : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      active
+        ? "Maintenance ON — exécutions bloquées (POLICY_DENY)."
+        : "Maintenance OFF — Policy Guard habituel.",
+    );
+    await refresh();
+  }
 
   async function activateSubscription() {
     setError(null);
@@ -514,6 +602,82 @@ export default function AdminHome() {
               <button type="button" onClick={() => void importStub()}>
                 Importer stub hiérarchie pour ce tenant
               </button>
+            </div>
+          )}
+
+          {canOps && opsStatus && (
+            <div className="panel">
+              <h2>Versions / mises à jour / maintenance</h2>
+              <p className="muted">{opsStatus.principle}</p>
+              <div className="banner">
+                Version courante :{" "}
+                <code>
+                  {opsStatus.currentVersion?.version ?? "—"}
+                </code>
+                {opsStatus.currentVersion
+                  ? ` — ${opsStatus.currentVersion.title}`
+                  : ""}
+                {" · "}
+                Maintenance :{" "}
+                <strong>
+                  {opsStatus.maintenanceMode ? "ON (exécutions bloquées)" : "OFF"}
+                </strong>
+                {opsStatus.maintenanceReason
+                  ? ` — ${opsStatus.maintenanceReason}`
+                  : ""}
+              </div>
+              {canMutateOps && (
+                <>
+                  <label>Raison maintenance</label>
+                  <input
+                    value={maintReason}
+                    onChange={(e) => setMaintReason(e.target.value)}
+                  />
+                  {!opsStatus.maintenanceMode ? (
+                    <button type="button" onClick={() => void setMaintenance(true)}>
+                      Activer maintenance
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void setMaintenance(false)}
+                    >
+                      Lever maintenance
+                    </button>
+                  )}
+                </>
+              )}
+              <h3>Catalogue versions</h3>
+              <ul>
+                {opsVersions.map((v) => (
+                  <li key={v.id} className="item">
+                    <div>
+                      <strong>
+                        {v.version}
+                        {v.current ? " (courante)" : ""}
+                      </strong>{" "}
+                      <span className="muted">{v.channel}</span> — {v.title}
+                    </div>
+                    <p className="muted">{v.releaseNotes}</p>
+                  </li>
+                ))}
+              </ul>
+              <h3>Journal ops</h3>
+              {opsJournal.length === 0 ? (
+                <p className="muted">Aucune entrée.</p>
+              ) : (
+                <ul>
+                  {opsJournal.map((j) => (
+                    <li key={j.id} className="item">
+                      <code>{j.kind}</code> — {j.message}{" "}
+                      <span className="muted">
+                        ({new Date(j.createdAt).toLocaleString("fr-FR")})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

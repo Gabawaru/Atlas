@@ -13,7 +13,16 @@ Console admin distincte du client. Auth locale seedée — **pas d’OIDC / SSO*
 | `admin@a.atlas.local` | admin | Non (mais importe le stub routage) |
 | `support@a.atlas.local` | support | Non |
 | `billing@a.atlas.local` | billing | Non (licences commerciales seulement) |
-| `ops@a.atlas.local` | ops | Non (peut vérifier l’audit) |
+| `ops@a.atlas.local` | ops | Non (audit + **versions / maintenance**) |
+
+## Versions / maintenance
+
+Écran **« Versions / mises à jour / maintenance »** (`/v1/admin/ops/…`) — rôles `ops` / `admin` (lecture `support`) :
+
+- catalogue versions + notes de release ;
+- **flag maintenance** : si ON, aucune nouvelle exécution (Policy Guard `POLICY_DENY`) ;
+- journal ops (maintenance, versions, notes) ;
+- détail : `docs/versions-et-maintenance.md`.
 
 ## Licences & abonnements (stub)
 

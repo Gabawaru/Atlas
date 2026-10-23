@@ -48,8 +48,15 @@ Attendu : `{ "ok": true, ... }`.
 
 ## 2. Mises à jour (MVP)
 
+**Avant** une fenêtre de maj : activer le mode maintenance (bloque les exécutions) — voir `docs/versions-et-maintenance.md`.
+
 ```bash
-git fetch && git checkout cursor/mvp-scaffold-fc63   # ou main après merge
+# Maintenance ON (compte ops/admin)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"active":true,"reason":"Fenêtre maj MVP"}' \
+  http://localhost:3001/v1/admin/ops/maintenance
+
+git fetch && git checkout main
 pnpm install
 pnpm --filter @atlas/shared build
 pnpm --filter @atlas/policy-guard build
@@ -61,6 +68,8 @@ pnpm build               # optionnel
 ```
 
 Redémarrer API / admin / client.
+
+Après maj : publier une note de version si besoin, puis **lever** la maintenance (`"active":false`).
 
 Checklist post-maj :
 
@@ -85,6 +94,7 @@ pnpm smoke               # ou pnpm demo:smoke
 | Finding sans statut remédiation | Colonnes absentes / seed ancien | `pnpm db:migrate` puis re-seed démo |
 | `OFFLINE_HOSTED` à l’exécution | `ATLAS_OFFLINE=true` en mode hébergé | Repasser online ou mode hybrid/local + jeton |
 | Révocation `remoteConfirmed: false` | Offline attendu | `POST /v1/deploy/sync` une fois online |
+| `POLICY_DENY` / maintenance | Flag ops `maintenanceMode` | Admin ops : lever maintenance (`/v1/admin/ops/maintenance`) |
 
 ### Kill / cancel d’urgence
 
