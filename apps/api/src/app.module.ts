@@ -10,6 +10,7 @@ import { TicketsModule } from "./tickets/tickets.module";
 import { RemediationModule } from "./remediation/remediation.module";
 import { VulnModule } from "./vuln/vuln.module";
 import { AssistantModule } from "./assistant/assistant.module";
+import { DeployModule } from "./deploy/deploy.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
@@ -26,6 +27,7 @@ import { PrismaService } from "./prisma/prisma.service";
     RemediationModule,
     VulnModule,
     AssistantModule,
+    DeployModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService],

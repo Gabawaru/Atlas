@@ -356,10 +356,33 @@ describe("AC suite — critères d'acceptation MVP", () => {
     });
   });
 
-  describe("AC-12 — mode démo documenté", () => {
+  describe("AC-12 — modes local / hébergé / hybride", () => {
     it("marqueurs démo / synthetic présents dans le modèle d'états", () => {
       assert.ok(canTransition("AUTH_VALID", "A_SKIPPED_DEMO"));
       assert.ok(canTransition("AUTH_VALID", "BLOCKED"));
+    });
+
+    it("DEPLOY_MODES expose hosted|hybrid|local", async () => {
+      const { DEPLOY_MODES } = await import("@atlas/shared");
+      assert.deepEqual([...DEPLOY_MODES], ["hosted", "hybrid", "local"]);
+    });
+
+    it("hébergé offline refuse l'exécution ; hybride offline sans jeton aussi", async () => {
+      const {
+        getDeployRuntime,
+        canExecuteOffline,
+      } = await import("../../src/deploy/deploy.config");
+      const hostedOff = getDeployRuntime({
+        ATLAS_DEPLOY_MODE: "hosted",
+        ATLAS_OFFLINE: "true",
+      } as NodeJS.ProcessEnv);
+      assert.equal(canExecuteOffline(hostedOff, true).allow, false);
+      const hybridOff = getDeployRuntime({
+        ATLAS_DEPLOY_MODE: "hybrid",
+        ATLAS_OFFLINE: "true",
+      } as NodeJS.ProcessEnv);
+      assert.equal(canExecuteOffline(hybridOff, false).allow, false);
+      assert.equal(canExecuteOffline(hybridOff, true).allow, true);
     });
   });
 });

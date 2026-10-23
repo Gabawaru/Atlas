@@ -1,5 +1,9 @@
 /** Types et constantes partagés Atlas MVP */
 
+/** Modes de déploiement — mêmes contrats API (ADR-009) */
+export const DEPLOY_MODES = ["hosted", "hybrid", "local"] as const;
+export type DeployMode = (typeof DEPLOY_MODES)[number];
+
 export const MODULE_WEB_PASSIVE = "web.passive.presence.v1" as const;
 
 export type ModuleId = typeof MODULE_WEB_PASSIVE | string;

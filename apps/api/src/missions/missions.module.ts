@@ -7,9 +7,16 @@ import { AuthModule } from "../auth/auth.module";
 import { QueueModule } from "../queue/queue.module";
 import { SignaturesModule } from "../signatures/signatures.module";
 import { ConnectorsModule } from "../connectors/connectors.module";
+import { DeployModule } from "../deploy/deploy.module";
 
 @Module({
-  imports: [AuthModule, QueueModule, SignaturesModule, ConnectorsModule],
+  imports: [
+    AuthModule,
+    QueueModule,
+    SignaturesModule,
+    ConnectorsModule,
+    DeployModule,
+  ],
   controllers: [MissionsController],
   providers: [MissionsService, PrismaService, AuditService],
   exports: [MissionsService],

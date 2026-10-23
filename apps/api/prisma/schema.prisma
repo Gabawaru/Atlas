@@ -39,6 +39,7 @@ model Tenant {
   supportTickets SupportTicket[]
   softwareComponents SoftwareComponent[]
   llmUsageLogs   LlmUsageLog[]
+  syncJournal    SyncJournalEntry[]
 }
 
 model User {
@@ -396,6 +397,24 @@ model Report {
   exportsMarkedSynthetic  Boolean  @default(true)
   createdAt               DateTime @default(now())
   mission                 Mission  @relation(fields: [missionId], references: [id])
+}
+
+/// File de sync contrôle plane (révocation / journaux) — drain au retour online
+model SyncJournalEntry {
+  id        String   @id @default(cuid())
+  tenantId  String
+  /// revoke_token | revoke_connector | audit_export | custom
+  kind      String
+  payload   Json
+  /// pending | synced | failed
+  status    String   @default("pending")
+  error     String?
+  createdAt DateTime @default(now())
+  syncedAt  DateTime?
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
 }
 
 /// Journal d'usage LLM — métadonnées seulement (pas de prompt/réponse complets)

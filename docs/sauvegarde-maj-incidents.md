@@ -83,6 +83,8 @@ pnpm smoke               # ou pnpm demo:smoke
 | Support peut « Approuver » grisé | Normal | Seul rôle `approver` |
 | Approver ne peut pas créer un ticket SAV | Normal | SAV = `support`/`ops`/`admin` ; ≠ approbation |
 | Finding sans statut remédiation | Colonnes absentes / seed ancien | `pnpm db:migrate` puis re-seed démo |
+| `OFFLINE_HOSTED` à l’exécution | `ATLAS_OFFLINE=true` en mode hébergé | Repasser online ou mode hybrid/local + jeton |
+| Révocation `remoteConfirmed: false` | Offline attendu | `POST /v1/deploy/sync` une fois online |
 
 ### Kill / cancel d’urgence
 
