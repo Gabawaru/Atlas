@@ -1,0 +1,28 @@
+{
+  "name": "atlas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Atlas — assistant de pentest autorisé (MVP)",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r --parallel --filter @atlas/api --filter @atlas/admin --filter @atlas/client run dev",
+    "dev:api": "pnpm --filter @atlas/api run dev",
+    "dev:admin": "pnpm --filter @atlas/admin run dev",
+    "dev:client": "pnpm --filter @atlas/client run dev",
+    "test": "pnpm -r run test",
+    "test:unit": "pnpm --filter @atlas/shared run test && pnpm --filter @atlas/policy-guard run test && pnpm --filter @atlas/api run test:unit",
+    "test:e2e": "pnpm --filter @atlas/api run test:e2e",
+    "test:acceptance": "pnpm --filter @atlas/api run test:acceptance",
+    "db:migrate": "pnpm --filter @atlas/api run db:migrate",
+    "db:seed": "pnpm --filter @atlas/api run db:seed",
+    "db:generate": "pnpm --filter @atlas/api run db:generate",
+    "lint": "pnpm -r run lint --if-present",
+    "smoke": "pnpm --filter @atlas/api run smoke",
+    "demo:smoke": "bash apps/api/scripts/demo-smoke.sh",
+    "docs:exemple-rapport": "pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
