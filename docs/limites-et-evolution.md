@@ -24,7 +24,7 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Exécution | Worker BullMQ in-process + retry/DLQ/kill | Workers dédiés, HA, priorités |
 | Données | RLS Postgres FORCE + `asTenant` (bypass seed/ops) | Rôle DB dédié non-owner, chaos tests |
 | Client desktop | Stub Tauri | Shell Tauri 2 + coffre OS |
-| Paiements | Plan seedé | PSP (Stripe-like) hors chemin Policy Guard |
+| Paiements | Plans seed + activate/expire + payment stub | PSP (Stripe-like) hors chemin Policy Guard |
 | SAV / tickets | Minimal (états, lien tenant/mission, RBAC support ≠ approver) | SLA, escalade, impersonation journalisée |
 | Remédiation findings | Statuts client FICTIFS | Workflow retest / preuves / intégration ticketing |
 | Feeds vulns | OSV/NVD/KEV passifs + fixtures CI ; confiance ≠ gravité | Live NVD clé API, couverture élargie, preuves runtime |

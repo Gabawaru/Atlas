@@ -12,12 +12,21 @@ Console admin distincte du client. Auth locale seedée — **pas d’OIDC / SSO*
 | `approver@a.atlas.local` | approver | Oui |
 | `admin@a.atlas.local` | admin | Non (mais importe le stub routage) |
 | `support@a.atlas.local` | support | Non |
-| `billing@a.atlas.local` | billing | Non |
+| `billing@a.atlas.local` | billing | Non (licences commerciales seulement) |
 | `ops@a.atlas.local` | ops | Non (peut vérifier l’audit) |
+
+## Licences & abonnements (stub)
+
+Écran **« Licences & abonnements (stub) »** (`/v1/admin/billing/…`) — rôles `billing` / `admin` (lecture `ops`) :
+
+- plans seed (`atlas-starter-fictif`, `atlas-pro-fictif`), activation / expiration ;
+- paiement **stub** uniquement (pas de PSP réel) ;
+- le rôle billing **ne voit pas** RoE, jetons ni findings (données commerciales seulement) ;
+- détail : `docs/licences-abonnements.md`.
 
 ## Abonnement ≠ autorisation de test
 
-Écran **« Abonnement ≠ autorisation de test »** (`GET /v1/admin/entitlements`) :
+Écran **« Abonnement ≠ autorisation de test »** (`GET /v1/admin/entitlements`) — rôles sécu (`admin` / `ops` / `support` / `approver`, **pas billing**) :
 
 - montre par tenant : statut d’**abonnement** (droit logiciel) vs missions (RoE, co-signature 2 parties, jeton) ;
 - une licence **active** n’implique **jamais** seule le droit d’exécuter ;
@@ -57,6 +66,6 @@ Sans politique de routage, les missions **réelles** restent `BLOCKED` (`NO_APPR
 
 ## Limites admin MVP
 
-- Pas de facturation PSP réelle, pas de catalogue connecteurs production.
+- Facturation = stub paiement (pas de PSP réel) ; pas de catalogue connecteurs production.
 - SAV minimal (pas de SLA, pas d’escalade RH, pas d’impersonation journalisée complète).
 - Pas de hiérarchie RH réelle — uniquement config stub / seed.

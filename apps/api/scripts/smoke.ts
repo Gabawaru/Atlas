@@ -378,6 +378,50 @@ async function main() {
       body: JSON.stringify({ active: false }),
     });
 
+    // Billing : plans + rôle billing (commercial) + expire ≠ autorisation
+    const billingLogin = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "billing@a.atlas.local",
+        password: "atlas-demo",
+      }),
+    }).then((r) => r.json());
+    const billingHeaders = {
+      Authorization: `Bearer ${billingLogin.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const plans = await fetch(`${BASE}/admin/billing/plans`, {
+      headers: billingHeaders,
+    }).then((r) => r.json());
+    if (!Array.isArray(plans) || plans.length < 2) {
+      throw new Error(`billing plans seed attendus (≥2), reçu ${JSON.stringify(plans)}`);
+    }
+    const entitlementsDeny = await fetch(`${BASE}/admin/entitlements`, {
+      headers: billingHeaders,
+    });
+    if (entitlementsDeny.status !== 403) {
+      throw new Error(
+        `billing ne doit pas lire entitlements sécu (403), reçu ${entitlementsDeny.status}`,
+      );
+    }
+    const subs = await fetch(`${BASE}/admin/billing/subscriptions`, {
+      headers: billingHeaders,
+    }).then((r) => r.json());
+    if (!subs?.principle || !/n'autorise jamais|jamais seul/i.test(subs.principle)) {
+      throw new Error(`billing principle attendu: ${JSON.stringify(subs)}`);
+    }
+    const lapsed = Array.isArray(subs.subscriptions)
+      ? subs.subscriptions.find(
+          (s: { tenantSlug: string; commerciallyActive: boolean }) =>
+            s.tenantSlug === "licence-expiree",
+        )
+      : null;
+    if (!lapsed || lapsed.commerciallyActive !== false) {
+      throw new Error(
+        `licence-expiree doit être commercialement inactive: ${JSON.stringify(lapsed)}`,
+      );
+    }
 
     // Assistant : propose sans exécuter
     const chat = await fetch(`${BASE}/conversation`, {
@@ -396,7 +440,7 @@ async function main() {
     }
 
     console.log(
-      "✅ Smoke e2e OK — BullMQ + SAV + vulns + assistant (non-bypass)",
+      "✅ Smoke e2e OK — BullMQ + SAV + vulns + assistant + billing (≠ pentest)",
     );
     process.exitCode = 0;
   } catch (e) {

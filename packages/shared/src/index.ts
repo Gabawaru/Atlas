@@ -46,6 +46,22 @@ export type SubscriptionStatus =
   | "canceled";
 
 /**
+ * Droit commercial produit (licence) — nécessaire mais insuffisant pour exécuter.
+ * Un abonnement actif / en essai avec `endsAt` passé n'est plus commercialement actif.
+ * Ne confond jamais avec autorisation pentest (RoE / owner auth / Policy Guard).
+ */
+export function isSubscriptionCommerciallyActive(
+  sub: { status: string; endsAt?: Date | string | null },
+  now: Date = new Date(),
+): boolean {
+  if (sub.status !== "active" && sub.status !== "trialing") return false;
+  if (sub.endsAt == null) return true;
+  const end = sub.endsAt instanceof Date ? sub.endsAt : new Date(sub.endsAt);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() > now.getTime();
+}
+
+/**
  * Machine d'états mission (parcours-client-admin.md).
  * Transitions interdites testées côté API.
  */

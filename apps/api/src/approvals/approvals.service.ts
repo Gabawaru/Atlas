@@ -10,6 +10,7 @@ import { AuditService } from "../audit/audit.service";
 import { MissionsService } from "../missions/missions.service";
 import type { AuthUser } from "../auth/auth.types";
 import { assertTransition } from "../mission/mission-state";
+import { isSubscriptionCommerciallyActive } from "@atlas/shared";
 
 @Injectable()
 export class ApprovalsService {
@@ -90,8 +91,9 @@ export class ApprovalsService {
       },
       rows: tenants.map((t) => {
         const sub = t.subscriptions[0];
-        const subscriptionActive =
-          sub?.status === "active" || sub?.status === "trialing";
+        const subscriptionActive = sub
+          ? isSubscriptionCommerciallyActive(sub)
+          : false;
         return {
           tenantId: t.id,
           slug: t.slug,
@@ -101,6 +103,8 @@ export class ApprovalsService {
                 status: sub.status,
                 plan: sub.plan.code,
                 modulesEntitled: sub.plan.modulesEntitled,
+                endsAt: sub.endsAt,
+                commerciallyActive: subscriptionActive,
               }
             : null,
           subscriptionActive,

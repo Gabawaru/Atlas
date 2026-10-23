@@ -5,7 +5,7 @@ import {
   Optional,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import { UX_NEEDS } from "@atlas/shared";
+import { UX_NEEDS, isSubscriptionCommerciallyActive } from "@atlas/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CONNECTOR_CATALOG } from "../connectors/connector.types";
@@ -207,11 +207,14 @@ export class AssistantService {
   }
 
   private async loadCaps(tenantId: string) {
-    const sub = await this.prisma.subscription.findFirst({
+    const now = new Date();
+    const candidates = await this.prisma.subscription.findMany({
       where: { tenantId, status: { in: ["active", "trialing"] } },
       include: { plan: true },
       orderBy: { startsAt: "desc" },
     });
+    const sub =
+      candidates.find((c) => isSubscriptionCommerciallyActive(c, now)) ?? null;
     return {
       tokenCap: sub?.plan.llmTokenCapMonthly ?? 200_000,
       euroCapCents: sub?.plan.llmEuroCapCentsMonthly ?? 500,

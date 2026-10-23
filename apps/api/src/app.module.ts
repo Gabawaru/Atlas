@@ -12,6 +12,7 @@ import { VulnModule } from "./vuln/vuln.module";
 import { AssistantModule } from "./assistant/assistant.module";
 import { DeployModule } from "./deploy/deploy.module";
 import { RetentionModule } from "./retention/retention.module";
+import { BillingModule } from "./billing/billing.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
@@ -30,6 +31,7 @@ import { PrismaService } from "./prisma/prisma.service";
     AssistantModule,
     DeployModule,
     RetentionModule,
+    BillingModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService],

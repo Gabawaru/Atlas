@@ -82,7 +82,7 @@ Comptes seed (mot de passe `atlas-demo`) — **fictifs** :
 | `owner@demo.atlas.local` | Client owner (tenant démo) |
 | `approver@a.atlas.local` | Staff approver |
 | `support@a.atlas.local` | Staff support (ne peut pas approuver) |
-| `billing@a.atlas.local` | Staff billing |
+| `billing@a.atlas.local` | Staff billing (licences stub ; pas de données sécu) |
 | `ops@a.atlas.local` | Staff ops |
 | `admin@a.atlas.local` | Staff admin |
 
