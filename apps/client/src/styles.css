@@ -1,0 +1,135 @@
+:root {
+  --ink: #14201c;
+  --paper: #f3efe6;
+  --moss: #2f6b4f;
+  --sand: #d9cbb3;
+  --alert: #8a4b2a;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    linear-gradient(160deg, #e8f0ea 0%, var(--paper) 45%, #e4d8c4 100%);
+}
+
+.shell {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0.4rem 0 1.2rem;
+  max-width: 36rem;
+  font-size: 1.05rem;
+}
+
+.banner {
+  background: #fff6e8;
+  border-left: 4px solid var(--alert);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 800px) {
+  .grid.two {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+section {
+  padding: 1rem 0;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  margin: 0 0 0.5rem;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+input,
+textarea,
+button,
+select {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #b7c0b4;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+button {
+  margin-top: 0.6rem;
+  margin-right: 0.4rem;
+  padding: 0.55rem 0.95rem;
+  background: var(--moss);
+  color: #f5fff8;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid #8a9a8c;
+}
+
+.need {
+  padding: 0.75rem 0;
+  border-top: 1px solid #c9d2c6;
+}
+
+.need.disabled {
+  opacity: 0.55;
+}
+
+.muted {
+  color: #4d5c54;
+  font-size: 0.92rem;
+}
+
+pre {
+  background: #1b2621;
+  color: #d7ebe0;
+  padding: 0.75rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+
+.report {
+  background: rgba(255, 255, 255, 0.55);
+  padding: 1rem;
+  border: 1px solid var(--sand);
+}

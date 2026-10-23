@@ -1,0 +1,294 @@
+// Atlas MVP — modèle aligné docs/modele-donnees.md
+// Abonnement ≠ autorisation ; approbation A ≠ autorisation propriétaire.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  tenants   Tenant[]
+  staff     StaffMembership[]
+  groups    StaffGroup[]
+}
+
+model Tenant {
+  id             String   @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  slug           String   @unique
+  name           String
+  status         String   @default("active")
+  syntheticDemo  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  memberships    TenantMembership[]
+  subscriptions  Subscription[]
+  assets         Asset[]
+  missions       Mission[]
+  secretRefs     SecretRef[]
+  auditEvents    AuditEvent[]
+  routingPolicies ApprovalRoutingPolicy[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  tenantMemberships TenantMembership[]
+  staffMemberships  StaffMembership[]
+}
+
+model TenantMembership {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+  role     String // owner | operator | viewer
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+}
+
+model StaffMembership {
+  id        String @id @default(cuid())
+  orgId     String
+  userId    String
+  staffRole String // admin | support | billing | ops | approver
+  org       Organization @relation(fields: [orgId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([orgId, userId, staffRole])
+}
+
+model StaffGroup {
+  id        String @id @default(cuid())
+  orgId     String
+  name      String
+  /// Contenu fictif / stub — ne représente PAS la hiérarchie réelle A
+  isStub    Boolean @default(true)
+  memberIds String[] @default([])
+  org       Organization @relation(fields: [orgId], references: [id])
+  policies  ApprovalRoutingPolicy[]
+}
+
+model Plan {
+  id               String @id @default(cuid())
+  code             String @unique
+  name             String
+  modulesEntitled  String[]
+  maxUsers         Int    @default(10)
+  subscriptions    Subscription[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  planId    String
+  status    String   // trialing | active | past_due | canceled
+  startsAt  DateTime @default(now())
+  endsAt    DateTime?
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  plan      Plan     @relation(fields: [planId], references: [id])
+}
+
+model Asset {
+  id           String   @id @default(cuid())
+  tenantId     String
+  type         String   // domain | url | host
+  value        String
+  normalized   String
+  verified     Boolean  @default(false)
+  /// FICTIF — données de démonstration
+  synthetic    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, normalized])
+}
+
+model SecretRef {
+  id        String   @id @default(cuid())
+  tenantId  String
+  provider  String   @default("stub")
+  path      String
+  purpose   String
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model Mission {
+  id              String   @id @default(cuid())
+  tenantId        String
+  title           String
+  status          String   @default("DRAFT")
+  blockedReason   String?
+  /// true = démo fictive (A_SKIPPED_DEMO possible)
+  synthetic       Boolean  @default(false)
+  isRealMission   Boolean  @default(true)
+  uxNeedIds       String[] @default([])
+  moduleIds       String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  scopeVersions   ScopeVersion[]
+  ownerAuths      OwnerAuthorization[]
+  approvalReqs    ApprovalRequest[]
+  tokens          AuthorizationToken[]
+  jobRuns         JobRun[]
+  findings        Finding[]
+  reports         Report[]
+}
+
+model ScopeVersion {
+  id           String   @id @default(cuid())
+  missionId    String
+  version      Int
+  assetIds     String[]
+  methods      String[]
+  periodStart  DateTime
+  periodEnd    DateTime
+  scopeHash    String
+  immutable    Boolean  @default(true)
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+  mission      Mission  @relation(fields: [missionId], references: [id])
+
+  @@unique([missionId, version])
+  @@index([scopeHash])
+}
+
+model OwnerAuthorization {
+  id                   String   @id @default(cuid())
+  missionId            String
+  scopeVersionId       String
+  scopeHash            String
+  status               String   // valid | revoked | pending
+  signerLabel          String
+  signatureArtifactRef String?
+  /// Stub signature — PAS une signature eIDAS réelle
+  isStubSignature      Boolean  @default(true)
+  revokedAt            DateTime?
+  createdAt            DateTime @default(now())
+  mission              Mission  @relation(fields: [missionId], references: [id])
+}
+
+model ApprovalRoutingPolicy {
+  id            String  @id @default(cuid())
+  tenantId      String?
+  orgWide       Boolean @default(false)
+  modulePattern String  @default("*")
+  staffGroupId  String?
+  enabled       Boolean @default(true)
+  /// Stub hiérarchie — ne pas présenter comme organigramme réel
+  isStub        Boolean @default(true)
+  tenant        Tenant? @relation(fields: [tenantId], references: [id])
+  staffGroup    StaffGroup? @relation(fields: [staffGroupId], references: [id])
+}
+
+model ApprovalRequest {
+  id                   String   @id @default(cuid())
+  missionId            String
+  scopeVersionId       String
+  scopeHash            String
+  ownerAuthorizationId String
+  status               String   // pending | blocked_no_route | approved | rejected | returned
+  createdAt            DateTime @default(now())
+  mission              Mission  @relation(fields: [missionId], references: [id])
+  decisions            ApprovalDecision[]
+}
+
+model ApprovalDecision {
+  id              String   @id @default(cuid())
+  requestId       String
+  decision        String   // approved | rejected | returned
+  approverUserId  String
+  scopeHash       String
+  comment         String?
+  createdAt       DateTime @default(now())
+  request         ApprovalRequest @relation(fields: [requestId], references: [id])
+}
+
+model AuthorizationToken {
+  id         String   @id @default(cuid())
+  missionId  String
+  scopeHash  String
+  moduleIds  String[]
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  issuedAt   DateTime @default(now())
+  mission    Mission  @relation(fields: [missionId], references: [id])
+}
+
+model JobRun {
+  id                    String   @id @default(cuid())
+  missionId             String
+  tenantId              String
+  moduleId              String
+  authorizationTokenId  String?
+  scopeHash             String
+  status                String
+  gateDecision          String?
+  gateCode              String?
+  gateReason            String?
+  cancelRequested       Boolean  @default(false)
+  rateLimitPerMinute    Int      @default(30)
+  evidenceJson          Json?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  createdAt             DateTime @default(now())
+  mission               Mission  @relation(fields: [missionId], references: [id])
+}
+
+model Finding {
+  id          String   @id @default(cuid())
+  missionId   String
+  jobRunId    String?
+  severity    String
+  title       String
+  summary     String
+  technical   String?
+  /// FICTIF
+  synthetic   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  mission     Mission  @relation(fields: [missionId], references: [id])
+}
+
+model Report {
+  id              String   @id @default(cuid())
+  missionId       String
+  executiveSummary String
+  technicalDetail String
+  /// FICTIF — exemple de rapport
+  synthetic       Boolean  @default(true)
+  exportJson      Json?
+  createdAt       DateTime @default(now())
+  mission         Mission  @relation(fields: [missionId], references: [id])
+}
+
+/// Append-only : pas de update/delete applicatif
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  actorId    String?
+  action     String
+  objectType String?
+  objectId   String?
+  payload    Json?
+  prevHash   String?
+  hash       String
+  requestId  String?
+  createdAt  DateTime @default(now())
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([createdAt])
+}
