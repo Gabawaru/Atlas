@@ -17,11 +17,11 @@ Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard dé
 ## Structure
 
 ```
-apps/api          NestJS — auth locale, missions, BullMQ, exports, SignatureProvider mock
+apps/api          NestJS — auth, missions, BullMQ, exports, connecteurs, SignatureProvider mock
 apps/admin        Next.js — file d’approbation + config routage (stub)
-apps/client       React (Vite) — 5 besoins UX, conversation mock, mission, bilans + exports
+apps/client       React — 5 besoins (états honnêtes), connecteurs, conversation mock, bilans
 apps/client/src-tauri  Stub documenté Tauri (desktop reporté)
-packages/shared   Types, états mission, transitions
+packages/shared   Types, états mission, UX needs, transitions
 packages/policy-guard  evaluateExecution() déterministe + tests sans LLM
 docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
 docs/             Guides FR + exemples de rapports FICTIFS
@@ -151,11 +151,17 @@ pnpm test:acceptance
 | [`docs/exemples/`](docs/exemples/) | Rapport FICTIF versionné |
 | [`docs/tauri-stub.md`](docs/tauri-stub.md) | Desktop reporté |
 
+## Connecteurs (MVP)
+
+- **Présence web** (`web.passive.presence`) — réel, révocable, requis par Policy Guard avant exécution
+- **GitHub lecture seule** (`github.read_only`) — stub mock OAuth, **non production**, aucune exécution de contrôle
+- Conversation mock : oriente vers besoins/connecteurs **sans** contourner le Policy Guard
+
 ## Hors scope de ce MVP (honnête)
 
 - OIDC / SSO réel ; e-sign / eIDAS réel (mock seulement)
 - Hiérarchie d’approbation **réelle** A
-- Connecteurs authentifiés, réseau interne, CVE feeds, PSP
+- OAuth GitHub réel, réseau interne, CVE feeds, PSP
 - Shell Tauri empaqueté ; HA BullMQ ; RLS Postgres durcie
 - Analyse de contrats, scans agressifs
 
