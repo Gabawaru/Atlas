@@ -19,8 +19,8 @@ Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard dé
 ```
 apps/api          NestJS — auth, missions, BullMQ, exports, connecteurs, SignatureProvider mock
 apps/admin        Next.js — file d’approbation + config routage (stub)
-apps/client       React — 5 besoins (états honnêtes), connecteurs, conversation mock, bilans
-apps/client/src-tauri  Stub documenté Tauri (desktop reporté)
+apps/client       React — 5 besoins, connecteurs, conversation mock, bilans ; `pnpm client:smoke`
+apps/client/src-tauri  Stub Tauri 2 (conf + cargo message-only ; pas de bundle signé)
 packages/shared   Types, états mission, UX needs, transitions
 packages/policy-guard  evaluateExecution() déterministe + tests sans LLM
 docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
@@ -128,6 +128,8 @@ pnpm --filter @atlas/api run test:e2e
 pnpm test:acceptance    # AC-01…AC-12
 pnpm smoke              # Postgres + Redis
 pnpm demo:smoke         # checklist vérif complète
+pnpm client:smoke       # build web + dist
+pnpm client:stub-desktop  # message Rust stub (pas tauri build)
 ```
 
 ### Suite d’acceptation (AC plan)

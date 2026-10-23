@@ -16,7 +16,8 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 |---------|------------|-------------------|
 | Identité | Auth locale seedée | OIDC (Keycloak / Auth0) |
 | Hiérarchie A | Stub `isStub` / seed | Matrice réelle fournie par A (config métier) |
-| Contrôles | Présence web passive élargie (DNS/TLS/headers, sous-domaines courants in-scope) | Connecteur auth lecture, modules catalogue versionné |
+| Contrôles | Présence web + OSINT RDAP apex public in-scope | Modules catalogue, sources OSINT payantes hors MVP |
+| Client desktop | Build web + stub Rust/Tauri conf (`bundle.active: false`) | Tauri 2 packagé + signing |
 | RoE | Machine-readable + versioning + invalidation signatures | Modèles juridiques cabinet + e-sign réel |
 | Signatures | Mock **deux parties** pluggable | Prestataire eIDAS derrière la même interface |
 | Connecteurs | Web réel + GitHub **stub** mock OAuth | OAuth GitHub réel (read-only) derrière la même interface |

@@ -90,3 +90,6 @@ jobs:
 
       - name: Acceptance tests
         run: pnpm test:acceptance
+
+      - name: Client packaging smoke
+        run: pnpm client:smoke

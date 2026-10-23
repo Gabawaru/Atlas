@@ -1,0 +1,18 @@
+[package]
+name = "atlas-client-stub"
+version = "0.1.0"
+description = "Atlas desktop stub — shell Tauri 2 à brancher ; pas de binaire productisé ici"
+edition = "2021"
+publish = false
+
+# Stub volontairement SANS dépendance `tauri` :
+# webkit2gtk manquant en CI/cloud agent → `tauri build` documenté, non exécuté.
+# Quand la toolchain desktop est prête : remplacer ce crate par un app Tauri 2
+# pointant frontendDist vers ../dist (build Vite).
+
+[[bin]]
+name = "atlas-client-stub"
+path = "src/main.rs"
+
+[profile.release]
+lto = false

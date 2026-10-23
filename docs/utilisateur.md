@@ -20,8 +20,9 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 6. **RoE machine-readable** : actifs, méthodes passives, **exclusions**, dates — versionnés (`GET/POST …/roe`). Toute modification crée une nouvelle version et **invalide** les signatures.
 7. **Mission démo** : besoin présence web → mission synthétique avec exclusions (ex. `mail.example.com`).
 8. **Co-signature mock (2 parties)** : propriétaire + contrepartie Atlas Ops ; en démo synthétique la 2ᵉ partie est auto-complétée (toujours mock, pas eIDAS).
-9. **Exécution** : Policy Guard (connecteur actif requis) → DNS (A/AAAA/NS/MX/TXT), TLS, headers sécu **dans le périmètre** uniquement ; sous-domaines courants (`www`/`api`/`mail`) seulement s’ils sont in-scope et non exclus.
+9. **Exécution** : Policy Guard → DNS, TLS, headers sécu, **OSINT RDAP** (apex in-scope, public) ; sous-domaines courants seulement s’ils sont in-scope et non exclus.
 10. **Bilans** : décideur + détail technique ; exports JSON/CSV/PDF.
+11. **Client** : build web (`pnpm client:smoke`) ; desktop = stub Tauri documenté (pas d’installateur).
 
 ## Ce que vous ne pouvez pas faire (honnête)
 

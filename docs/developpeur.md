@@ -35,7 +35,9 @@ pnpm demo:smoke
 | `packages/shared` | États mission, types |
 | `docs/` | Guides FR + exemples de rapports |
 | `apps/api/src/connectors` | Catalogue + grants révocables (web réel, GitHub stub) |
-| `apps/api/src/control/web-passive.ts` | Contrôles passifs DNS/TLS/headers + exclusions RoE |
+| `apps/api/src/control/web-passive.ts` | Passifs DNS/TLS/headers + OSINT RDAP apex + exclusions RoE |
+| `apps/client` / `src-tauri` | Build web + smoke ; stub desktop (pas `tauri build` CI) |
+| `pnpm client:smoke` | Vérifie `dist/index.html` + bundles JS |
 | `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation |
