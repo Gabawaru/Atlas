@@ -34,6 +34,7 @@ async function main() {
   await prisma.secretRef.deleteMany();
   await prisma.connectorGrant.deleteMany();
   await prisma.asset.deleteMany();
+  await prisma.paymentStub.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.plan.deleteMany();
   await prisma.staffMembership.deleteMany();
@@ -121,6 +122,15 @@ async function main() {
     },
   });
 
+  const tenantLapsed = await prisma.tenant.create({
+    data: {
+      orgId: org.id,
+      slug: "licence-expiree",
+      name: "Client Licence Expirée (FICTIF — past_due / endsAt)",
+      syntheticDemo: true,
+    },
+  });
+
   await prisma.tenantMembership.create({
     data: {
       tenantId: tenantDemo.id,
@@ -129,29 +139,50 @@ async function main() {
     },
   });
 
-  const plan = await prisma.plan.create({
+  const planStarter = await prisma.plan.create({
     data: {
       code: "atlas-starter-fictif",
       name: "Starter FICTIF",
       modulesEntitled: [MODULE_WEB_PASSIVE],
       maxUsers: 5,
-      llmTokenCapMonthly: 200_000,
+      llmTokenCapMonthly: 200000,
       llmEuroCapCentsMonthly: 500, // 5,00 € estimés / mois
+    },
+  });
+
+  const planPro = await prisma.plan.create({
+    data: {
+      code: "atlas-pro-fictif",
+      name: "Pro FICTIF",
+      modulesEntitled: [MODULE_WEB_PASSIVE],
+      maxUsers: 25,
+      llmTokenCapMonthly: 1000000,
+      llmEuroCapCentsMonthly: 2500, // 25,00 € estimés / mois
     },
   });
 
   await prisma.subscription.create({
     data: {
       tenantId: tenantDemo.id,
-      planId: plan.id,
+      planId: planStarter.id,
       status: "active",
     },
   });
   await prisma.subscription.create({
     data: {
       tenantId: tenantRealBlocked.id,
-      planId: plan.id,
+      planId: planPro.id,
       status: "active",
+    },
+  });
+  // Licence expirée : status encore "active" mais endsAt passé → commercialement inactive
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenantLapsed.id,
+      planId: planStarter.id,
+      status: "active",
+      startsAt: new Date("2025-01-01T00:00:00.000Z"),
+      endsAt: new Date("2025-06-01T00:00:00.000Z"),
     },
   });
 
@@ -379,10 +410,12 @@ async function main() {
   console.log("  owner@demo.atlas.local     — client owner");
   console.log("  approver@a.atlas.local     — staff approver");
   console.log("  support@a.atlas.local      — staff support (ne peut pas approve)");
-  console.log("  billing@a.atlas.local      — staff billing");
+  console.log("  billing@a.atlas.local      — staff billing (licences, pas de données sécu)");
   console.log("  ops@a.atlas.local          — staff ops");
   console.log("  admin@a.atlas.local        — staff admin");
+  console.log("Plans: atlas-starter-fictif, atlas-pro-fictif");
   console.log("Tenant sans routage A (test BLOCKED): acme-sans-route");
+  console.log("Tenant licence expirée (endsAt passé): licence-expiree");
 }
 
 main()

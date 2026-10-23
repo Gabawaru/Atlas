@@ -9,6 +9,7 @@ import { hashScope, evaluateExecution } from "@atlas/policy-guard";
 import {
   MODULE_WEB_PASSIVE,
   PASSIVE_ROE_METHODS,
+  isSubscriptionCommerciallyActive,
   type MachineReadableRoe,
   type MissionStatus,
   UX_NEEDS,
@@ -579,10 +580,17 @@ export class MissionsService {
     const approval = mission.approvalReqs
       .flatMap((r) => r.decisions)
       .find((d) => d.decision === "approved");
-    const sub = await this.prisma.subscription.findFirst({
-      where: { tenantId: mission.tenantId, status: "active" },
+    const now = new Date();
+    const candidates = await this.prisma.subscription.findMany({
+      where: {
+        tenantId: mission.tenantId,
+        status: { in: ["active", "trialing"] },
+      },
       include: { plan: true },
+      orderBy: { startsAt: "desc" },
     });
+    const sub =
+      candidates.find((c) => isSubscriptionCommerciallyActive(c, now)) ?? null;
     const routeOk = await this.hasApprovalRoute(mission.tenantId);
     const assets = await this.prisma.asset.findMany({
       where: { id: { in: scope?.assetIds ?? [] } },
@@ -594,10 +602,12 @@ export class MissionsService {
     );
 
     const gate = evaluateExecution({
-      now: new Date(),
+      now,
       moduleId: WEB_PASSIVE_MODULE_ID,
       claimedScopeHash: scope?.scopeHash ?? "",
-      subscriptionActive: sub?.status === "active",
+      subscriptionActive: sub
+        ? isSubscriptionCommerciallyActive(sub, now)
+        : false,
       entitlementAllowsModule:
         sub?.plan.modulesEntitled.includes(WEB_PASSIVE_MODULE_ID) ?? false,
       ownerAuthorizationValid: owner?.status === "valid",

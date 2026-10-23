@@ -40,7 +40,8 @@ pnpm demo:smoke
 | `pnpm client:smoke` | Vérifie `dist/index.html` + bundles JS |
 | `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
-| Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation |
+| Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation (sécu ; pas billing) |
+| Billing / licences | `GET/POST /v1/admin/billing/…` — plans, activate/expire, payment stub — `docs/licences-abonnements.md` |
 | Admin SAV | `GET/POST /v1/admin/tickets`, `PATCH …/tickets/:id/status` — support≠approver |
 | Remédiation | `GET /v1/findings`, `PATCH /v1/findings/:id/remediation` |
 | Vuln feeds | `GET /v1/vuln/feeds`, `GET /v1/software-components`, `POST /v1/vuln/match` — voir `docs/referentiels-vulnerabilites.md` |

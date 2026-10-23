@@ -113,6 +113,24 @@ model Subscription {
   endsAt    DateTime?
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   plan      Plan     @relation(fields: [planId], references: [id])
+  payments  PaymentStub[]
+}
+
+/// Stub paiement — jamais un charge PSP réel (Stripe/Adyen…). Hors chemin Policy Guard.
+model PaymentStub {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amountCents    Int
+  currency       String   @default("EUR")
+  /// stub_recorded | simulated_success | simulated_failure
+  status         String
+  /// Toujours "stub" en MVP — pas de provider réel
+  provider       String   @default("stub")
+  externalRef    String?
+  note           String?
+  createdAt      DateTime @default(now())
+  createdByUserId String?
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
 }
 
 model Asset {

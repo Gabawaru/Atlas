@@ -70,6 +70,10 @@ export class ApprovalsController {
     return this.approvals.listTenants();
   }
 
+  /**
+   * Matrice pédagogique sécu (RoE / jetons) — billing exclu :
+   * rôle billing → GET /v1/admin/billing/subscriptions (commercial seul).
+   */
   @Get("entitlements")
   entitlements(@Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, [
@@ -77,7 +81,6 @@ export class ApprovalsController {
       "ops",
       "support",
       "approver",
-      "billing",
     ]);
     return this.approvals.entitlementMatrix();
   }

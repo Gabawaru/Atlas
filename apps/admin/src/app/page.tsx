@@ -65,6 +65,26 @@ type SupportTicket = {
   mission?: { id: string; title: string; status: string } | null;
 };
 
+type BillingPlan = {
+  code: string;
+  name: string;
+  maxUsers: number;
+  llmTokenCapMonthly: number;
+};
+
+type BillingSub = {
+  id: string;
+  tenantId: string;
+  tenantSlug: string;
+  tenantName: string;
+  planCode: string;
+  planName: string;
+  status: string;
+  startsAt: string;
+  endsAt: string | null;
+  commerciallyActive: boolean;
+};
+
 export default function AdminHome() {
   const [email, setEmail] = useState("approver@a.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
@@ -85,6 +105,10 @@ export default function AdminHome() {
     null,
   );
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [billingPlans, setBillingPlans] = useState<BillingPlan[]>([]);
+  const [billingSubs, setBillingSubs] = useState<BillingSub[]>([]);
+  const [billingPrinciple, setBillingPrinciple] = useState<string | null>(null);
+  const [activatePlanCode, setActivatePlanCode] = useState("atlas-starter-fictif");
   const [ticketSubject, setTicketSubject] = useState(
     "[FICTIF] Incident démo — accès rapport",
   );
@@ -121,6 +145,46 @@ export default function AdminHome() {
 
   const refresh = useCallback(async () => {
     if (!token) return;
+    const roles = user?.staffRoles ?? [];
+    const isBillingOnly =
+      roles.includes("billing") &&
+      !roles.some((r) => ["admin", "ops", "support", "approver"].includes(r));
+    const canBilling = roles.some((r) =>
+      ["billing", "admin", "ops"].includes(r),
+    );
+
+    if (canBilling) {
+      const [plans, subs, billingTenants] = await Promise.all([
+        fetch(`${API}/v1/admin/billing/plans`, { headers: headers() }).then(
+          (x) => x.json(),
+        ),
+        fetch(`${API}/v1/admin/billing/subscriptions`, {
+          headers: headers(),
+        }).then((x) => x.json()),
+        fetch(`${API}/v1/admin/billing/tenants`, { headers: headers() }).then(
+          (x) => x.json(),
+        ),
+      ]);
+      if (Array.isArray(plans)) {
+        setBillingPlans(plans);
+        if (plans[0]?.code) setActivatePlanCode(plans[0].code);
+      }
+      if (subs?.principle) setBillingPrinciple(subs.principle);
+      setBillingSubs(Array.isArray(subs?.subscriptions) ? subs.subscriptions : []);
+      if (Array.isArray(billingTenants)) {
+        setTenants(billingTenants);
+        if (!tenantId && billingTenants[0]) setTenantId(billingTenants[0].id);
+      }
+    }
+
+    if (isBillingOnly) {
+      setQueue([]);
+      setRouting([]);
+      setEntitlements(null);
+      setTickets([]);
+      return;
+    }
+
     const [q, r, t, e, tk] = await Promise.all([
       fetch(`${API}/v1/admin/approvals`, { headers: headers() }).then((x) =>
         x.json(),
@@ -146,7 +210,7 @@ export default function AdminHome() {
     }
     if (e?.principle) setEntitlements(e);
     setTickets(Array.isArray(tk) ? tk : []);
-  }, [token, headers, tenantId]);
+  }, [token, headers, tenantId, user?.staffRoles]);
 
   useEffect(() => {
     void refresh();
@@ -272,7 +336,92 @@ export default function AdminHome() {
     ["support", "ops", "admin"].includes(r),
   );
   const isAdmin = user?.staffRoles?.includes("admin");
+  const canBilling = user?.staffRoles?.some((r) =>
+    ["billing", "admin", "ops"].includes(r),
+  );
+  const canMutateBilling = user?.staffRoles?.some((r) =>
+    ["billing", "admin"].includes(r),
+  );
   const blockedCount = queue.filter((q) => q.status === "blocked_no_route").length;
+
+  async function activateSubscription() {
+    setError(null);
+    setMsg(null);
+    const res = await fetch(`${API}/v1/admin/billing/subscriptions/activate`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        tenantId,
+        planCode: activatePlanCode,
+        status: "active",
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      `Abonnement activé (${data.planCode}) pour ${data.tenantSlug} — licence ≠ autorisation pentest.`,
+    );
+    await refresh();
+  }
+
+  async function expireSubscription(id: string) {
+    setError(null);
+    setMsg(null);
+    const res = await fetch(
+      `${API}/v1/admin/billing/subscriptions/${id}/expire`,
+      { method: "POST", headers: headers() },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      `Abonnement ${data.tenantSlug} expiré — exécution bloquée (SUBSCRIPTION_INACTIVE).`,
+    );
+    await refresh();
+  }
+
+  async function stubPayment(id: string, outcome: "recorded" | "simulated_success" | "simulated_failure") {
+    setError(null);
+    setMsg(null);
+    const res = await fetch(
+      `${API}/v1/admin/billing/subscriptions/${id}/payment-stub`,
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          amountCents: 4900,
+          outcome,
+          note: "[FICTIF] Stub — aucun débit réel",
+        }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      `Paiement stub ${data.payment?.status} (${data.payment?.externalRef}) — pas de PSP réel.`,
+    );
+    await refresh();
+  }
 
   return (
     <>
@@ -302,8 +451,8 @@ export default function AdminHome() {
             Se connecter
           </button>
           <p className="muted">
-            approver@a.atlas.local / atlas-demo — ou support@… (refus RBAC à
-            l&apos;approbation) · admin@… pour l&apos;import stub.
+            approver@a.atlas.local / atlas-demo — support@… (refus approbation) ·
+            billing@… (licences stub) · admin@… (import stub).
           </p>
         </div>
       ) : (
@@ -365,6 +514,132 @@ export default function AdminHome() {
               <button type="button" onClick={() => void importStub()}>
                 Importer stub hiérarchie pour ce tenant
               </button>
+            </div>
+          )}
+
+          {canBilling && (
+            <div className="panel">
+              <h2>Licences &amp; abonnements (stub)</h2>
+              <p className="muted">
+                {billingPrinciple ??
+                  "Abonnement = droit logiciel. Jamais une autorisation de test."}
+              </p>
+              <div className="banner">
+                Rôle <code>billing</code> : plans, activation, expiration,
+                paiement <strong>stub</strong> (pas de PSP). Aucun accès RoE,
+                jetons, findings ni preuves client. Une licence active{" "}
+                <strong>n&apos;autorise jamais</strong> seule un contrôle.
+              </div>
+              <h3>Plans seed</h3>
+              <ul>
+                {billingPlans.map((p) => (
+                  <li key={p.code} className="item">
+                    <strong>{p.name}</strong>{" "}
+                    <code>{p.code}</code> · max {p.maxUsers} users · LLM{" "}
+                    {p.llmTokenCapMonthly.toLocaleString("fr-FR")} tok/mois
+                  </li>
+                ))}
+              </ul>
+              {canMutateBilling && (
+                <>
+                  <h3>Activer un abonnement</h3>
+                  <label>Tenant</label>
+                  <select
+                    value={tenantId}
+                    onChange={(e) => setTenantId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      background: "#10161d",
+                      color: "#e8eef4",
+                      border: "1px solid #2a3542",
+                    }}
+                  >
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.slug} — {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <label>Plan</label>
+                  <select
+                    value={activatePlanCode}
+                    onChange={(e) => setActivatePlanCode(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      background: "#10161d",
+                      color: "#e8eef4",
+                      border: "1px solid #2a3542",
+                    }}
+                  >
+                    {billingPlans.map((p) => (
+                      <option key={p.code} value={p.code}>
+                        {p.code} — {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => void activateSubscription()}>
+                    Activer (commercial)
+                  </button>
+                </>
+              )}
+              <h3>Abonnements tenants</h3>
+              {billingSubs.length === 0 ? (
+                <p className="muted">Aucun abonnement.</p>
+              ) : (
+                <ul>
+                  {billingSubs.map((s) => (
+                    <li key={s.id} className="item">
+                      <div>
+                        <strong>{s.tenantName}</strong>{" "}
+                        <span className="muted">({s.tenantSlug})</span>
+                      </div>
+                      <div className="muted">
+                        {s.planCode} / {s.status}
+                        {s.endsAt
+                          ? ` · fin ${new Date(s.endsAt).toLocaleDateString("fr-FR")}`
+                          : " · sans fin"}{" "}
+                        →{" "}
+                        {s.commerciallyActive
+                          ? "licence OK (insuffisante seule)"
+                          : "licence inactive"}
+                      </div>
+                      {canMutateBilling && (
+                        <>
+                          {s.commerciallyActive && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => void expireSubscription(s.id)}
+                            >
+                              Expirer
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => void stubPayment(s.id, "recorded")}
+                          >
+                            Stub paiement
+                          </button>
+                          {s.status === "past_due" && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() =>
+                                void stubPayment(s.id, "simulated_success")
+                              }
+                            >
+                              Simuler succès
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
