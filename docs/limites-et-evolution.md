@@ -25,6 +25,8 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Données | RLS Postgres FORCE + `asTenant` (bypass seed/ops) | Rôle DB dédié non-owner, chaos tests |
 | Client desktop | Stub Tauri | Shell Tauri 2 + coffre OS |
 | Paiements | Plan seedé | PSP (Stripe-like) hors chemin Policy Guard |
+| SAV / tickets | Minimal (états, lien tenant/mission, RBAC support ≠ approver) | SLA, escalade, impersonation journalisée |
+| Remédiation findings | Statuts client FICTIFS | Workflow retest / preuves / intégration ticketing |
 | Feeds vulns | Absents | NVD/KEV/OSV avec licences documentées |
 | Juridique | Docs hors certification | Cadre juridique séparé — pas d’auto-certif |
 

@@ -22,7 +22,8 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 8. **Co-signature mock (2 parties)** : propriétaire + contrepartie Atlas Ops ; en démo synthétique la 2ᵉ partie est auto-complétée (toujours mock, pas eIDAS).
 9. **Exécution** : Policy Guard → DNS, TLS, headers sécu, **OSINT RDAP** (apex in-scope, public) ; sous-domaines courants seulement s’ils sont in-scope et non exclus.
 10. **Bilans** : décideur + détail technique ; exports JSON/CSV/PDF.
-11. **Client** : build web (`pnpm client:smoke`) ; desktop = stub Tauri documenté (pas d’installateur).
+11. **Suivi des corrections** : findings → statut de remédiation (`open`, `in_progress`, `fixed`, `accepted_risk`, `wont_fix`, `retest_requested`) — owner/operator ; données FICTIVES.
+12. **Client** : build web (`pnpm client:smoke`) ; desktop = stub Tauri documenté (pas d’installateur).
 
 ## Ce que vous ne pouvez pas faire (honnête)
 
@@ -34,6 +35,8 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 | Réseau interne, CVE, connecteurs cloud | **Non branchés** (stubs UX) |
 | App desktop Tauri | **Stub documenté** — client web seulement |
 | Signature électronique légale | **Mock** uniquement |
+| Ouvrir un ticket SAV depuis le client | **Non** — SAV côté console admin A |
+| Remédiation = clôture juridique | **Non** — suivi opérationnel client seulement |
 
 ## Messages fréquents
 

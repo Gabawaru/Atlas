@@ -31,13 +31,25 @@ type CatalogEntry = {
   disclaimer?: string;
 };
 
+type Finding = {
+  id: string;
+  title: string;
+  summary: string;
+  severity: string;
+  synthetic?: boolean;
+  remediationStatus?: string;
+  remediationNote?: string | null;
+  remediatedAt?: string | null;
+  mission?: { id: string; title: string };
+};
+
 type Mission = {
   id: string;
   title: string;
   status: string;
   blockedReason?: string | null;
   synthetic: boolean;
-  findings?: { title: string; summary: string; severity: string }[];
+  findings?: Finding[];
   jobRuns?: {
     id: string;
     status: string;
@@ -66,6 +78,15 @@ type Mission = {
     counterpartySignedAt?: string | null;
   }[];
 };
+
+const REMEDIATION_OPTIONS = [
+  "open",
+  "in_progress",
+  "fixed",
+  "accepted_risk",
+  "wont_fix",
+  "retest_requested",
+] as const;
 
 type Roe = {
   version: number;
@@ -102,6 +123,7 @@ export function App() {
   const [roeMissionId, setRoeMissionId] = useState<string | null>(null);
   const [roe, setRoe] = useState<Roe | null>(null);
   const [roeExclusions, setRoeExclusions] = useState("mail.example.com");
+  const [findings, setFindings] = useState<Finding[]>([]);
 
   const headers = useMemo(
     () =>
@@ -129,18 +151,44 @@ export function App() {
 
   async function refresh() {
     if (!token) return;
-    const [n, a, m, c, g] = await Promise.all([
+    const [n, a, m, c, g, f] = await Promise.all([
       fetch(`${API}/v1/ux-needs`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
+      fetch(`${API}/v1/findings`, { headers }).then((r) => r.json()),
     ]);
     setNeeds(n);
     setAssets(a);
     setMissions(m);
     setCatalog(Array.isArray(c) ? c : []);
     setGrants(Array.isArray(g) ? g : []);
+    setFindings(Array.isArray(f) ? f : []);
+  }
+
+  async function updateRemediation(findingId: string, status: string) {
+    setInfo(null);
+    setError(null);
+    const res = await fetch(`${API}/v1/findings/${findingId}/remediation`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        remediationStatus: status,
+        remediationNote: `Mise à jour client démo → ${status}`,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setInfo(`Finding « ${data.title} » → remédiation ${status}`);
+    await refresh();
   }
 
   useEffect(() => {
@@ -523,6 +571,53 @@ export function App() {
           <p>{latestReport.reports[0].executiveSummary}</p>
           <h2>Détail technique</h2>
           <p>{latestReport.reports[0].technicalDetail}</p>
+        </section>
+      )}
+
+      {token && (
+        <section>
+          <h2>Suivi des corrections</h2>
+          <p className="muted">
+            Findings → statut de remédiation (owner/operator). Données FICTIVES —
+            ne remplace pas un ticket SAV côté A.
+          </p>
+          {findings.length === 0 ? (
+            <p className="muted">
+              Aucun finding — lancez une mission démo ou consultez le seed.
+            </p>
+          ) : (
+            <ul>
+              {findings.map((f) => (
+                <li key={f.id} className="need">
+                  <strong>
+                    {f.title}{" "}
+                    {f.synthetic && <span className="muted">[FICTIF]</span>}
+                  </strong>
+                  <div className="muted">
+                    {f.severity} · {f.summary}
+                    {f.mission ? ` · ${f.mission.title}` : ""}
+                  </div>
+                  <div className="muted">
+                    Remédiation : {f.remediationStatus ?? "open"}
+                    {f.remediationNote ? ` — ${f.remediationNote}` : ""}
+                  </div>
+                  <label>Mettre à jour le statut</label>
+                  <select
+                    value={f.remediationStatus ?? "open"}
+                    onChange={(e) =>
+                      void updateRemediation(f.id, e.target.value)
+                    }
+                  >
+                    {REMEDIATION_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 

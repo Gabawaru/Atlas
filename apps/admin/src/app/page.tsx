@@ -54,6 +54,17 @@ type EntitlementMatrix = {
   }[];
 };
 
+type SupportTicket = {
+  id: string;
+  subject: string;
+  body: string;
+  status: string;
+  category: string;
+  synthetic: boolean;
+  tenant?: { slug: string; name: string };
+  mission?: { id: string; title: string; status: string } | null;
+};
+
 export default function AdminHome() {
   const [email, setEmail] = useState("approver@a.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
@@ -72,6 +83,13 @@ export default function AdminHome() {
   );
   const [entitlements, setEntitlements] = useState<EntitlementMatrix | null>(
     null,
+  );
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketSubject, setTicketSubject] = useState(
+    "[FICTIF] Incident démo — accès rapport",
+  );
+  const [ticketBody, setTicketBody] = useState(
+    "Données fictives : clarification client sur un finding. SAV ≠ approbation.",
   );
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -103,7 +121,7 @@ export default function AdminHome() {
 
   const refresh = useCallback(async () => {
     if (!token) return;
-    const [q, r, t, e] = await Promise.all([
+    const [q, r, t, e, tk] = await Promise.all([
       fetch(`${API}/v1/admin/approvals`, { headers: headers() }).then((x) =>
         x.json(),
       ),
@@ -116,6 +134,9 @@ export default function AdminHome() {
       fetch(`${API}/v1/admin/entitlements`, { headers: headers() }).then((x) =>
         x.json(),
       ),
+      fetch(`${API}/v1/admin/tickets`, { headers: headers() }).then((x) =>
+        x.json(),
+      ),
     ]);
     setQueue(Array.isArray(q) ? q : []);
     setRouting(Array.isArray(r) ? r : []);
@@ -124,6 +145,7 @@ export default function AdminHome() {
       if (!tenantId && t[0]) setTenantId(t[0].id);
     }
     if (e?.principle) setEntitlements(e);
+    setTickets(Array.isArray(tk) ? tk : []);
   }, [token, headers, tenantId]);
 
   useEffect(() => {
@@ -191,7 +213,64 @@ export default function AdminHome() {
     setAudit(data);
   }
 
+  async function createTicket() {
+    setError(null);
+    setMsg(null);
+    if (!tenantId) {
+      setError("Choisir un tenant pour le ticket SAV.");
+      return;
+    }
+    const res = await fetch(`${API}/v1/admin/tickets`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        tenantId,
+        subject: ticketSubject,
+        body: ticketBody,
+        category: "incident",
+        synthetic: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(data.notice ?? "Ticket SAV créé (≠ approbation).");
+    await refresh();
+  }
+
+  async function setTicketStatus(
+    id: string,
+    status: "open" | "waiting" | "resolved" | "closed",
+  ) {
+    setError(null);
+    const res = await fetch(`${API}/v1/admin/tickets/${id}/status`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(`Ticket ${id.slice(0, 8)}… → ${status}`);
+    await refresh();
+  }
+
   const canApprove = user?.staffRoles?.includes("approver");
+  const canSav = user?.staffRoles?.some((r) =>
+    ["support", "ops", "admin"].includes(r),
+  );
   const isAdmin = user?.staffRoles?.includes("admin");
   const blockedCount = queue.filter((q) => q.status === "blocked_no_route").length;
 
@@ -354,6 +433,122 @@ export default function AdminHome() {
               </ul>
             </div>
           )}
+
+          <div className="panel">
+            <h2>SAV / tickets / incidents</h2>
+            <p className="muted">
+              Support client lié au tenant (et optionnellement à une mission).
+              Les rôles <code>support</code>/<code>ops</code>/<code>admin</code>{" "}
+              gèrent les tickets — <code>approver</code> peut lire, pas muter.
+              Un ticket SAV <strong>n&apos;approuve jamais</strong> une mission.
+            </p>
+            {!canSav && (
+              <p className="muted">
+                Lecture seule : votre rôle ne peut pas créer ni changer le statut
+                SAV.
+              </p>
+            )}
+            {canSav && (
+              <>
+                <label>Tenant du ticket</label>
+                <select
+                  value={tenantId}
+                  onChange={(e) => setTenantId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    background: "#10161d",
+                    color: "#e8eef4",
+                    border: "1px solid #2a3542",
+                  }}
+                >
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.slug} — {t.name}
+                    </option>
+                  ))}
+                </select>
+                <label>Sujet</label>
+                <input
+                  value={ticketSubject}
+                  onChange={(e) => setTicketSubject(e.target.value)}
+                />
+                <label>Description</label>
+                <textarea
+                  rows={3}
+                  value={ticketBody}
+                  onChange={(e) => setTicketBody(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    background: "#10161d",
+                    color: "#e8eef4",
+                    border: "1px solid #2a3542",
+                  }}
+                />
+                <button type="button" onClick={() => void createTicket()}>
+                  Créer ticket FICTIF
+                </button>
+              </>
+            )}
+            {tickets.length === 0 ? (
+              <p className="muted">Aucun ticket (seed après migration SAV).</p>
+            ) : (
+              <ul>
+                {tickets.map((tk) => (
+                  <li key={tk.id} className="item">
+                    <div>
+                      <strong>{tk.subject}</strong>{" "}
+                      {tk.synthetic && (
+                        <span className="muted">[FICTIF]</span>
+                      )}
+                    </div>
+                    <div className="muted">
+                      {tk.status} · {tk.category} · tenant{" "}
+                      {tk.tenant?.slug ?? "—"}
+                      {tk.mission
+                        ? ` · mission ${tk.mission.title}`
+                        : ""}
+                    </div>
+                    <p className="muted">{tk.body}</p>
+                    {canSav && tk.status !== "closed" && (
+                      <>
+                        {tk.status === "open" && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              void setTicketStatus(tk.id, "waiting")
+                            }
+                          >
+                            En attente
+                          </button>
+                        )}
+                        {tk.status !== "resolved" && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              void setTicketStatus(tk.id, "resolved")
+                            }
+                          >
+                            Résoudre
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void setTicketStatus(tk.id, "closed")}
+                        >
+                          Clôturer
+                        </button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="panel">
             <h2>Demandes en file</h2>

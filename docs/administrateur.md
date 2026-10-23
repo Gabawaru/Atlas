@@ -45,8 +45,18 @@ Sans politique de routage, les missions **réelles** restent `BLOCKED` (`NO_APPR
 - Bouton **Vérifier chaîne audit** (admin / ops) → `GET /v1/admin/audit/verify`
 - `verify_chain` recalcule les hash ; une modification SQL du payload **casse** la chaîne.
 
+## SAV / tickets / incidents
+
+Écran **« SAV / tickets / incidents »** (`/v1/admin/tickets`) :
+
+- création et états `open` → `waiting` → `resolved` / `closed` ;
+- lien **tenant** obligatoire, **mission** optionnelle ;
+- rôles **support** / **ops** / **admin** peuvent muter ; **approver** peut lire seulement ;
+- un ticket SAV **n’approuve jamais** une mission et ne remplace pas le Policy Guard ;
+- seed : ticket FICTIF lié à la mission démo (`support@a.atlas.local`).
+
 ## Limites admin MVP
 
-- Pas de facturation PSP réelle, pas de SAV tickets, pas de catalogue connecteurs production.
+- Pas de facturation PSP réelle, pas de catalogue connecteurs production.
+- SAV minimal (pas de SLA, pas d’escalade RH, pas d’impersonation journalisée complète).
 - Pas de hiérarchie RH réelle — uniquement config stub / seed.
-- Cross-tenant support : non abouti (pas d’impersonation journalisée complète).

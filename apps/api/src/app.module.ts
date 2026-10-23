@@ -6,6 +6,8 @@ import { AssetsModule } from "./assets/assets.module";
 import { QueueModule } from "./queue/queue.module";
 import { SignaturesModule } from "./signatures/signatures.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
+import { TicketsModule } from "./tickets/tickets.module";
+import { RemediationModule } from "./remediation/remediation.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
@@ -18,6 +20,8 @@ import { PrismaService } from "./prisma/prisma.service";
     MissionsModule,
     ApprovalsModule,
     AssetsModule,
+    TicketsModule,
+    RemediationModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService],

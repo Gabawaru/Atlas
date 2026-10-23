@@ -41,6 +41,8 @@ pnpm demo:smoke
 | `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation |
+| Admin SAV | `GET/POST /v1/admin/tickets`, `PATCH …/tickets/:id/status` — support≠approver |
+| Remédiation | `GET /v1/findings`, `PATCH /v1/findings/:id/remediation` |
 | RLS | Migration `*_rls_tenant` ; `PrismaService.asTenant` / bypass |
 | BullMQ | Retry 3×, DLQ `atlas-control-passive-dlq`, kill → failed |
 
