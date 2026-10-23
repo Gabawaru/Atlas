@@ -27,7 +27,7 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Paiements | Plan seedé | PSP (Stripe-like) hors chemin Policy Guard |
 | SAV / tickets | Minimal (états, lien tenant/mission, RBAC support ≠ approver) | SLA, escalade, impersonation journalisée |
 | Remédiation findings | Statuts client FICTIFS | Workflow retest / preuves / intégration ticketing |
-| Feeds vulns | Absents | NVD/KEV/OSV avec licences documentées |
+| Feeds vulns | OSV/NVD/KEV passifs + fixtures CI ; confiance ≠ gravité | Live NVD clé API, couverture élargie, preuves runtime |
 | Juridique | Docs hors certification | Cadre juridique séparé — pas d’auto-certif |
 
 ## Non négociable même en évolution

@@ -300,8 +300,29 @@ async function main() {
       throw new Error(`approver SAV attendu 403, reçu ${deny.status}`);
     }
 
+    // Feeds vulns passifs (fixture) — inventaire + disclaimer
+    const feeds = await fetch(`${BASE}/vuln/feeds`, { headers }).then((r) =>
+      r.json(),
+    );
+    if (!feeds?.disclaimer || !/ne confirme pas/i.test(feeds.disclaimer)) {
+      throw new Error("vuln/feeds disclaimer manquant");
+    }
+    const comps = await fetch(`${BASE}/software-components`, { headers }).then(
+      (r) => r.json(),
+    );
+    if (!Array.isArray(comps) || comps.length < 1) {
+      throw new Error("software-components seed attendus");
+    }
+    const matched = await fetch(`${BASE}/vuln/match`, {
+      method: "POST",
+      headers,
+    }).then((r) => r.json());
+    if (!matched?.principle || matched.principle.indexOf("confidence") < 0) {
+      throw new Error(`vuln/match principle attendu, reçu ${JSON.stringify(matched)}`);
+    }
+
     console.log(
-      "✅ Smoke e2e OK — BullMQ + exports + remédiation + SAV (support≠approver)",
+      "✅ Smoke e2e OK — BullMQ + remédiation + SAV + vuln feeds (confiance≠gravité)",
     );
     process.exitCode = 0;
   } catch (e) {

@@ -37,6 +37,7 @@ model Tenant {
   routingPolicies ApprovalRoutingPolicy[]
   connectorGrants ConnectorGrant[]
   supportTickets SupportTicket[]
+  softwareComponents SoftwareComponent[]
 }
 
 model User {
@@ -171,6 +172,7 @@ model Mission {
   findings        Finding[]
   reports         Report[]
   supportTickets  SupportTicket[]
+  softwareComponents SoftwareComponent[]
 }
 
 model ScopeVersion {
@@ -304,8 +306,51 @@ model Finding {
   remediationStatus String @default("open")
   remediationNote   String?
   remediatedAt      DateTime?
+  /// Confiance du matching version→CVE — indépendante de severity (CVSS/gravité)
+  /// low | medium | high | null (finding non issu d'un feed)
+  confidence    String?
+  cveId         String?
+  kevListed     Boolean  @default(false)
+  /// Sources : osv | nvd | kev (fixtures ou live)
+  feedSources   String[] @default([])
+  matchDisclaimer String?
   createdAt   DateTime @default(now())
   mission     Mission  @relation(fields: [missionId], references: [id])
+
+  @@index([cveId])
+}
+
+/// Inventaire logiciel passif (seed FICTIF ou bannières HTTP observées) — pas de scan agressif
+model SoftwareComponent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  missionId     String?
+  /// Nom produit / package (ex. openssl, nginx)
+  name          String
+  version       String
+  /// Ecosystem hint : openssl | nginx | npm | pypi | generic
+  ecosystem     String   @default("generic")
+  /// seed | http_server | manual
+  observedFrom  String   @default("seed")
+  synthetic     Boolean  @default(true)
+  rawEvidence   String?
+  createdAt     DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  mission       Mission? @relation(fields: [missionId], references: [id])
+
+  @@index([tenantId, name])
+}
+
+/// Cache local des feeds vulnérabilités (OSV / NVD / KEV)
+model VulnFeedCache {
+  id        String   @id @default(cuid())
+  cacheKey  String   @unique
+  source    String
+  body      Json
+  fetchedAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([source, expiresAt])
 }
 
 /// Tickets SAV / incidents staff A — support ≠ approbation

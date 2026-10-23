@@ -189,11 +189,12 @@ export const UX_NEEDS = [
     id: "systems_software",
     label: "Vérifier systèmes et logiciels",
     description: "Versions, patchs, logiciels vulnérables.",
-    moduleIds: [] as string[],
+    moduleIds: ["vuln.match.passive.v1"] as string[],
     connectorIds: ["github.read_only"],
     mvpReady: false,
     status: "coming_soon" as UxNeedStatus,
-    statusLabel: "Bientôt — stub GitHub lecture seule (non production)",
+    statusLabel:
+      "Partiel — inventaire seed + matching OSV/NVD/KEV passif (pas de scan agressif)",
   },
   {
     id: "configs_access",
@@ -209,11 +210,12 @@ export const UX_NEEDS = [
     id: "vuln_tracking",
     label: "Suivre et corriger les vulnérabilités",
     description: "Prioriser, assigner, retester, clôturer.",
-    moduleIds: [] as string[],
+    moduleIds: ["vuln.match.passive.v1"] as string[],
     connectorIds: [] as string[],
     mvpReady: false,
     status: "coming_soon" as UxNeedStatus,
-    statusLabel: "Bientôt — suivi local minimal hors ITSM",
+    statusLabel:
+      "Partiel — findings CVE avec confiance ≠ gravité + remédiation locale",
   },
 ] as const;
 

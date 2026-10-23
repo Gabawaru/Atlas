@@ -37,6 +37,11 @@ type Finding = {
   summary: string;
   severity: string;
   synthetic?: boolean;
+  confidence?: string | null;
+  cveId?: string | null;
+  kevListed?: boolean;
+  feedSources?: string[];
+  matchDisclaimer?: string | null;
   remediationStatus?: string;
   remediationNote?: string | null;
   remediatedAt?: string | null;
@@ -594,9 +599,18 @@ export function App() {
                     {f.synthetic && <span className="muted">[FICTIF]</span>}
                   </strong>
                   <div className="muted">
-                    {f.severity} · {f.summary}
+                    Gravité {f.severity}
+                    {f.confidence
+                      ? ` · confiance matching ${f.confidence} (≠ gravité)`
+                      : ""}
+                    {f.cveId ? ` · ${f.cveId}` : ""}
+                    {f.kevListed ? " · KEV" : ""}
                     {f.mission ? ` · ${f.mission.title}` : ""}
                   </div>
+                  <div className="muted">{f.summary}</div>
+                  {f.matchDisclaimer && (
+                    <div className="muted">{f.matchDisclaimer}</div>
+                  )}
                   <div className="muted">
                     Remédiation : {f.remediationStatus ?? "open"}
                     {f.remediationNote ? ` — ${f.remediationNote}` : ""}

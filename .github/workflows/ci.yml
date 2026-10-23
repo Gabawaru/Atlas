@@ -50,6 +50,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-only-not-a-real-secret
       ATLAS_FORCE_MOCK_NETWORK: "true"
+      ATLAS_VULN_FEEDS_MODE: "fixture"
       ATLAS_ENV: ci
       ATLAS_SYNTHETIC_DEMO: "true"
       CI: "true"
