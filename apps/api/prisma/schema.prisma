@@ -27,6 +27,10 @@ model Tenant {
   name           String
   status         String   @default("active")
   syntheticDemo  Boolean  @default(false)
+  /// Hold légal : bloque toute purge automatique (hypothèse process, pas un avis juridique)
+  legalHold      Boolean  @default(false)
+  legalHoldReason String?
+  legalHoldAt    DateTime?
   createdAt      DateTime @default(now())
   memberships    TenantMembership[]
   subscriptions  Subscription[]
@@ -40,6 +44,7 @@ model Tenant {
   softwareComponents SoftwareComponent[]
   llmUsageLogs   LlmUsageLog[]
   syncJournal    SyncJournalEntry[]
+  purgeRuns      PurgeRun[]
 }
 
 model User {
@@ -397,6 +402,23 @@ model Report {
   exportsMarkedSynthetic  Boolean  @default(true)
   createdAt               DateTime @default(now())
   mission                 Mission  @relation(fields: [missionId], references: [id])
+}
+
+/// Historique des jobs de purge (rétention) — dry-run ou réel
+model PurgeRun {
+  id            String   @id @default(cuid())
+  tenantId      String?
+  dryRun        Boolean  @default(true)
+  /// true si aucune suppression à cause d'un legal hold
+  heldSkipped   Boolean  @default(false)
+  categories    String[]
+  deletedCounts Json
+  notes         String?
+  actorId       String?
+  createdAt     DateTime @default(now())
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
 }
 
 /// File de sync contrôle plane (révocation / journaux) — drain au retour online
