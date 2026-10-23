@@ -31,6 +31,43 @@ class CreateMissionDto {
   @IsOptional()
   @IsBoolean()
   synthetic?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  exclusions?: string[];
+
+  @IsOptional()
+  @IsArray()
+  methods?: string[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class UpdateRoeDto {
+  @IsArray()
+  assetIds!: string[];
+
+  @IsOptional()
+  @IsArray()
+  methods?: string[];
+
+  @IsOptional()
+  @IsArray()
+  exclusions?: string[];
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  periodStart?: string;
+
+  @IsOptional()
+  @IsString()
+  periodEnd?: string;
 }
 
 class OwnerAuthDto {
@@ -68,6 +105,22 @@ export class MissionsController {
     return this.missions.create(req.user, body);
   }
 
+  @Get("missions/:id/roe")
+  getRoe(@Param("id") id: string, @Req() req: { user: AuthUser }) {
+    this.auth.requireTenant(req.user);
+    return this.missions.getRoe(id, req.user.tenantId);
+  }
+
+  @Post("missions/:id/roe")
+  updateRoe(
+    @Param("id") id: string,
+    @Body() body: UpdateRoeDto,
+    @Req() req: { user: AuthUser },
+  ) {
+    this.auth.requireTenant(req.user, ["owner", "operator"]);
+    return this.missions.updateRoe(id, req.user, body);
+  }
+
   @Post("missions/:id/owner-authorization")
   ownerAuth(
     @Param("id") id: string,
@@ -76,6 +129,12 @@ export class MissionsController {
   ) {
     this.auth.requireTenant(req.user, ["owner", "operator"]);
     return this.missions.submitOwnerAuth(id, req.user, body.signerLabel);
+  }
+
+  @Post("missions/:id/counter-signature")
+  counterSign(@Param("id") id: string, @Req() req: { user: AuthUser }) {
+    this.auth.requireTenant(req.user, ["owner", "operator"]);
+    return this.missions.completeCounterSignature(id, req.user);
   }
 
   @Post("missions/:id/execute")

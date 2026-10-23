@@ -231,6 +231,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     try {
       evidence = await runWebPassivePresence(p.targets, {
         allowedHosts: new Set(p.allowedHosts),
+        exclusions: new Set(p.exclusions ?? []),
         rateLimitPerMinute: p.rateLimitPerMinute,
         isCancelled: () => cancelFlag,
         onProgress: async (prog) => {
@@ -254,12 +255,17 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
               lookupFn: async () => ({
                 a: ["203.0.113.10"],
                 aaaa: [] as string[],
+                ns: ["ns1.synthetic.invalid"],
+                mx: ["mail.synthetic.invalid"],
+                txt: ["v=spf1 -all"],
               }),
               fetchFn: async () => ({
                 status: 200,
                 headers: {
                   server: "atlas-synthetic/1.0",
                   "content-type": "text/html",
+                  "strict-transport-security": "max-age=31536000",
+                  "x-content-type-options": "nosniff",
                 },
                 bodySha256:
                   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -269,7 +275,9 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
                 protocol: "TLSv1.3",
                 authorized: false,
                 subjectCN: "synthetic.invalid",
+                subjectSANs: ["synthetic.invalid", "www.synthetic.invalid"],
                 issuerCN: "Atlas Mock CA",
+                daysRemaining: 90,
               }),
             }
           : {}),
@@ -311,21 +319,22 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
           ? "[FICTIF] Présence web passive observée"
           : "Présence web passive observée",
         summary: p.syntheticMission
-          ? "[FICTIF] Contrôle passif DNS/HTTP sur périmètre de démonstration."
-          : "Contrôle passif DNS/HTTP sur le périmètre approuvé.",
+          ? "[FICTIF] Contrôle passif DNS/TLS/headers sur périmètre de démonstration."
+          : "Contrôle passif DNS/TLS/headers sur le périmètre approuvé (RoE).",
         technical: JSON.stringify(evidence, null, 2),
         synthetic: p.syntheticMission,
       },
     });
 
     const executiveSummary = p.syntheticMission
-      ? "[FICTIF] Bilan décideur : exposition web de démonstration — marqueur synthétique ; preuves DNS/HTTP collectées dans le scope uniquement."
-      : "Bilan décideur : observation passive de la présence web sur le périmètre autorisé.";
+      ? "[FICTIF] Bilan décideur : exposition web de démonstration — DNS, certificats TLS et headers de sécurité observés dans le scope uniquement."
+      : "Bilan décideur : observation passive (DNS, TLS, headers sécu) sur le périmètre autorisé.";
     const technicalDetail = [
       `Module ${WEB_PASSIVE_MODULE_ID}`,
       `Cibles contrôlées : ${evidence.length}`,
-      `Preuves : DNS (A/AAAA) + HTTP HEAD/GET tronqué + TLS métadonnées si https`,
-      `Rate limit : ${p.rateLimitPerMinute}/min · file BullMQ`,
+      `Preuves : DNS (A/AAAA/NS/MX/TXT) + headers sécu de base + TLS (CN/SAN/échéance) si https`,
+      `Exclusions RoE : ${(p.exclusions ?? []).join(", ") || "(aucune)"}`,
+      `Rate limit : ${p.rateLimitPerMinute}/min · file BullMQ · pas de scan agressif`,
       forceMock ? "Réseau : mock forcé (ATLAS_FORCE_MOCK_NETWORK)" : "Réseau : sondes réelles",
     ].join("\n");
 

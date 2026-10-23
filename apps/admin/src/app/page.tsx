@@ -34,6 +34,26 @@ type RoutingRow = {
   staffGroup?: { name: string; memberIds: string[]; isStub: boolean } | null;
 };
 
+type EntitlementMatrix = {
+  principle: string;
+  rows: {
+    slug: string;
+    name: string;
+    subscriptionActive: boolean;
+    subscription: { status: string; plan: string } | null;
+    missions: {
+      title: string;
+      status: string;
+      ownerAuthValid: boolean;
+      dualSignature: boolean;
+      tokenPresent: boolean;
+      canExecuteHint: boolean;
+      scopeVersion: number | null;
+      exclusions: string[];
+    }[];
+  }[];
+};
+
 export default function AdminHome() {
   const [email, setEmail] = useState("approver@a.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
@@ -48,6 +68,9 @@ export default function AdminHome() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [tenantId, setTenantId] = useState<string>("");
   const [audit, setAudit] = useState<{ ok?: boolean; checked?: number; reason?: string } | null>(
+    null,
+  );
+  const [entitlements, setEntitlements] = useState<EntitlementMatrix | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +103,7 @@ export default function AdminHome() {
 
   const refresh = useCallback(async () => {
     if (!token) return;
-    const [q, r, t] = await Promise.all([
+    const [q, r, t, e] = await Promise.all([
       fetch(`${API}/v1/admin/approvals`, { headers: headers() }).then((x) =>
         x.json(),
       ),
@@ -90,6 +113,9 @@ export default function AdminHome() {
       fetch(`${API}/v1/admin/tenants`, { headers: headers() }).then((x) =>
         x.json(),
       ),
+      fetch(`${API}/v1/admin/entitlements`, { headers: headers() }).then((x) =>
+        x.json(),
+      ),
     ]);
     setQueue(Array.isArray(q) ? q : []);
     setRouting(Array.isArray(r) ? r : []);
@@ -97,6 +123,7 @@ export default function AdminHome() {
       setTenants(t);
       if (!tenantId && t[0]) setTenantId(t[0].id);
     }
+    if (e?.principle) setEntitlements(e);
   }, [token, headers, tenantId]);
 
   useEffect(() => {
@@ -259,6 +286,72 @@ export default function AdminHome() {
               <button type="button" onClick={() => void importStub()}>
                 Importer stub hiérarchie pour ce tenant
               </button>
+            </div>
+          )}
+
+          {entitlements && (
+            <div className="panel">
+              <h2>Abonnement ≠ autorisation de test</h2>
+              <p className="muted">{entitlements.principle}</p>
+              <div className="banner">
+                Une licence <strong>active</strong> ouvre le produit. Elle ne
+                permet <strong>jamais</strong> seule d&apos;exécuter un contrôle :
+                il faut RoE versionné, co-signature (2 parties mock), jeton et
+                Policy Guard ALLOW.
+              </div>
+              <ul>
+                {entitlements.rows.map((row) => (
+                  <li key={row.slug} className="item">
+                    <div>
+                      <strong>{row.name}</strong>{" "}
+                      <span className="muted">({row.slug})</span>
+                    </div>
+                    <div className="muted">
+                      Abonnement :{" "}
+                      {row.subscription
+                        ? `${row.subscription.plan} / ${row.subscription.status}`
+                        : "aucun"}{" "}
+                      →{" "}
+                      {row.subscriptionActive
+                        ? "logiciel OK"
+                        : "logiciel inactif"}{" "}
+                      · exécution :{" "}
+                      {row.subscriptionActive
+                        ? "insuffisant seul"
+                        : "bloqué"}
+                    </div>
+                    {row.missions.length === 0 ? (
+                      <p className="muted">Aucune mission récente.</p>
+                    ) : (
+                      <ul>
+                        {row.missions.map((m) => (
+                          <li key={m.title + m.status}>
+                            {m.title} — {m.status}
+                            {" · "}
+                            auth propriétaire{" "}
+                            {m.ownerAuthValid ? "valide" : "absente/invalide"}
+                            {" · "}
+                            co-signature {m.dualSignature ? "2/2" : "incomplète"}
+                            {" · "}
+                            jeton {m.tokenPresent ? "oui" : "non"}
+                            {m.scopeVersion != null && (
+                              <>
+                                {" · "}RoE v{m.scopeVersion}
+                                {m.exclusions?.length
+                                  ? ` (excl. ${m.exclusions.join(", ")})`
+                                  : ""}
+                              </>
+                            )}
+                            {" · "}
+                            indice exécutable :{" "}
+                            {m.canExecuteHint ? "possible" : "non"}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

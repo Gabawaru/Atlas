@@ -35,6 +35,10 @@ pnpm demo:smoke
 | `packages/shared` | États mission, types |
 | `docs/` | Guides FR + exemples de rapports |
 | `apps/api/src/connectors` | Catalogue + grants révocables (web réel, GitHub stub) |
+| `apps/api/src/control/web-passive.ts` | Contrôles passifs DNS/TLS/headers + exclusions RoE |
+| `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
+| Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
+| Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation |
 
 ## Tests
 

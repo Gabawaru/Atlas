@@ -182,6 +182,7 @@ describe("AC suite — critères d'acceptation MVP", () => {
         {
           allowedHosts: new Set(["example.com"]),
           rateLimitPerMinute: 1000,
+          expandCommonSubdomains: false,
           isCancelled: () => cancelled,
           lookupFn: async (host) => {
             if (host === "a.example.com") cancelled = true;
@@ -199,6 +200,7 @@ describe("AC suite — critères d'acceptation MVP", () => {
       await runWebPassivePresence([{ host: "a.test" }, { host: "b.test" }], {
         allowedHosts: new Set(["a.test", "b.test"]),
         rateLimitPerMinute: 60,
+        expandCommonSubdomains: false,
         isCancelled: () => false,
         lookupFn: async () => ({ a: ["1.1.1.1"], aaaa: [] }),
         fetchFn: async () => ({ status: 200, headers: {} }),
@@ -445,5 +447,35 @@ describe("AC smoke DB — isolation tenants + audit (si Postgres)", () => {
     const broken = verifyAuditChain(after);
     assert.equal(broken.ok, false);
     assert.match(broken.reason ?? "", /hash mismatch/);
+  });
+});
+
+describe("RoE versioning + co-signature mock (unit fixtures)", () => {
+  it("modif de scope_hash invalide l'autorisation propriétaire (AC-06 élargi)", () => {
+    const before = gate({
+      claimedScopeHash: "scope-v1",
+      ownerAuthorizationScopeHash: "scope-v1",
+      approvalScopeHash: "scope-v1",
+      tokenScopeHash: "scope-v1",
+    });
+    assert.equal(before.decision, "ALLOW");
+
+    const afterBump = gate({
+      claimedScopeHash: "scope-v2",
+      ownerAuthorizationScopeHash: "scope-v1",
+      approvalScopeHash: "scope-v1",
+      tokenScopeHash: "scope-v1",
+      ownerAuthorizationValid: true,
+    });
+    assert.equal(afterBump.decision, "REJECT");
+    assert.equal(afterBump.code, "OWNER_AUTH_INVALID");
+  });
+
+  it("PASSIVE_ROE_METHODS ne contient aucun scan agressif", async () => {
+    const { PASSIVE_ROE_METHODS } = await import("@atlas/shared");
+    for (const m of PASSIVE_ROE_METHODS) {
+      assert.ok(!/port.?scan|fuzz|exploit|bruteforce/i.test(m));
+      assert.ok(/dns|tls|http/i.test(m));
+    }
   });
 });

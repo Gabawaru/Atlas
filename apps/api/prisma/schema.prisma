@@ -177,6 +177,9 @@ model ScopeVersion {
   version      Int
   assetIds     String[]
   methods      String[]
+  /// Hôtes/FQDN exclus du périmètre (RoE machine-readable)
+  exclusions   String[] @default([])
+  notes        String?
   periodStart  DateTime
   periodEnd    DateTime
   scopeHash    String
@@ -196,6 +199,11 @@ model OwnerAuthorization {
   scopeHash            String
   status               String   // valid | revoked | pending
   signerLabel          String
+  /// Contrepartie A (2e partie du circuit mock)
+  counterpartyLabel    String?
+  counterpartyEmail    String?
+  ownerSignedAt        DateTime?
+  counterpartySignedAt DateTime?
   signatureArtifactRef String?
   /// Stub / mock — PAS une signature eIDAS réelle
   isStubSignature      Boolean  @default(true)

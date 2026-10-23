@@ -15,12 +15,20 @@ Console admin distincte du client. Auth locale seedée — **pas d’OIDC / SSO*
 | `billing@a.atlas.local` | billing | Non |
 | `ops@a.atlas.local` | ops | Non (peut vérifier l’audit) |
 
+## Abonnement ≠ autorisation de test
+
+Écran **« Abonnement ≠ autorisation de test »** (`GET /v1/admin/entitlements`) :
+
+- montre par tenant : statut d’**abonnement** (droit logiciel) vs missions (RoE, co-signature 2 parties, jeton) ;
+- une licence **active** n’implique **jamais** seule le droit d’exécuter ;
+- l’indice « exécutable » reste soumis au Policy Guard à l’exécution.
+
 ## File d’approbation
 
 1. Connexion avec un compte staff.
 2. Liste des demandes `pending` ou `blocked_no_route`.
 3. Seul le rôle **approver** peut Approuver / Rejeter.
-4. L’approbation A **ne crée pas** l’autorisation propriétaire.
+4. L’approbation A **ne crée pas** l’autorisation propriétaire ni ne remplace le RoE signé.
 
 ## Débloquer le routage en démo (stub)
 

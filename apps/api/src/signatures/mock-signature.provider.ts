@@ -8,7 +8,7 @@ import type {
 } from "./signature-provider";
 
 /**
- * Mock pluggable — enveloppes signées instantanément.
+ * Mock pluggable — circuit à deux parties (owner + contrepartie).
  * Ne constitue PAS une signature électronique réelle ni eIDAS.
  */
 export class MockSignatureProvider implements SignatureProvider {
@@ -19,6 +19,7 @@ export class MockSignatureProvider implements SignatureProvider {
     {
       documentHash: string;
       signers: SignatureSigner[];
+      completed: Set<string>;
       status: SignatureStatus;
     }
   >();
@@ -27,13 +28,37 @@ export class MockSignatureProvider implements SignatureProvider {
     documentHash: string,
     signers: SignatureSigner[],
   ): Promise<CreateEnvelopeResult> {
+    if (signers.length < 2) {
+      throw new Error(
+        "Circuit mock : deux parties requises (propriétaire + contrepartie A).",
+      );
+    }
     const envelopeId = `mock-env-${randomUUID()}`;
     this.envelopes.set(envelopeId, {
       documentHash,
       signers,
-      status: "signed",
+      completed: new Set(),
+      status: "pending",
     });
-    return { envelopeId, provider: this.name };
+    return { envelopeId, provider: this.name, status: "pending" };
+  }
+
+  async completeSigner(
+    envelopeId: string,
+    signerEmail: string,
+  ): Promise<SignatureStatus> {
+    const env = this.envelopes.get(envelopeId);
+    if (!env) return "expired";
+    const email = signerEmail.toLowerCase();
+    const ok = env.signers.some((s) => s.email.toLowerCase() === email);
+    if (!ok) {
+      throw new Error(`Signataire hors enveloppe mock: ${signerEmail}`);
+    }
+    env.completed.add(email);
+    if (env.completed.size >= env.signers.length) {
+      env.status = "signed";
+    }
+    return env.status;
   }
 
   async getStatus(envelopeId: string): Promise<SignatureStatus> {
@@ -47,10 +72,13 @@ export class MockSignatureProvider implements SignatureProvider {
     if (!env) {
       throw new Error(`Enveloppe mock inconnue: ${envelopeId}`);
     }
+    const signedBy = [...env.completed];
     const payload = JSON.stringify({
       envelopeId,
       documentHash: env.documentHash,
       signers: env.signers,
+      signedBy,
+      status: env.status,
       mock: true,
       disclaimer: "Signature mock — pas un prestataire e-sign réel",
     });
@@ -58,6 +86,7 @@ export class MockSignatureProvider implements SignatureProvider {
       artifactRef: `mock://artifact/${envelopeId}`,
       contentHash: createHash("sha256").update(payload).digest("hex"),
       isMock: true,
+      signedBy,
     };
   }
 }

@@ -15,9 +15,10 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Domaine | Limite MVP | Évolution typique |
 |---------|------------|-------------------|
 | Identité | Auth locale seedée | OIDC (Keycloak / Auth0) |
-| Signatures | `MockSignatureProvider` | Prestataire e-sign EU pluggable |
 | Hiérarchie A | Stub `isStub` / seed | Matrice réelle fournie par A (config métier) |
-| Contrôles | Présence web passive seule | Connecteur auth lecture, modules catalogue versionné |
+| Contrôles | Présence web passive élargie (DNS/TLS/headers, sous-domaines courants in-scope) | Connecteur auth lecture, modules catalogue versionné |
+| RoE | Machine-readable + versioning + invalidation signatures | Modèles juridiques cabinet + e-sign réel |
+| Signatures | Mock **deux parties** pluggable | Prestataire eIDAS derrière la même interface |
 | Connecteurs | Web réel + GitHub **stub** mock OAuth | OAuth GitHub réel (read-only) derrière la même interface |
 | Exécution | 1 worker BullMQ in-process API | Workers dédiés, HA, priorités |
 | Données | Isolation logique `tenantId` | RLS Postgres + tests chaos |

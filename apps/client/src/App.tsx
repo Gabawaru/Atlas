@@ -50,6 +50,32 @@ type Mission = {
     technicalDetail: string;
     synthetic: boolean;
   }[];
+  scopeVersions?: {
+    version: number;
+    scopeHash: string;
+    exclusions?: string[];
+    methods?: string[];
+    periodStart?: string;
+    periodEnd?: string;
+  }[];
+  ownerAuths?: {
+    status: string;
+    signerLabel: string;
+    counterpartyLabel?: string | null;
+    ownerSignedAt?: string | null;
+    counterpartySignedAt?: string | null;
+  }[];
+};
+
+type Roe = {
+  version: number;
+  scopeHash: string;
+  assetIds: string[];
+  exclusions: string[];
+  methods: string[];
+  periodStart: string;
+  periodEnd: string;
+  notes?: string | null;
 };
 
 function needBadge(status?: string) {
@@ -73,6 +99,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [roeMissionId, setRoeMissionId] = useState<string | null>(null);
+  const [roe, setRoe] = useState<Roe | null>(null);
+  const [roeExclusions, setRoeExclusions] = useState("mail.example.com");
 
   const headers = useMemo(
     () =>
@@ -199,6 +228,8 @@ export function App() {
           uxNeedIds: [selectedNeed],
           assetIds: [assetList[0].id],
           synthetic: true,
+          exclusions: ["mail.example.com"],
+          notes: "RoE démo — exclusions machine-readable",
         }),
       }).then((r) => r.json());
 
@@ -216,12 +247,55 @@ export function App() {
       if (run.gate?.decision === "REJECT") {
         setError(`${run.gate.code}: ${run.gate.reason}`);
       }
+      setRoeMissionId(mission.id);
+      const roeData = await fetch(`${API}/v1/missions/${mission.id}/roe`, {
+        headers,
+      }).then((r) => r.json());
+      setRoe(roeData);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadRoe(missionId: string) {
+    setRoeMissionId(missionId);
+    const data = await fetch(`${API}/v1/missions/${missionId}/roe`, {
+      headers,
+    }).then((r) => r.json());
+    setRoe(data);
+    setRoeExclusions((data.exclusions ?? []).join(", "));
+  }
+
+  async function bumpRoe() {
+    if (!roeMissionId || !roe) return;
+    setInfo(null);
+    setError(null);
+    const exclusions = roeExclusions
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const updated = await fetch(`${API}/v1/missions/${roeMissionId}/roe`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetIds: roe.assetIds,
+        methods: roe.methods,
+        exclusions,
+        notes: "RoE modifié — signatures invalidées",
+      }),
+    }).then((r) => r.json());
+    if (updated.message && !updated.id) {
+      setError(JSON.stringify(updated.message));
+      return;
+    }
+    setInfo(
+      `RoE passé en v${updated.scopeVersions?.[0]?.version ?? "?"} — autorisations révoquées, re-signature (2 parties) requise.`,
+    );
+    await loadRoe(roeMissionId);
+    await refresh();
   }
 
   const latestReport = missions.find((m) => m.reports && m.reports.length > 0);
@@ -376,9 +450,58 @@ export function App() {
                   {m.blockedReason && (
                     <div className="muted">{m.blockedReason}</div>
                   )}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => void loadRoe(m.id)}
+                  >
+                    Voir RoE
+                  </button>
+                  {m.ownerAuths?.[0] && (
+                    <div className="muted">
+                      Signatures : {m.ownerAuths[0].signerLabel}
+                      {m.ownerAuths[0].counterpartyLabel
+                        ? ` + ${m.ownerAuths[0].counterpartyLabel}`
+                        : ""}{" "}
+                      ({m.ownerAuths[0].status})
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
+
+            {roe && roeMissionId && (
+              <>
+                <h2>RoE machine-readable</h2>
+                <p className="muted">
+                  Actifs, méthodes, exclusions, dates — versionnés. Toute
+                  modification invalide les signatures (2 parties mock).
+                </p>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      version: roe.version,
+                      scopeHash: roe.scopeHash.slice(0, 16) + "…",
+                      methods: roe.methods,
+                      exclusions: roe.exclusions,
+                      periodStart: roe.periodStart,
+                      periodEnd: roe.periodEnd,
+                      notes: roe.notes,
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+                <label>Exclusions (FQDN, séparés par virgule)</label>
+                <input
+                  value={roeExclusions}
+                  onChange={(e) => setRoeExclusions(e.target.value)}
+                />
+                <button type="button" className="ghost" onClick={() => void bumpRoe()}>
+                  Publier nouvelle version RoE
+                </button>
+              </>
+            )}
           </section>
         </div>
       )}
