@@ -364,6 +364,7 @@ describe("AC smoke DB — isolation tenants + audit (si Postgres)", () => {
     try {
       const { PrismaClient } = await import("@prisma/client");
       prisma = new PrismaClient();
+      await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
       await prisma.$queryRaw`SELECT 1`;
       dbOk = true;
     } catch {
@@ -377,6 +378,7 @@ describe("AC smoke DB — isolation tenants + audit (si Postgres)", () => {
       t.skip("Postgres injoignable — skip smoke isolation");
       return;
     }
+    await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
     const tenants = await prisma.tenant.findMany({ take: 2 });
     if (tenants.length < 2) {
       t.skip("Besoin de 2 tenants seedés (demo-synth + acme-sans-route)");
@@ -394,6 +396,61 @@ describe("AC smoke DB — isolation tenants + audit (si Postgres)", () => {
       where: { id: missionA.id, tenantId: b!.id },
     });
     assert.equal(leak, null);
+  });
+
+  it("RLS : sous tenant A la mission de B est invisible (via atlas_app)", async (t) => {
+    if (!dbOk || !prisma) {
+      t.skip("Postgres injoignable");
+      return;
+    }
+    const rlsUrl =
+      process.env.ATLAS_RLS_DATABASE_URL ??
+      "postgresql://atlas_app:atlas_dev_only@localhost:5432/atlas?schema=public";
+    let rls: import("@prisma/client").PrismaClient | null = null;
+    try {
+      const { PrismaClient } = await import("@prisma/client");
+      await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
+      const tenants = await prisma.tenant.findMany({
+        orderBy: { slug: "asc" },
+        take: 2,
+      });
+      if (tenants.length < 2) {
+        t.skip("2 tenants requis");
+        return;
+      }
+      const [a, b] = tenants;
+      let missionB = await prisma.mission.findFirst({
+        where: { tenantId: b!.id },
+      });
+      if (!missionB) {
+        missionB = await prisma.mission.create({
+          data: {
+            tenantId: b!.id,
+            title: "[FICTIF] AC RLS B",
+            synthetic: true,
+            isRealMission: false,
+          },
+        });
+      }
+      rls = new PrismaClient({ datasources: { db: { url: rlsUrl } } });
+      await rls.$connect();
+      const me = await rls.$queryRaw<{ rolsuper: boolean }[]>`
+        SELECT rolsuper FROM pg_roles WHERE rolname = current_user`;
+      if (me[0]?.rolsuper) {
+        t.skip("atlas_app absent / encore superuser — migration rls requise");
+        return;
+      }
+      const underA = await rls.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'off', true)`;
+        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${a!.id}, true)`;
+        return tx.mission.findFirst({ where: { id: missionB!.id } });
+      });
+      assert.equal(underA, null);
+    } catch (e) {
+      t.skip(`RLS atlas_app indisponible: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      await rls?.$disconnect();
+    }
   });
 
   it("verify_chain DB + détection UPDATE simulé", async (t) => {

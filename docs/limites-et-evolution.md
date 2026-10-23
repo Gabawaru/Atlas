@@ -20,8 +20,8 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | RoE | Machine-readable + versioning + invalidation signatures | Modèles juridiques cabinet + e-sign réel |
 | Signatures | Mock **deux parties** pluggable | Prestataire eIDAS derrière la même interface |
 | Connecteurs | Web réel + GitHub **stub** mock OAuth | OAuth GitHub réel (read-only) derrière la même interface |
-| Exécution | 1 worker BullMQ in-process API | Workers dédiés, HA, priorités |
-| Données | Isolation logique `tenantId` | RLS Postgres + tests chaos |
+| Exécution | Worker BullMQ in-process + retry/DLQ/kill | Workers dédiés, HA, priorités |
+| Données | RLS Postgres FORCE + `asTenant` (bypass seed/ops) | Rôle DB dédié non-owner, chaos tests |
 | Client desktop | Stub Tauri | Shell Tauri 2 + coffre OS |
 | Paiements | Plan seedé | PSP (Stripe-like) hors chemin Policy Guard |
 | Feeds vulns | Absents | NVD/KEV/OSV avec licences documentées |

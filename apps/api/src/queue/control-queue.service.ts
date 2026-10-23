@@ -8,6 +8,9 @@ import {
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
 import IORedis from "ioredis";
 import {
+  CONTROL_DLQ_NAME,
+  CONTROL_JOB_ATTEMPTS,
+  CONTROL_JOB_BACKOFF_MS,
   CONTROL_QUEUE_NAME,
   REDIS_URL,
   type WebPassiveJobPayload,
@@ -27,6 +30,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ControlQueueService.name);
   private connection!: IORedis;
   private queue!: Queue<WebPassiveJobPayload>;
+  private dlq!: Queue<WebPassiveJobPayload & { failedReason?: string }>;
   private worker!: Worker<WebPassiveJobPayload>;
   private events!: QueueEvents;
   private ready = false;
@@ -43,6 +47,15 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     });
     this.queue = new Queue(CONTROL_QUEUE_NAME, {
       connection: this.connection.duplicate(),
+      defaultJobOptions: {
+        attempts: CONTROL_JOB_ATTEMPTS,
+        backoff: { type: "exponential", delay: CONTROL_JOB_BACKOFF_MS },
+        removeOnComplete: 100,
+        removeOnFail: 200,
+      },
+    });
+    this.dlq = new Queue(CONTROL_DLQ_NAME, {
+      connection: this.connection.duplicate(),
     });
     this.events = new QueueEvents(CONTROL_QUEUE_NAME, {
       connection: this.connection.duplicate(),
@@ -56,17 +69,20 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       },
     );
     this.worker.on("failed", (job, err) => {
-      this.logger.error(`Job ${job?.id} failed: ${err.message}`);
+      void this.onJobFailed(job, err);
     });
     await this.events.waitUntilReady();
     this.ready = true;
-    this.logger.log(`BullMQ worker prêt (${CONTROL_QUEUE_NAME})`);
+    this.logger.log(
+      `BullMQ worker prêt (${CONTROL_QUEUE_NAME}, attempts=${CONTROL_JOB_ATTEMPTS}, dlq=${CONTROL_DLQ_NAME})`,
+    );
   }
 
   async onModuleDestroy() {
     await this.worker?.close();
     await this.events?.close();
     await this.queue?.close();
+    await this.dlq?.close();
     await this.connection?.quit();
   }
 
@@ -77,20 +93,86 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
   async enqueue(payload: WebPassiveJobPayload): Promise<{ bullJobId: string }> {
     const job = await this.queue.add("web.passive.presence.v1", payload, {
       jobId: payload.jobRunId,
+      attempts: CONTROL_JOB_ATTEMPTS,
+      backoff: { type: "exponential", delay: CONTROL_JOB_BACKOFF_MS },
       removeOnComplete: 100,
-      removeOnFail: 100,
-      attempts: 1,
+      removeOnFail: 200,
     });
     await this.prisma.jobRun.update({
       where: { id: payload.jobRunId },
       data: {
         bullJobId: String(job.id),
         status: "queued",
+        attemptCount: 0,
         progressPercent: 0,
-        progressMessage: "En file BullMQ",
+        progressMessage: `En file BullMQ (max ${CONTROL_JOB_ATTEMPTS} tentatives)`,
       },
     });
     return { bullJobId: String(job.id) };
+  }
+
+  /** Exposé pour tests / ops — taille DLQ */
+  async dlqCount(): Promise<number> {
+    return this.dlq.count();
+  }
+
+  private async onJobFailed(
+    job: Job<WebPassiveJobPayload> | undefined,
+    err: Error,
+  ) {
+    this.logger.error(`Job ${job?.id} failed: ${err.message}`);
+    if (!job) return;
+    const attempts = job.opts.attempts ?? CONTROL_JOB_ATTEMPTS;
+    const made = job.attemptsMade;
+    await this.prisma.jobRun
+      .update({
+        where: { id: job.data.jobRunId },
+        data: {
+          attemptCount: made,
+          progressMessage: `Échec tentative ${made}/${attempts}: ${err.message}`,
+        },
+      })
+      .catch(() => undefined);
+
+    if (made >= attempts || err.message === "KILLED") {
+      await this.deadLetter(job, err.message);
+    }
+  }
+
+  private async deadLetter(
+    job: Job<WebPassiveJobPayload>,
+    reason: string,
+  ) {
+    await this.dlq.add(
+      "dead",
+      { ...job.data, failedReason: reason },
+      { removeOnComplete: 500 },
+    );
+    await this.prisma.jobRun
+      .update({
+        where: { id: job.data.jobRunId },
+        data: {
+          status:
+            reason === "KILLED"
+              ? "killed"
+              : "dead_lettered",
+          deadLetteredAt: new Date(),
+          finishedAt: new Date(),
+          progressMessage: `DLQ: ${reason}`,
+          attemptCount: job.attemptsMade,
+        },
+      })
+      .catch(() => undefined);
+    await this.audit
+      .append({
+        tenantId: job.data.tenantId,
+        action:
+          reason === "KILLED" ? "job.killed_dlq" : "job.dead_lettered",
+        objectType: "job_run",
+        objectId: job.data.jobRunId,
+        payload: { reason, attemptsMade: job.attemptsMade },
+      })
+      .catch(() => undefined);
   }
 
   async waitForJob(jobRunId: string, timeoutMs = 90_000) {
@@ -149,37 +231,68 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     return { cancelRequested: true, jobRunId: running.id };
   }
 
+  /**
+   * Kill forcé : annulation + moveToFailed(KILLED) + statut `killed`.
+   * Distinct de cancel (soft) — testé dans control-queue.test.ts.
+   */
   async kill(missionId: string) {
     const cancel = await this.requestCancel(missionId);
     const running = await this.prisma.jobRun.findFirst({
-      where: { missionId, status: { in: ["queued", "running"] } },
+      where: {
+        missionId,
+        status: { in: ["queued", "running"] },
+      },
       orderBy: { createdAt: "desc" },
     });
-    if (running?.bullJobId) {
+    if (!running) {
+      return { ...cancel, killed: false, reason: "aucun job actif" };
+    }
+    if (running.bullJobId) {
       const job = await this.queue.getJob(running.bullJobId);
       if (job) {
         try {
-          await job.moveToFailed(new Error("KILLED"), "0", true);
+          await job.moveToFailed(new Error("KILLED"), job.token ?? "0", true);
         } catch {
           await job.remove().catch(() => undefined);
         }
+        await this.deadLetter(
+          job as Job<WebPassiveJobPayload>,
+          "KILLED",
+        ).catch(() => undefined);
       }
-      await this.prisma.jobRun.update({
-        where: { id: running.id },
-        data: {
-          status: "killed",
-          killedAt: new Date(),
-          finishedAt: new Date(),
-          cancelRequested: true,
-          progressMessage: "Kill forcé",
-        },
-      });
     }
-    return { ...cancel, killed: true };
+    await this.prisma.jobRun.update({
+      where: { id: running.id },
+      data: {
+        status: "killed",
+        killedAt: new Date(),
+        finishedAt: new Date(),
+        cancelRequested: true,
+        progressMessage: "Kill forcé — job stoppé, entrée DLQ",
+      },
+    });
+    await this.audit.append({
+      tenantId: running.tenantId,
+      action: "job.killed",
+      objectType: "job_run",
+      objectId: running.id,
+      payload: { missionId, hard: true },
+    });
+    await this.safeMissionTransition(missionId, "CANCELLED");
+    return { ...cancel, killed: true, jobRunId: running.id };
   }
 
   private async processJob(job: Job<WebPassiveJobPayload>) {
     const p = job.data;
+    await this.prisma.jobRun
+      .update({
+        where: { id: p.jobRunId },
+        data: {
+          attemptCount: job.attemptsMade + 1,
+          progressMessage: `Tentative ${job.attemptsMade + 1}/${job.opts.attempts ?? CONTROL_JOB_ATTEMPTS}`,
+        },
+      })
+      .catch(() => undefined);
     try {
       return await this.runControl(job);
     } catch (e) {

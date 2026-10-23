@@ -75,6 +75,7 @@ describe("connector grants DB (si Postgres)", () => {
     try {
       const { PrismaClient } = await import("@prisma/client");
       prisma = new PrismaClient();
+      await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
       await prisma.$queryRaw`SELECT 1`;
       const t = await prisma.tenant.findFirst({
         where: { slug: "demo-synth" },

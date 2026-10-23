@@ -10,6 +10,8 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Seed Atlas MVP (données FICTIVES)...");
+  // FORCE RLS : seed en bypass (migration rls_tenant)
+  await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
 
   await prisma.auditEvent.deleteMany();
   await prisma.finding.deleteMany();
