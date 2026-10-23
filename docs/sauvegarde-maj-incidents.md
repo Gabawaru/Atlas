@@ -108,4 +108,23 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 - PRA multi-région, chiffrement at-rest managé, alerting OTel production  
 - Sauvegarde continue PITR Postgres managée  
-- Procédure RGPD complète (export/effacement) — modèle de rétention documenté ailleurs, non automatisé ici  
+- Export/effacement personne concernée bout-en-bout — voir hypothèses `docs/retention-et-purge.md` (pas une certification)  
+- AIPD / base légale validée avocat — hors MVP  
+
+### Rétention / legal hold (ops)
+
+```bash
+# Politique TTL (staff)
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3001/v1/admin/retention/policy
+
+# Activer un hold (bloque toute purge)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"active":true,"reason":"Litige FICTIF"}' \
+  http://localhost:3001/v1/admin/retention/tenants/$TENANT_ID/legal-hold
+
+# Dry-run purge (défaut)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"dryRun":true}' \
+  http://localhost:3001/v1/admin/retention/tenants/$TENANT_ID/purge
+```
+

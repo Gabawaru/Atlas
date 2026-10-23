@@ -46,6 +46,7 @@ pnpm demo:smoke
 | Vuln feeds | `GET /v1/vuln/feeds`, `GET /v1/software-components`, `POST /v1/vuln/match` — voir `docs/referentiels-vulnerabilites.md` |
 | Assistant | `POST /v1/conversation`, `GET /v1/assistant/usage` — mock/API, plafonds, non-bypass — `docs/assistant-conversationnel.md` |
 | Déploiement | `ATLAS_DEPLOY_MODE`, `ATLAS_OFFLINE`, `GET /v1/deploy/mode`, sync journal — `docs/modes-deploiement.md` |
+| Rétention | `GET/POST /v1/admin/retention/…` — TTL, legal hold, purge dry-run — `docs/retention-et-purge.md` |
 | RLS | Migration `*_rls_tenant` ; `PrismaService.asTenant` / bypass |
 | BullMQ | Retry 3×, DLQ `atlas-control-passive-dlq`, kill → failed |
 

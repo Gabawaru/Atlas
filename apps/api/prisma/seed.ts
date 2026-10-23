@@ -14,6 +14,7 @@ async function main() {
   await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
 
   await prisma.auditEvent.deleteMany();
+  await prisma.purgeRun.deleteMany();
   await prisma.syncJournalEntry.deleteMany();
   await prisma.llmUsageLog.deleteMany();
   await prisma.supportTicket.deleteMany();

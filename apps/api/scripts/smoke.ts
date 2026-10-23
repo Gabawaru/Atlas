@@ -327,6 +327,58 @@ async function main() {
       throw new Error(`deploy/mode invalide: ${JSON.stringify(deployMode)}`);
     }
 
+    // Rétention : policy + legal hold bloque purge
+    const adminLogin = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "admin@a.atlas.local",
+        password: "atlas-demo",
+      }),
+    }).then((r) => r.json());
+    const adminHeaders = {
+      Authorization: `Bearer ${adminLogin.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const pol = await fetch(`${BASE}/admin/retention/policy`, {
+      headers: adminHeaders,
+    }).then((r) => r.json());
+    if (!pol?.disclaimer || !/Hypothèses/i.test(pol.disclaimer)) {
+      throw new Error("retention policy disclaimer manquant");
+    }
+    const tenantsAdmin = await fetch(`${BASE}/admin/tenants`, {
+      headers: adminHeaders,
+    }).then((r) => r.json());
+    const demoT = Array.isArray(tenantsAdmin)
+      ? tenantsAdmin.find((x: { slug: string }) => x.slug === "demo-synth")
+      : null;
+    if (!demoT?.id) throw new Error("tenant demo-synth pour rétention");
+    await fetch(`${BASE}/admin/retention/tenants/${demoT.id}/legal-hold`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        active: true,
+        reason: "[FICTIF] Hold smoke rétention",
+      }),
+    });
+    const blocked = await fetch(
+      `${BASE}/admin/retention/tenants/${demoT.id}/purge`,
+      {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify({ dryRun: true }),
+      },
+    ).then((r) => r.json());
+    if (!blocked.heldSkipped) {
+      throw new Error(`legal hold doit bloquer purge: ${JSON.stringify(blocked)}`);
+    }
+    await fetch(`${BASE}/admin/retention/tenants/${demoT.id}/legal-hold`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ active: false }),
+    });
+
+
     // Assistant : propose sans exécuter
     const chat = await fetch(`${BASE}/conversation`, {
       method: "POST",

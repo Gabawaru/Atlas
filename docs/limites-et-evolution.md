@@ -30,6 +30,7 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Feeds vulns | OSV/NVD/KEV passifs + fixtures CI ; confiance ≠ gravité | Live NVD clé API, couverture élargie, preuves runtime |
 | Assistant LLM | Mock + API opt-in env ; plafonds tokens/€ ; journal sans contenu | Broker multi-modèles, budgets fins, redaction avancée |
 | Déploiement | Modes hosted/hybrid/local + garde-fous offline (sync journal) | Workers on-prem distincts, sync bidirectionnelle HA |
+| Rétention / RGPD | TTL + purge contrôlée + legal hold (hypothèses, pas certif.) | Export/effacement personne, AIPD, archivage froid |
 | Juridique | Docs hors certification | Cadre juridique séparé — pas d’auto-certif |
 
 ## Non négociable même en évolution
