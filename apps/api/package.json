@@ -12,9 +12,9 @@
     "db:migrate:dev": "prisma migrate dev --name init",
     "db:seed": "tsx prisma/seed.ts",
     "test": "pnpm run test:unit && pnpm run test:e2e && pnpm run test:acceptance",
-    "test:unit": "node --import tsx --test --test-timeout=20000 src/**/*.test.ts",
-    "test:e2e": "node --import tsx --test test/e2e/**/*.test.ts",
-    "test:acceptance": "node --import tsx --test --test-timeout=30000 test/acceptance/**/*.test.ts",
+    "test:unit": "node --import tsx --test --test-timeout=20000 src/*/*.test.ts",
+    "test:e2e": "node --import tsx --test test/e2e/*.test.ts",
+    "test:acceptance": "node --import tsx --test --test-timeout=30000 test/acceptance/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "lint": "echo 'ok'"
   },
