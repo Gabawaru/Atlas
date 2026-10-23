@@ -81,6 +81,8 @@ pnpm smoke               # ou pnpm demo:smoke
 | Export PDF 404 | Job non terminé | Attendre `REPORT_AVAILABLE` ; vérifier `JobRun` |
 | Chaîne audit `ok: false` | Tampering ou seed ancien | Re-seed en démo ; en réel : investiguer dump / logs |
 | Support peut « Approuver » grisé | Normal | Seul rôle `approver` |
+| Approver ne peut pas créer un ticket SAV | Normal | SAV = `support`/`ops`/`admin` ; ≠ approbation |
+| Finding sans statut remédiation | Colonnes absentes / seed ancien | `pnpm db:migrate` puis re-seed démo |
 
 ### Kill / cancel d’urgence
 

@@ -14,6 +14,7 @@ async function main() {
   await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
 
   await prisma.auditEvent.deleteMany();
+  await prisma.supportTicket.deleteMany();
   await prisma.finding.deleteMany();
   await prisma.report.deleteMany();
   await prisma.jobRun.deleteMany();
@@ -272,6 +273,23 @@ async function main() {
       payload: seedPayload,
       prevHash: AUDIT_GENESIS,
       hash: seedHash,
+    },
+  });
+
+  const supportUser = await prisma.user.findUniqueOrThrow({
+    where: { email: "support@a.atlas.local" },
+  });
+  await prisma.supportTicket.create({
+    data: {
+      tenantId: tenantDemo.id,
+      missionId: mission.id,
+      subject: "[FICTIF] Question client — lecture rapport",
+      body: "Données de démonstration : le client demande une clarification sur le bilan décideur. SAV ≠ approbation.",
+      status: "open",
+      category: "question",
+      createdByUserId: supportUser.id,
+      assigneeUserId: supportUser.id,
+      synthetic: true,
     },
   });
 

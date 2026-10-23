@@ -324,6 +324,14 @@ describe("AC suite — critères d'acceptation MVP", () => {
       ];
       assert.equal(new Set(families).size, 5);
     });
+
+    it("SAV : support peut muter, approver seul ne peut pas", () => {
+      const canMutateSav = (u: AuthUser) =>
+        u.staffRoles.some((r) => ["support", "ops", "admin"].includes(r));
+      assert.equal(canMutateSav(base(["support"])), true);
+      assert.equal(canMutateSav(base(["approver"])), false);
+      assert.equal(canMutateSav(base(["billing"])), false);
+    });
   });
 
   describe("AC-01 / parcours états", () => {

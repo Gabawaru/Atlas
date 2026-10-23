@@ -36,6 +36,7 @@ model Tenant {
   auditEvents    AuditEvent[]
   routingPolicies ApprovalRoutingPolicy[]
   connectorGrants ConnectorGrant[]
+  supportTickets SupportTicket[]
 }
 
 model User {
@@ -169,6 +170,7 @@ model Mission {
   jobRuns         JobRun[]
   findings        Finding[]
   reports         Report[]
+  supportTickets  SupportTicket[]
 }
 
 model ScopeVersion {
@@ -298,8 +300,37 @@ model Finding {
   technical   String?
   /// FICTIF
   synthetic   Boolean  @default(true)
+  /// Suivi corrections client : open | in_progress | fixed | accepted_risk | wont_fix | retest_requested
+  remediationStatus String @default("open")
+  remediationNote   String?
+  remediatedAt      DateTime?
   createdAt   DateTime @default(now())
   mission     Mission  @relation(fields: [missionId], references: [id])
+}
+
+/// Tickets SAV / incidents staff A — support ≠ approbation
+model SupportTicket {
+  id               String   @id @default(cuid())
+  tenantId         String
+  missionId        String?
+  subject          String
+  body             String
+  /// open | waiting | resolved | closed
+  status           String   @default("open")
+  /// incident | question | access | other
+  category         String   @default("question")
+  createdByUserId  String
+  assigneeUserId   String?
+  /// FICTIF
+  synthetic        Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  resolvedAt       DateTime?
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  mission          Mission? @relation(fields: [missionId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status])
 }
 
 model Report {

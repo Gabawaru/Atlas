@@ -13,6 +13,7 @@ export class PrismaService
 {
   async onModuleInit() {
     await this.$connect();
+    // Preferer DATABASE_URL avec options=-c app.bypass_rls=on (toutes connexions du pool).
     await this.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
   }
 

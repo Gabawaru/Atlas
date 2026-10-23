@@ -12,7 +12,7 @@ const API_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgresql://atlas:atlas_dev_only@localhost:5432/atlas?schema=public";
+  "postgresql://atlas:atlas_dev_only@localhost:5432/atlas?schema=public&options=-c%20app.bypass_rls%3Don";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const API_PORT = Number(process.env.API_PORT ?? 3001);
 const BASE = `http://127.0.0.1:${API_PORT}/v1`;
@@ -217,8 +217,91 @@ async function main() {
       }
     }
 
+    // Findings → remédiation client
+    const findings = await fetch(`${BASE}/findings`, { headers }).then((r) =>
+      r.json(),
+    );
+    if (!Array.isArray(findings) || findings.length < 1) {
+      throw new Error("findings attendus (seed ou mission smoke)");
+    }
+    const rem = await fetch(
+      `${BASE}/findings/${findings[0].id}/remediation`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          remediationStatus: "in_progress",
+          remediationNote: "[FICTIF] smoke remédiation",
+        }),
+      },
+    ).then((r) => r.json());
+    if (rem.remediationStatus !== "in_progress") {
+      throw new Error(`remédiation attendue in_progress, reçu ${rem.remediationStatus}`);
+    }
+
+    // SAV : support peut créer ; approver ne peut pas muter
+    const supportLogin = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "support@a.atlas.local",
+        password: "atlas-demo",
+      }),
+    }).then((r) => r.json());
+    const supportHeaders = {
+      Authorization: `Bearer ${supportLogin.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const tenants = await fetch(`${BASE}/admin/tenants`, {
+      headers: supportHeaders,
+    }).then((r) => r.json());
+    const demoTenant = Array.isArray(tenants)
+      ? tenants.find((t: { slug: string }) => t.slug === "demo-synth") ??
+        tenants[0]
+      : null;
+    if (!demoTenant?.id) {
+      throw new Error(
+        `tenant démo introuvable pour SAV: ${JSON.stringify(tenants)}`,
+      );
+    }
+    const ticket = await fetch(`${BASE}/admin/tickets`, {
+      method: "POST",
+      headers: supportHeaders,
+      body: JSON.stringify({
+        tenantId: demoTenant.id,
+        subject: "[FICTIF] Smoke SAV",
+        body: "Ticket smoke — SAV ≠ approbation",
+        category: "incident",
+      }),
+    }).then((r) => r.json());
+    if (!ticket.id) throw new Error(`création ticket SAV échouée: ${JSON.stringify(ticket)}`);
+
+    const approverLogin = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "approver@a.atlas.local",
+        password: "atlas-demo",
+      }),
+    }).then((r) => r.json());
+    const deny = await fetch(`${BASE}/admin/tickets`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${approverLogin.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tenantId: demoTenant.id,
+        subject: "ne doit pas passer",
+        body: "approver ne mute pas le SAV",
+      }),
+    });
+    if (deny.status !== 403) {
+      throw new Error(`approver SAV attendu 403, reçu ${deny.status}`);
+    }
+
     console.log(
-      "✅ Smoke e2e OK — BullMQ + exports PDF/CSV/JSON + signature mock + preuves scope",
+      "✅ Smoke e2e OK — BullMQ + exports + remédiation + SAV (support≠approver)",
     );
     process.exitCode = 0;
   } catch (e) {
