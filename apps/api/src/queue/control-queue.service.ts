@@ -24,6 +24,7 @@ import {
 import { generateReportExports } from "../reports/report-export";
 import { assertTransition } from "../mission/mission-state";
 import type { MissionStatus } from "@atlas/shared";
+import { VulnService } from "../vuln/vuln.service";
 
 @Injectable()
 export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
@@ -38,6 +39,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(VulnService) private readonly vuln: VulnService,
   ) {}
 
   async onModuleInit() {
@@ -448,6 +450,21 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         synthetic: p.syntheticMission,
       },
     });
+
+    // Inventaire passif depuis bannières HTTP → matching feeds (confiance ≠ gravité)
+    try {
+      await this.vuln.ingestEvidenceBanners(
+        p.tenantId,
+        p.missionId,
+        evidence,
+        "system:worker",
+        p.syntheticMission,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `vuln ingest ignoré: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
 
     const executiveSummary = p.syntheticMission
       ? "[FICTIF] Bilan décideur : exposition web de démonstration — DNS, certificats TLS et headers de sécurité observés dans le scope uniquement."

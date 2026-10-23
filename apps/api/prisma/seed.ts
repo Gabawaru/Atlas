@@ -15,6 +15,8 @@ async function main() {
 
   await prisma.auditEvent.deleteMany();
   await prisma.supportTicket.deleteMany();
+  await prisma.vulnFeedCache.deleteMany();
+  await prisma.softwareComponent.deleteMany();
   await prisma.finding.deleteMany();
   await prisma.report.deleteMany();
   await prisma.jobRun.deleteMany();
@@ -238,6 +240,80 @@ async function main() {
       synthetic: true,
     },
   });
+
+  // Inventaire logiciel FICTIF → matching feeds passifs (confiance ≠ gravité)
+  const { VERSION_MATCH_DISCLAIMER } = await import(
+    "../src/vuln/disclaimer"
+  );
+  const { matchFromFixtures, mergeCandidates } = await import(
+    "../src/vuln/match"
+  );
+  const inventory = [
+    {
+      name: "openssl",
+      version: "1.0.2k",
+      ecosystem: "openssl",
+      rawEvidence: "[FICTIF] seed inventory openssl/1.0.2k",
+    },
+    {
+      name: "nginx",
+      version: "1.14.0",
+      ecosystem: "nginx",
+      rawEvidence: "[FICTIF] seed inventory nginx/1.14.0",
+    },
+    {
+      name: "log4j-core",
+      version: "2.14.1",
+      ecosystem: "maven",
+      rawEvidence: "[FICTIF] seed inventory log4j-core@2.14.1",
+    },
+  ];
+  for (const item of inventory) {
+    await prisma.softwareComponent.create({
+      data: {
+        tenantId: tenantDemo.id,
+        missionId: mission.id,
+        name: item.name,
+        version: item.version,
+        ecosystem: item.ecosystem,
+        observedFrom: "seed",
+        synthetic: true,
+        rawEvidence: item.rawEvidence,
+      },
+    });
+  }
+  const seedMatches = mergeCandidates(
+    inventory.flatMap((item) => matchFromFixtures(item)),
+  );
+  for (const cand of seedMatches) {
+    await prisma.finding.create({
+      data: {
+        missionId: mission.id,
+        severity: cand.severity === "unknown" ? "info" : cand.severity,
+        confidence: cand.confidence,
+        cveId: cand.cveId,
+        kevListed: cand.kevListed,
+        feedSources: cand.feedSources,
+        matchDisclaimer: VERSION_MATCH_DISCLAIMER,
+        title: `[FICTIF] ${cand.cveId} — ${cand.title}`,
+        summary: `${cand.summary} Confiance: ${cand.confidence} ≠ gravité ${cand.severity}.`,
+        technical: JSON.stringify(
+          {
+            cveId: cand.cveId,
+            confidence: cand.confidence,
+            severity: cand.severity,
+            kevListed: cand.kevListed,
+            feedSources: cand.feedSources,
+            disclaimer: VERSION_MATCH_DISCLAIMER,
+          },
+          null,
+          2,
+        ),
+        synthetic: true,
+      },
+    });
+  }
+
   await prisma.report.create({
     data: {
       missionId: mission.id,

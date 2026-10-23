@@ -23,7 +23,8 @@ Prérequis : API démarrée (`pnpm dev:api`) avec Postgres + Redis.
 9. **Exécution** : Policy Guard → DNS, TLS, headers sécu, **OSINT RDAP** (apex in-scope, public) ; sous-domaines courants seulement s’ils sont in-scope et non exclus.
 10. **Bilans** : décideur + détail technique ; exports JSON/CSV/PDF.
 11. **Suivi des corrections** : findings → statut de remédiation (`open`, `in_progress`, `fixed`, `accepted_risk`, `wont_fix`, `retest_requested`) — owner/operator ; données FICTIVES.
-12. **Client** : build web (`pnpm client:smoke`) ; desktop = stub Tauri documenté (pas d’installateur).
+12. **Référentiels vulns (passifs)** : inventaire seed + matching OSV/NVD/KEV ; **confiance ≠ gravité** ; une correspondance de version **ne confirme pas** une vulnérabilité.
+13. **Client** : build web (`pnpm client:smoke`) ; desktop = stub Tauri documenté (pas d’installateur).
 
 ## Ce que vous ne pouvez pas faire (honnête)
 
