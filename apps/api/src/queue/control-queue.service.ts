@@ -392,6 +392,16 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
                 issuerCN: "Atlas Mock CA",
                 daysRemaining: 90,
               }),
+              rdapFn: async (host: string) => ({
+                source: "rdap" as const,
+                query: host,
+                ok: true,
+                handle: "SYNTHETIC-DOMAIN",
+                registrar: "Atlas Mock Registrar",
+                status: ["client transfer prohibited"],
+                disclaimer:
+                  "OSINT passif RDAP public uniquement — in-scope ; mock CI",
+              }),
             }
           : {}),
       });
@@ -445,7 +455,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     const technicalDetail = [
       `Module ${WEB_PASSIVE_MODULE_ID}`,
       `Cibles contrôlées : ${evidence.length}`,
-      `Preuves : DNS (A/AAAA/NS/MX/TXT) + headers sécu de base + TLS (CN/SAN/échéance) si https`,
+      `Preuves : DNS + headers sécu + TLS + OSINT RDAP (apex in-scope, public)`,
       `Exclusions RoE : ${(p.exclusions ?? []).join(", ") || "(aucune)"}`,
       `Rate limit : ${p.rateLimitPerMinute}/min · file BullMQ · pas de scan agressif`,
       forceMock ? "Réseau : mock forcé (ATLAS_FORCE_MOCK_NETWORK)" : "Réseau : sondes réelles",

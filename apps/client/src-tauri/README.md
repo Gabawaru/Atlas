@@ -1,24 +1,39 @@
-# Stub Tauri — client desktop Atlas
+# Client desktop Atlas — stub Tauri 2
 
-Le MVP de ce tour livre le **client web React** (`apps/client`) pour rester installable rapidement.
+Le **client web** (`apps/client`, Vite) est le parcours MVP supporté.  
+Ce dossier ancre le shell **Tauri 2** sans présenter un binaire packagé comme terminé.
 
-## Pourquoi un stub ?
-
-Le shell **Tauri 2** (ADR-001) reste la cible multi-OS (Windows / macOS / Linux), mais l’embarquer complètement (toolchain Rust, icônes, signing) dépasse la tranche verticale minimale de ce tour.
-
-## Prochaines étapes (hors ce PR)
-
-1. `pnpm create tauri-app` dans `apps/client` ou initialiser `src-tauri/` avec Tauri 2.
-2. Pointer `frontendDist` / `devUrl` vers le build Vite existant.
-3. Ne **jamais** exécuter de contrôles dans le process UI — appels API / worker uniquement.
-4. Plugins : coffre local / keychain pour secrets (pas de secret en clair).
-
-## État actuel
+## État
 
 | Élément | Statut |
 |---------|--------|
-| UI web React | ✅ MVP |
-| Shell Tauri | ⏳ Stub documenté |
-| Contrôles dans UI | ❌ Interdit |
+| UI web React (build Vite) | ✅ `pnpm --filter @atlas/client run build` |
+| Smoke packaging web | ✅ `pnpm client:smoke` |
+| Stub Rust (`atlas-client-stub`) | ✅ `cargo run` — message uniquement |
+| `tauri.conf.json` (cible) | ✅ présent, `bundle.active: false` |
+| `tauri build` / binaire signé | ❌ reporté (webkit2gtk / signing) |
 
-Ce dossier existe pour ancrer l’intention desktop sans présenter un binaire Tauri comme « terminé ».
+## Pourquoi pas `tauri build` ici ?
+
+Sur les runners CI / agents cloud, **webkit2gtk** et la chaîne de packaging OS manquent souvent.  
+Le stub Rust compile **sans** dépendance `tauri` pour rester vérifiable (`cargo check` / `cargo run`).
+
+## Brancher Tauri 2 (hors CI minimale)
+
+1. Installer toolchain desktop (voir [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)).
+2. Remplacer le crate stub par une app Tauri 2 ; garder `frontendDist: ../dist`.
+3. Ne **jamais** exécuter de contrôles dans le process UI — uniquement appels API `/v1`.
+4. Secrets : plugins coffre OS — pas de secret en clair.
+
+## Commandes
+
+```bash
+# Build web (livrable packaging MVP)
+pnpm --filter @atlas/client run build
+
+# Smoke : dist/index.html + assets
+pnpm client:smoke
+
+# Stub Rust (pas de UI native)
+cd apps/client/src-tauri && cargo run
+```

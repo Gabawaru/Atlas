@@ -20,6 +20,8 @@
     "lint": "pnpm -r run lint --if-present",
     "smoke": "pnpm --filter @atlas/api run smoke",
     "demo:smoke": "bash apps/api/scripts/demo-smoke.sh",
+    "client:smoke": "bash scripts/client-smoke.sh",
+    "client:stub-desktop": "cargo run --manifest-path apps/client/src-tauri/Cargo.toml",
     "docs:exemple-rapport": "pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts"
   },
   "engines": {

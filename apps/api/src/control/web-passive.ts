@@ -66,6 +66,25 @@ export interface WebPassiveTlsEvidence {
   error?: string;
 }
 
+/**
+ * OSINT passif public (RDAP) — in-scope uniquement.
+ * Limites : une requête RDAP GET publique ; pas de scrape WHOIS legacy,
+ * pas d'énumération, pas de sources payantes, pas hors périmètre.
+ */
+export interface WebPassiveOsintEvidence {
+  source: "rdap";
+  query: string;
+  ok: boolean;
+  handle?: string;
+  registrar?: string;
+  status?: string[];
+  nameservers?: string[];
+  events?: { action?: string; date?: string }[];
+  rdapUrl?: string;
+  disclaimer: string;
+  error?: string;
+}
+
 export interface WebPassiveResult {
   host: string;
   inScope: true;
@@ -73,6 +92,8 @@ export interface WebPassiveResult {
   dns: WebPassiveDnsEvidence;
   http?: WebPassiveHttpEvidence;
   tls?: WebPassiveTlsEvidence;
+  /** Présent sur apex in-scope uniquement */
+  osint?: WebPassiveOsintEvidence;
   evidenceHash: string;
   /** true si mocks réseau injectés (tests / offline forcé) */
   networkMocked?: boolean;
@@ -106,9 +127,13 @@ export interface WebPassiveOptions {
     bodyBytesSampled?: number;
   }>;
   tlsFn?: (host: string) => Promise<WebPassiveTlsEvidence>;
+  /** Injection tests — RDAP / OSINT public */
+  rdapFn?: (host: string) => Promise<WebPassiveOsintEvidence>;
   sleepFn?: (ms: number) => Promise<void>;
   /** default true — sondes www/mail/api in-scope ; false en fixtures unitaires */
   expandCommonSubdomains?: boolean;
+  /** default true — RDAP apex in-scope */
+  includeOsintRdap?: boolean;
 }
 
 export function normalizeHost(value: string): string {
@@ -311,6 +336,87 @@ async function realHttpProbe(url: string): Promise<{
   return { status: res.status, headers, bodySha256, bodyBytesSampled };
 }
 
+/** Apex = exactement un hôte de l'allowlist (pas www.x si x est listé) */
+export function isApexInAllowlist(
+  host: string,
+  allowedHosts: Set<string>,
+): boolean {
+  const h = normalizeHost(host);
+  return [...allowedHosts].map(normalizeHost).includes(h);
+}
+
+const OSINT_DISCLAIMER =
+  "OSINT passif RDAP public uniquement — in-scope ; pas de WHOIS agressif ni d'énumération.";
+
+async function realRdapProbe(host: string): Promise<WebPassiveOsintEvidence> {
+  const query = normalizeHost(host);
+  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(query)}`;
+  try {
+    const res = await fetch(rdapUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+      headers: { Accept: "application/rdap+json, application/json" },
+    });
+    if (!res.ok) {
+      return {
+        source: "rdap",
+        query,
+        ok: false,
+        rdapUrl,
+        disclaimer: OSINT_DISCLAIMER,
+        error: `HTTP ${res.status}`,
+      };
+    }
+    const data = (await res.json()) as {
+      handle?: string;
+      status?: string[];
+      entities?: { roles?: string[]; vcardArray?: unknown[] }[];
+      nameservers?: { ldhName?: string }[];
+      events?: { eventAction?: string; eventDate?: string }[];
+    };
+    const registrar = data.entities?.find((e) =>
+      e.roles?.includes("registrar"),
+    );
+    let registrarName: string | undefined;
+    const vcard = registrar?.vcardArray;
+    if (Array.isArray(vcard) && Array.isArray(vcard[1])) {
+      for (const row of vcard[1] as unknown[]) {
+        if (Array.isArray(row) && row[0] === "fn" && typeof row[3] === "string") {
+          registrarName = row[3];
+          break;
+        }
+      }
+    }
+    return {
+      source: "rdap",
+      query,
+      ok: true,
+      handle: data.handle,
+      registrar: registrarName,
+      status: data.status,
+      nameservers: data.nameservers
+        ?.map((n) => n.ldhName)
+        .filter((x): x is string => Boolean(x)),
+      events: data.events?.slice(0, 5).map((e) => ({
+        action: e.eventAction,
+        date: e.eventDate,
+      })),
+      rdapUrl,
+      disclaimer: OSINT_DISCLAIMER,
+    };
+  } catch (e) {
+    return {
+      source: "rdap",
+      query,
+      ok: false,
+      rdapUrl,
+      disclaimer: OSINT_DISCLAIMER,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
 async function realTlsProbe(host: string): Promise<WebPassiveTlsEvidence> {
   return new Promise((resolve) => {
     const socket = tlsConnect(
@@ -362,7 +468,8 @@ async function realTlsProbe(host: string): Promise<WebPassiveTlsEvidence> {
 }
 
 /**
- * Contrôle passif borné : DNS + HTTP headers + TLS, rate-limité, annulable.
+ * Contrôle passif borné : DNS + HTTP headers + TLS + RDAP apex,
+ * rate-limité, annulable. Pas de scan agressif.
  */
 export async function runWebPassivePresence(
   targets: WebPassiveTarget[],
@@ -372,10 +479,12 @@ export async function runWebPassivePresence(
   const intervalMs = Math.ceil(60_000 / Math.max(1, opts.rateLimitPerMinute));
   const sleep =
     opts.sleepFn ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
-  const networkMocked = Boolean(opts.lookupFn || opts.fetchFn);
+  const networkMocked = Boolean(opts.lookupFn || opts.fetchFn || opts.rdapFn);
   const lookup = opts.lookupFn ?? realDnsLookup;
   const fetchImpl = opts.fetchFn ?? realHttpProbe;
   const tlsImpl = opts.tlsFn ?? realTlsProbe;
+  const rdapImpl = opts.rdapFn ?? realRdapProbe;
+  const includeOsint = opts.includeOsintRdap !== false;
 
   // Refus immédiat si une cible fournie est hors périmètre (avant élargissement)
   for (const t of targets) {
@@ -467,6 +576,14 @@ export async function runWebPassivePresence(
 
     if (url.startsWith("https://") && !opts.isCancelled()) {
       entryCore.tls = await tlsImpl(host);
+    }
+
+    if (
+      includeOsint &&
+      isApexInAllowlist(host, opts.allowedHosts) &&
+      !opts.isCancelled()
+    ) {
+      entryCore.osint = await rdapImpl(host);
     }
 
     const evidenceHash = hashEvidence(entryCore);

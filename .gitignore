@@ -14,3 +14,7 @@ apps/client/src-tauri/target/
 *.tsbuildinfo
 .vercel
 dump.rdb
+
+# Rust / Tauri stub
+apps/client/src-tauri/target/
+

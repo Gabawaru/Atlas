@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assertInScope,
   expandPassiveTargets,
+  isApexInAllowlist,
   runWebPassivePresence,
 } from "./web-passive";
 
@@ -95,6 +96,28 @@ describe("web.passive.presence.v1", () => {
         }),
       /OUT_OF_SCOPE/,
     );
+  });
+
+  it("OSINT RDAP apex in-scope uniquement (pas hors périmètre)", async () => {
+    const results = await runWebPassivePresence([{ host: "example.com" }], {
+      allowedHosts: new Set(["example.com"]),
+      rateLimitPerMinute: 1000,
+      expandCommonSubdomains: false,
+      isCancelled: () => false,
+      lookupFn: async () => ({ a: ["93.184.216.34"], aaaa: [] }),
+      fetchFn: async () => ({ status: 200, headers: {} }),
+      rdapFn: async (host) => ({
+        source: "rdap",
+        query: host,
+        ok: true,
+        registrar: "Mock Registrar",
+        disclaimer: "test",
+      }),
+      sleepFn: async () => undefined,
+    });
+    assert.equal(results[0]!.osint?.ok, true);
+    assert.equal(results[0]!.osint?.registrar, "Mock Registrar");
+    assert.equal(isApexInAllowlist("www.example.com", new Set(["example.com"])), false);
   });
 
   it("rapporte headers sécu + progression", async () => {

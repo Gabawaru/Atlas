@@ -7,6 +7,7 @@
     "dev": "vite --port 3002",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview --port 3002",
+    "smoke": "bash ../../scripts/client-smoke.sh",
     "lint": "echo 'ok'",
     "test": "echo 'no unit tests yet'"
   },
