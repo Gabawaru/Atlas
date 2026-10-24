@@ -4,7 +4,9 @@ import {
   assertInScope,
   expandPassiveTargets,
   isApexInAllowlist,
+  parseCookieFlags,
   runWebPassivePresence,
+  WEB_PASSIVE_LIMITS,
 } from "./web-passive";
 
 describe("web.passive.presence.v1", () => {
@@ -163,5 +165,43 @@ describe("web.passive.presence.v1", () => {
     );
     assert.ok(results[0]!.dns.ns?.includes("ns1.test"));
     assert.equal(results[0]!.tls?.daysRemaining, 30);
+  });
+
+  it("parseCookieFlags observe Secure/HttpOnly/SameSite (pas d'attaque)", () => {
+    const cookies = parseCookieFlags(
+      "session=abc; Path=/; HttpOnly, other=1; Secure; SameSite=Lax",
+    );
+    assert.ok(cookies.length >= 1);
+    const session = cookies.find((c) => c.name === "session");
+    assert.ok(session);
+    assert.equal(session!.httpOnly, true);
+    assert.ok(session!.missingFlags.includes("Secure"));
+  });
+
+  it("rapporte cookies + redirectChain in-scope (limites documentées)", async () => {
+    assert.equal(WEB_PASSIVE_LIMITS.maxRedirectHops, 5);
+    assert.equal(WEB_PASSIVE_LIMITS.noAggressiveScan, true);
+    const results = await runWebPassivePresence([{ host: "a.test" }], {
+      allowedHosts: new Set(["a.test"]),
+      rateLimitPerMinute: 1000,
+      expandCommonSubdomains: false,
+      isCancelled: () => false,
+      lookupFn: async () => ({ a: ["127.0.0.1"], aaaa: [] }),
+      fetchFn: async () => ({
+        status: 200,
+        headers: {
+          "set-cookie": "sid=1; Secure; HttpOnly; SameSite=Strict",
+        },
+        redirectChain: [
+          { url: "https://a.test/", status: 302, location: "https://a.test/app" },
+          { url: "https://a.test/app", status: 200 },
+        ],
+        cookies: parseCookieFlags("sid=1; Secure; HttpOnly; SameSite=Strict"),
+      }),
+      sleepFn: async () => undefined,
+    });
+    assert.ok(results[0]!.http?.cookies?.length);
+    assert.equal(results[0]!.http!.cookies![0]!.secure, true);
+    assert.equal(results[0]!.http!.redirectChain?.length, 2);
   });
 });

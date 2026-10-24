@@ -34,6 +34,21 @@ class StubImportDto {
   tenantId?: string;
 }
 
+class HierarchyFileImportDto {
+  @IsString()
+  orgId!: string;
+
+  @IsString()
+  content!: string;
+
+  @IsIn(["csv", "json"])
+  format!: "csv" | "json";
+
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
+}
+
 @Controller("admin")
 @UseGuards(AuthGuard)
 export class ApprovalsController {
@@ -105,6 +120,16 @@ export class ApprovalsController {
       memberIds,
       body.tenantId,
     );
+  }
+
+  /** Import CSV/JSON prêt — vide → BLOCKED ; n'invente pas d'approbateurs. */
+  @Post("routing/import")
+  importHierarchy(
+    @Body() body: HierarchyFileImportDto,
+    @Req() req: { user: AuthUser },
+  ) {
+    this.auth.requireStaff(req.user, ["admin"]);
+    return this.approvals.importHierarchyFile(body);
   }
 
   @Get("audit/verify")

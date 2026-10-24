@@ -41,6 +41,8 @@ pnpm demo:smoke
 | `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation (sécu ; pas billing) |
+| Import hiérarchie | `POST /v1/admin/routing/import` CSV/JSON — vide → BLOCKED — `docs/import-hierarchie.md` |
+| Web passif | cookies + redirects (max 5, in-scope) — `docs/controle-web-passif.md` |
 | Billing / licences | `GET/POST /v1/admin/billing/…` — plans, activate/expire, payment stub — `docs/licences-abonnements.md` |
 | Ops / versions | `GET/POST /v1/admin/ops/…` — versions, maintenance (kill-switch), journal — `docs/versions-et-maintenance.md` |
 | Admin SAV | `GET/POST /v1/admin/tickets`, `PATCH …/tickets/:id/status` — support≠approver |

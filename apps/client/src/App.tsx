@@ -105,8 +105,8 @@ type Roe = {
 };
 
 function needBadge(status?: string) {
-  if (status === "usable") return "Utilisable";
-  if (status === "coming_soon") return "Bientôt";
+  if (status === "usable") return "OK démo";
+  if (status === "coming_soon") return "Partiel";
   return "Non branché";
 }
 
@@ -362,18 +362,17 @@ export function App() {
     <div className="shell">
       <p className="brand">Atlas</p>
       <p className="tagline">
-        Assistant de pentest autorisé — conversation guidée, connecteurs
-        révocables, contrôles déterministes. L&apos;IA ne s&apos;auto-accorde
-        pas de droits.
+        Parcours démo court : connexion → présence web → rapport. Policy Guard
+        ; l&apos;IA n&apos;exécute rien.
       </p>
       <div className="banner">
         <strong>Données de démonstration</strong> — aucune cible réelle.
-        Abonnement ≠ autorisation. États UX honnêtes : pas de faux « terminé ».
+        Abonnement ≠ autorisation. Pas de faux « terminé » sur besoins non branchés.
       </div>
 
       {!token ? (
         <section>
-          <h2>Connexion</h2>
+          <h2>1 · Connexion</h2>
           <label>Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
           <label>Mot de passe</label>
@@ -388,23 +387,13 @@ export function App() {
           <p className="muted">Compte seed : owner@demo.atlas.local / atlas-demo</p>
         </section>
       ) : (
-        <div className="grid two">
+        <>
           <section>
-            <h2>Conversation guidée</h2>
+            <h2>2 · Besoin (états honnêtes)</h2>
             <p className="muted">
-              LLM mock — oriente vers modules/connecteurs, jamais d&apos;exécution.
+              Un seul besoin exécutable en démo. Les autres restent visibles sans
+              faux succès.
             </p>
-            <textarea
-              rows={3}
-              value={chat}
-              onChange={(e) => setChat(e.target.value)}
-            />
-            <button type="button" onClick={() => void ask()}>
-              Demander conseil
-            </button>
-            {chatReply && <pre>{chatReply}</pre>}
-
-            <h2>Cinq besoins</h2>
             {needs.map((n) => (
               <div
                 key={n.id}
@@ -420,147 +409,163 @@ export function App() {
                   {n.label}{" "}
                   <span className="muted">[{needBadge(n.status)}]</span>
                 </label>
-                <div className="muted">{n.statusLabel ?? n.note}</div>
+                {!n.mvpReady && (
+                  <div className="muted">{n.statusLabel ?? n.note}</div>
+                )}
               </div>
             ))}
-            {selected && !selected.mvpReady && (
-              <p className="muted">
-                Ce besoin n&apos;est pas exécutable : {selected.statusLabel}. Aucune
-                mission ne sera lancée sous un faux statut « terminé ».
-              </p>
-            )}
           </section>
 
           <section>
-            <h2>Connecteurs</h2>
+            <h2>3 · Mission démo → rapport</h2>
             <p className="muted">
-              Permissions révocables. Stub GitHub = mock OAuth non production.
+              Actif seed / example.com · RoE mock · Policy Guard · contrôles
+              passifs (headers, cookies, redirects in-scope).
             </p>
-            <ul>
-              {catalog.map((c) => {
-                const grant = grants.find(
-                  (g) => g.connectorId === c.id && g.status === "active",
-                );
-                return (
-                  <li key={c.id} className="need">
-                    <strong>
-                      {c.label}{" "}
-                      {c.isStub && <span className="muted">[STUB]</span>}
-                      {!c.productionReady && !c.isStub && (
-                        <span className="muted">[non prod]</span>
-                      )}
-                    </strong>
-                    <div className="muted">{c.statusLabel}</div>
-                    {c.disclaimer && (
-                      <div className="muted">{c.disclaimer}</div>
-                    )}
-                    {grant ? (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => void revokeGrant(grant.id)}
-                      >
-                        Révoquer
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => void connectConnector(c.id)}
-                      >
-                        {c.isStub ? "Connecter (mock OAuth)" : "Connecter"}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            <h2>Actifs</h2>
-            <ul>
-              {assets.map((a) => (
-                <li key={a.id}>
-                  {a.value}{" "}
-                  {a.synthetic && <span className="muted">[FICTIF]</span>}
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="ghost" onClick={() => void addAsset()}>
-              Ajouter actif démo
-            </button>
-
-            <h2>Mission</h2>
             <button
               type="button"
               disabled={busy || selectedNeed !== "web_presence"}
               onClick={() => void createAndRunDemo()}
             >
-              {busy ? "Exécution…" : "Mission démo présence web"}
+              {busy ? "Exécution…" : "Lancer présence web (démo)"}
             </button>
             <button type="button" className="ghost" onClick={() => void refresh()}>
               Rafraîchir
             </button>
+            {selectedNeed !== "web_presence" && (
+              <p className="muted">
+                Sélectionnez « présence web » pour lancer — les autres besoins
+                n&apos;exécutent rien.
+              </p>
+            )}
             <ul>
-              {missions.slice(0, 5).map((m) => (
+              {missions.slice(0, 3).map((m) => (
                 <li key={m.id}>
                   <strong>{m.title}</strong> — {m.status}
                   {m.blockedReason && (
                     <div className="muted">{m.blockedReason}</div>
                   )}
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => void loadRoe(m.id)}
-                  >
-                    Voir RoE
-                  </button>
-                  {m.ownerAuths?.[0] && (
-                    <div className="muted">
-                      Signatures : {m.ownerAuths[0].signerLabel}
-                      {m.ownerAuths[0].counterpartyLabel
-                        ? ` + ${m.ownerAuths[0].counterpartyLabel}`
-                        : ""}{" "}
-                      ({m.ownerAuths[0].status})
-                    </div>
-                  )}
                 </li>
               ))}
             </ul>
+          </section>
 
+          <details>
+            <summary>Options avancées (RoE, connecteurs, chat)</summary>
+            <section>
+              <h3>Conversation (mock — n&apos;exécute pas)</h3>
+              <textarea
+                rows={2}
+                value={chat}
+                onChange={(e) => setChat(e.target.value)}
+              />
+              <button type="button" className="ghost" onClick={() => void ask()}>
+                Demander conseil
+              </button>
+              {chatReply && <pre>{chatReply}</pre>}
+            </section>
+            <section>
+              <h3>Connecteurs</h3>
+              <ul>
+                {catalog
+                  .filter((c) => c.id === "web.passive.presence" || c.isStub)
+                  .map((c) => {
+                    const grant = grants.find(
+                      (g) => g.connectorId === c.id && g.status === "active",
+                    );
+                    return (
+                      <li key={c.id} className="need">
+                        <strong>
+                          {c.label}{" "}
+                          {c.isStub && <span className="muted">[STUB]</span>}
+                        </strong>
+                        <div className="muted">{c.statusLabel}</div>
+                        {grant ? (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => void revokeGrant(grant.id)}
+                          >
+                            Révoquer
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => void connectConnector(c.id)}
+                          >
+                            Connecter
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+              </ul>
+            </section>
+            <section>
+              <h3>Actifs</h3>
+              <ul>
+                {assets.map((a) => (
+                  <li key={a.id}>
+                    {a.value}{" "}
+                    {a.synthetic && <span className="muted">[FICTIF]</span>}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void addAsset()}
+              >
+                Ajouter actif démo
+              </button>
+            </section>
             {roe && roeMissionId && (
-              <>
-                <h2>RoE machine-readable</h2>
-                <p className="muted">
-                  Actifs, méthodes, exclusions, dates — versionnés. Toute
-                  modification invalide les signatures (2 parties mock).
-                </p>
+              <section>
+                <h3>RoE</h3>
                 <pre>
                   {JSON.stringify(
                     {
                       version: roe.version,
-                      scopeHash: roe.scopeHash.slice(0, 16) + "…",
-                      methods: roe.methods,
                       exclusions: roe.exclusions,
-                      periodStart: roe.periodStart,
-                      periodEnd: roe.periodEnd,
-                      notes: roe.notes,
+                      methods: roe.methods,
                     },
                     null,
                     2,
                   )}
                 </pre>
-                <label>Exclusions (FQDN, séparés par virgule)</label>
+                <label>Exclusions</label>
                 <input
                   value={roeExclusions}
                   onChange={(e) => setRoeExclusions(e.target.value)}
                 />
-                <button type="button" className="ghost" onClick={() => void bumpRoe()}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void bumpRoe()}
+                >
                   Publier nouvelle version RoE
                 </button>
-              </>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void loadRoe(roeMissionId)}
+                >
+                  Recharger RoE
+                </button>
+              </section>
             )}
-          </section>
-        </div>
+            {missions[0] && !roe && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void loadRoe(missions[0]!.id)}
+              >
+                Charger RoE mission récente
+              </button>
+            )}
+          </details>
+        </>
       )}
 
       {latestReport?.jobRuns?.[0] && (
