@@ -1,5 +1,5 @@
 # Atlas MVP — CI légère (unit + acceptation)
-# Services : Postgres 16 + Redis 7 (BullMQ). Pas de features produit ici.
+# Musk étape 5 : automatiser en dernier — cache uniquement, pas de feature produit.
 name: CI
 
 on:
@@ -71,9 +71,27 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Cache Prisma engines
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prisma
+          key: ${{ runner.os }}-prisma-${{ hashFiles('apps/api/prisma/schema.prisma', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-prisma-
+
+      - name: Cache shared package dist
+        id: cache-pkg-dist
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/shared/dist
+            packages/policy-guard/dist
+          key: ${{ runner.os }}-pkg-dist-${{ hashFiles('packages/shared/src/**', 'packages/policy-guard/src/**', 'packages/*/package.json', 'packages/*/tsconfig.json') }}
 
       - name: Build shared packages
+        if: steps.cache-pkg-dist.outputs.cache-hit != 'true'
         run: |
           pnpm --filter @atlas/shared build
           pnpm --filter @atlas/policy-guard build
