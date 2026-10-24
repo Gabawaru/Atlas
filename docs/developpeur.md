@@ -50,6 +50,8 @@ pnpm test:acceptance   # AC-01…AC-12
 pnpm smoke             # Postgres + Redis
 ```
 
+CI GitHub Actions (`.github/workflows/ci.yml`) : cache **pnpm** + dist `shared`/`policy-guard` + Prisma engines — pas de feature produit dans le workflow (Musk étape 5).
+
 Régénérer l’exemple de rapport versionné :
 
 ```bash
