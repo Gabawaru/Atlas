@@ -38,6 +38,22 @@ export interface WebPassiveSecurityHeaders {
   missing: string[];
 }
 
+/** Observation Set-Cookie — pas de vol de session, pas de bypass. */
+export interface WebPassiveCookieFlags {
+  name: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite?: string;
+  /** Flags manquants utiles pour le rapport (observation) */
+  missingFlags: string[];
+}
+
+export interface WebPassiveRedirectHop {
+  url: string;
+  status: number;
+  location?: string;
+}
+
 export interface WebPassiveHttpEvidence {
   ok: boolean;
   method: "HEAD" | "GET";
@@ -47,11 +63,23 @@ export interface WebPassiveHttpEvidence {
   contentType?: string;
   hsts?: string;
   securityHeaders?: WebPassiveSecurityHeaders;
+  /** Chaîne de redirect (max 5) — hôtes hors scope → arrêt, pas de suivi */
+  redirectChain?: WebPassiveRedirectHop[];
+  cookies?: WebPassiveCookieFlags[];
   bodySha256?: string;
   bodyBytesSampled?: number;
   observedAt?: string;
   error?: string;
 }
+
+/** Limites documentées du module (pas un scan agressif). */
+export const WEB_PASSIVE_LIMITS = {
+  maxRedirectHops: 5,
+  maxBodySampleBytes: 2048,
+  commonSubdomainsOnly: COMMON_IN_SCOPE_SUBDOMAINS,
+  noAggressiveScan: true,
+  methods: ["dns", "tls", "http.headers", "http.cookies", "http.redirects", "rdap.apex"],
+} as const;
 
 export interface WebPassiveTlsEvidence {
   protocol?: string;
@@ -125,6 +153,8 @@ export interface WebPassiveOptions {
     headers: Record<string, string>;
     bodySha256?: string;
     bodyBytesSampled?: number;
+    redirectChain?: WebPassiveRedirectHop[];
+    cookies?: WebPassiveCookieFlags[];
   }>;
   tlsFn?: (host: string) => Promise<WebPassiveTlsEvidence>;
   /** Injection tests — RDAP / OSINT public */
@@ -258,6 +288,52 @@ function extractSecurityHeaders(
   };
 }
 
+/** Parse Set-Cookie (observation flags uniquement). */
+export function parseCookieFlags(
+  setCookieHeader: string | string[] | undefined,
+): WebPassiveCookieFlags[] {
+  if (!setCookieHeader) return [];
+  const parts = Array.isArray(setCookieHeader)
+    ? setCookieHeader
+    : setCookieHeader.split(/,(?=\s*[^;]+=)/);
+  const out: WebPassiveCookieFlags[] = [];
+  for (const raw of parts) {
+    const line = raw.trim();
+    if (!line) continue;
+    const [pair, ...attrs] = line.split(";").map((s) => s.trim());
+    const name = pair?.split("=")[0]?.trim();
+    if (!name) continue;
+    const lower = attrs.map((a) => a.toLowerCase());
+    const secure = lower.some((a) => a === "secure");
+    const httpOnly = lower.some((a) => a === "httponly");
+    const sameSiteAttr = attrs.find((a) =>
+      a.toLowerCase().startsWith("samesite"),
+    );
+    const sameSite = sameSiteAttr?.split("=")[1]?.trim();
+    const missingFlags: string[] = [];
+    if (!secure) missingFlags.push("Secure");
+    if (!httpOnly) missingFlags.push("HttpOnly");
+    if (!sameSite) missingFlags.push("SameSite");
+    out.push({ name, secure, httpOnly, sameSite, missingFlags });
+  }
+  return out.slice(0, 20);
+}
+
+function collectSetCookie(
+  headers: Headers | Record<string, string>,
+): string | string[] | undefined {
+  if (headers instanceof Headers) {
+    const multi =
+      typeof headers.getSetCookie === "function"
+        ? headers.getSetCookie()
+        : [];
+    if (multi.length) return multi;
+    const single = headers.get("set-cookie");
+    return single ?? undefined;
+  }
+  return headers["set-cookie"];
+}
+
 function hashEvidence(payload: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(payload))
@@ -298,27 +374,82 @@ async function realDnsLookup(host: string): Promise<{
   return { a, aaaa, ns, mx, txt };
 }
 
-async function realHttpProbe(url: string): Promise<{
+async function realHttpProbe(
+  url: string,
+  allowedHosts?: Set<string>,
+  exclusions?: Set<string>,
+): Promise<{
   status: number;
   headers: Record<string, string>;
   bodySha256?: string;
   bodyBytesSampled?: number;
+  redirectChain?: WebPassiveRedirectHop[];
+  cookies?: WebPassiveCookieFlags[];
 }> {
-  let res = await fetch(url, {
-    method: "HEAD",
-    redirect: "manual",
-    signal: AbortSignal.timeout(8_000),
-  });
+  const redirectChain: WebPassiveRedirectHop[] = [];
+  let current = url;
+  let res: Response | null = null;
   const headers: Record<string, string> = {};
-  res.headers.forEach((v, k) => {
-    headers[k.toLowerCase()] = v;
-  });
+
+  for (let hop = 0; hop <= WEB_PASSIVE_LIMITS.maxRedirectHops; hop++) {
+    res = await fetch(current, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(8_000),
+    });
+    headers["set-cookie"] = "";
+    res.headers.forEach((v, k) => {
+      headers[k.toLowerCase()] = v;
+    });
+    const setCookie = collectSetCookie(res.headers);
+    if (setCookie) {
+      headers["set-cookie"] = Array.isArray(setCookie)
+        ? setCookie.join("\n")
+        : setCookie;
+    }
+
+    const location = res.headers.get("location") ?? undefined;
+    redirectChain.push({
+      url: current,
+      status: res.status,
+      location,
+    });
+
+    if (
+      location &&
+      res.status >= 300 &&
+      res.status < 400 &&
+      hop < WEB_PASSIVE_LIMITS.maxRedirectHops
+    ) {
+      let next: string;
+      try {
+        next = new URL(location, current).toString();
+      } catch {
+        break;
+      }
+      if (allowedHosts) {
+        try {
+          assertInScope(normalizeHost(next), allowedHosts, exclusions);
+        } catch {
+          // Hors scope : on n'ensuit pas (pas de scan ouvert)
+          break;
+        }
+      }
+      current = next;
+      continue;
+    }
+    break;
+  }
+
+  if (!res) {
+    return { status: 0, headers: {}, redirectChain };
+  }
 
   let bodySha256: string | undefined;
   let bodyBytesSampled: number | undefined;
 
   if (res.status === 405 || res.status === 501 || res.status === 403) {
-    res = await fetch(url, {
+    res = await fetch(current, {
       method: "GET",
       redirect: "manual",
       signal: AbortSignal.timeout(8_000),
@@ -327,13 +458,35 @@ async function realHttpProbe(url: string): Promise<{
     res.headers.forEach((v, k) => {
       headers[k.toLowerCase()] = v;
     });
+    const setCookie = collectSetCookie(res.headers);
+    if (setCookie) {
+      headers["set-cookie"] = Array.isArray(setCookie)
+        ? setCookie.join("\n")
+        : setCookie;
+    }
     const buf = Buffer.from(await res.arrayBuffer());
-    const sample = buf.subarray(0, Math.min(buf.length, 2048));
+    const sample = buf.subarray(
+      0,
+      Math.min(buf.length, WEB_PASSIVE_LIMITS.maxBodySampleBytes),
+    );
     bodyBytesSampled = sample.length;
     bodySha256 = createHash("sha256").update(sample).digest("hex");
   }
 
-  return { status: res.status, headers, bodySha256, bodyBytesSampled };
+  const cookieSource =
+    headers["set-cookie"]?.includes("\n")
+      ? headers["set-cookie"].split("\n")
+      : headers["set-cookie"];
+  const cookies = parseCookieFlags(cookieSource);
+
+  return {
+    status: res.status,
+    headers,
+    bodySha256,
+    bodyBytesSampled,
+    redirectChain: redirectChain.length ? redirectChain : undefined,
+    cookies: cookies.length ? cookies : undefined,
+  };
 }
 
 /** Apex = exactement un hôte de l'allowlist (pas www.x si x est listé) */
@@ -481,7 +634,9 @@ export async function runWebPassivePresence(
     opts.sleepFn ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const networkMocked = Boolean(opts.lookupFn || opts.fetchFn || opts.rdapFn);
   const lookup = opts.lookupFn ?? realDnsLookup;
-  const fetchImpl = opts.fetchFn ?? realHttpProbe;
+  const fetchImpl =
+    opts.fetchFn ??
+    ((u: string) => realHttpProbe(u, opts.allowedHosts, opts.exclusions));
   const tlsImpl = opts.tlsFn ?? realTlsProbe;
   const rdapImpl = opts.rdapFn ?? realRdapProbe;
   const includeOsint = opts.includeOsintRdap !== false;
@@ -551,6 +706,13 @@ export async function runWebPassivePresence(
     try {
       const http = await fetchImpl(url);
       const securityHeaders = extractSecurityHeaders(http.headers);
+      const cookies =
+        http.cookies ??
+        parseCookieFlags(
+          http.headers["set-cookie"]?.includes("\n")
+            ? http.headers["set-cookie"].split("\n")
+            : http.headers["set-cookie"],
+        );
       entryCore.http = {
         ok: http.status > 0 && http.status < 500,
         method: http.bodySha256 ? "GET" : "HEAD",
@@ -560,6 +722,8 @@ export async function runWebPassivePresence(
         contentType: http.headers["content-type"],
         hsts: securityHeaders.hsts,
         securityHeaders,
+        redirectChain: http.redirectChain,
+        cookies: cookies.length ? cookies : undefined,
         bodySha256: http.bodySha256,
         bodyBytesSampled: http.bodyBytesSampled,
         observedAt: new Date().toISOString(),

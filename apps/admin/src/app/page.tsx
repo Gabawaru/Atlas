@@ -143,6 +143,9 @@ export default function AdminHome() {
   const [maintReason, setMaintReason] = useState(
     "[FICTIF] Fenêtre de maintenance démo",
   );
+  const [hierarchyCsv, setHierarchyCsv] = useState(
+    "email,role\napprover@a.atlas.local,approver\n",
+  );
   const [ticketSubject, setTicketSubject] = useState(
     "[FICTIF] Incident démo — accès rapport",
   );
@@ -314,6 +317,40 @@ export default function AdminHome() {
     }
     setMsg(
       `${data.disclaimer ?? "Stub importé."} Missions débloquées : ${(data.unblockedMissions ?? []).length}.`,
+    );
+    await refresh();
+  }
+
+  async function importHierarchyCsv() {
+    setError(null);
+    setMsg(null);
+    const me = await fetch(`${API}/v1/auth/me`, { headers: headers() }).then(
+      (r) => r.json(),
+    );
+    const res = await fetch(`${API}/v1/admin/routing/import`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        orgId: me.orgId,
+        format: "csv",
+        content: hierarchyCsv,
+        tenantId: tenantId || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      data.disclaimer ??
+        (data.realMissionsRemainBlocked
+          ? "Fichier vide / aucun match — missions réelles BLOCKED."
+          : `Import OK (${data.imported} approver(s)).`),
     );
     await refresh();
   }
@@ -601,6 +638,32 @@ export default function AdminHome() {
               </select>
               <button type="button" onClick={() => void importStub()}>
                 Importer stub hiérarchie pour ce tenant
+              </button>
+              <h3>Import CSV prêt (format Benjamin)</h3>
+              <p className="muted">
+                Vide → aucune route, missions réelles restent BLOCKED. Emails
+                inconnus ignorés — aucun compte inventé.{" "}
+                <code>docs/import-hierarchie.md</code>
+              </p>
+              <textarea
+                rows={4}
+                value={hierarchyCsv}
+                onChange={(e) => setHierarchyCsv(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  background: "#10161d",
+                  color: "#e8eef4",
+                  border: "1px solid #2a3542",
+                  fontFamily: "monospace",
+                }}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void importHierarchyCsv()}
+              >
+                Valider / importer CSV
               </button>
             </div>
           )}

@@ -11,6 +11,10 @@ import { MissionsService } from "../missions/missions.service";
 import type { AuthUser } from "../auth/auth.types";
 import { assertTransition } from "../mission/mission-state";
 import { isSubscriptionCommerciallyActive } from "@atlas/shared";
+import {
+  matchExistingApprovers,
+  parseHierarchyFile,
+} from "./hierarchy-import";
 
 @Injectable()
 export class ApprovalsService {
@@ -219,6 +223,79 @@ export class ApprovalsService {
     return this.prisma.approvalRoutingPolicy.findMany({
       include: { staffGroup: true, tenant: true },
     });
+  }
+
+  /**
+   * Import CSV/JSON prêt — format validé.
+   * Fichier vide ou aucun email approver connu → aucune route ; missions réelles restent BLOCKED.
+   * N'invente jamais d'utilisateurs / approbateurs.
+   */
+  async importHierarchyFile(input: {
+    orgId: string;
+    content: string;
+    format: "csv" | "json";
+    tenantId?: string | null;
+  }) {
+    const parsed = parseHierarchyFile(input.content, input.format);
+    if (parsed.errors.length && parsed.empty) {
+      throw new BadRequestException(parsed.errors.join("; "));
+    }
+
+    if (parsed.empty) {
+      return {
+        imported: 0,
+        matchedUserIds: [] as string[],
+        unknownEmails: [] as string[],
+        parseErrors: parsed.errors,
+        realMissionsRemainBlocked: true,
+        policyCreated: false,
+        disclaimer:
+          "Fichier vide — aucune hiérarchie créée. Missions réelles restent BLOCKED (NO_APPROVAL_ROUTE). Aucun approbateur inventé.",
+      };
+    }
+
+    const staff = await this.prisma.staffMembership.findMany({
+      where: { orgId: input.orgId, staffRole: "approver" },
+      include: { user: true },
+    });
+    const emailMap = new Map(
+      staff.map((s) => [s.user.email.toLowerCase(), s.userId]),
+    );
+    const { matchedUserIds, unknownEmails } = matchExistingApprovers(
+      parsed.rows,
+      emailMap,
+    );
+
+    if (matchedUserIds.length === 0) {
+      return {
+        imported: 0,
+        matchedUserIds: [],
+        unknownEmails,
+        parseErrors: parsed.errors,
+        realMissionsRemainBlocked: true,
+        policyCreated: false,
+        disclaimer:
+          "Aucun email ne correspond à un staff approver existant — aucune route créée, aucun compte inventé. Missions réelles restent BLOCKED.",
+      };
+    }
+
+    // Marqué isStub : fichier fourni ≠ organigramme RH certifié A
+    const result = await this.importStubHierarchy(
+      input.orgId,
+      matchedUserIds,
+      input.tenantId,
+    );
+    return {
+      imported: matchedUserIds.length,
+      matchedUserIds,
+      unknownEmails,
+      parseErrors: parsed.errors,
+      realMissionsRemainBlocked: false,
+      policyCreated: true,
+      ...result,
+      disclaimer:
+        "Import format prêt (CSV/JSON) — membres = staff approver déjà existants uniquement. Pas une hiérarchie RH réelle A.",
+    };
   }
 
   /**
