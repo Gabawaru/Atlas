@@ -4,24 +4,11 @@ Stack hypothèse : monorepo **pnpm**, NestJS API, Next admin, Vite client, Postg
 
 ## Démarrage local
 
-Voir la **checklist install** du `README.md` racine (commandes testées). Résumé :
+Checklist complète : `README.md`. Court :
 
 ```bash
-cp .env.example .env
-docker compose up -d          # Postgres + Redis
-pnpm install
-pnpm --filter @atlas/shared build
-pnpm --filter @atlas/policy-guard build
-pnpm db:generate && pnpm db:migrate && pnpm db:seed
-pnpm dev:api                  # :3001
-pnpm dev:admin                # :3000
-pnpm dev:client               # :3002
-```
-
-Smoke tout-en-un :
-
-```bash
-pnpm demo:smoke
+pnpm demo:smoke    # migrate + seed + smoke
+pnpm dev           # api :3001 · admin :3000 · client :3002
 ```
 
 ## Layout
@@ -95,4 +82,5 @@ pnpm --filter @atlas/api exec prisma migrate deploy
 
 ## Hors scope code (ne pas « finir » en silence)
 
-OIDC, e-sign réel, workers HA, RLS Postgres stricte, modules réseau agressifs, Tauri packagé.
+OIDC, e-sign réel, workers HA, durcissement RLS **prod**, modules réseau agressifs, Tauri packagé.  
+(Feeds vulns passifs + RLS FORCE sont déjà livrés — voir `docs/limites-et-evolution.md`.)

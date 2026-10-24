@@ -17,13 +17,12 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 | Identité | Auth locale seedée | OIDC (Keycloak / Auth0) |
 | Hiérarchie A | Stub `isStub` / seed | Matrice réelle fournie par A (config métier) |
 | Contrôles | Présence web + OSINT RDAP apex public in-scope | Modules catalogue, sources OSINT payantes hors MVP |
-| Client desktop | Build web + stub Rust/Tauri conf (`bundle.active: false`) | Tauri 2 packagé + signing |
+| Client desktop | Build web + stub Tauri (`bundle.active: false`) | Tauri 2 packagé + signing |
 | RoE | Machine-readable + versioning + invalidation signatures | Modèles juridiques cabinet + e-sign réel |
 | Signatures | Mock **deux parties** pluggable | Prestataire eIDAS derrière la même interface |
 | Connecteurs | Web réel + GitHub **stub** mock OAuth | OAuth GitHub réel (read-only) derrière la même interface |
 | Exécution | Worker BullMQ in-process + retry/DLQ/kill | Workers dédiés, HA, priorités |
-| Données | RLS Postgres FORCE + `asTenant` (bypass seed/ops) | Rôle DB dédié non-owner, chaos tests |
-| Client desktop | Stub Tauri | Shell Tauri 2 + coffre OS |
+| Données | RLS Postgres FORCE + `asTenant` (bypass seed/ops) | Chaos tests / rôle DB prod durci |
 | Paiements | Plans seed + activate/expire + payment stub | PSP (Stripe-like) hors chemin Policy Guard |
 | SAV / tickets | Minimal (états, lien tenant/mission, RBAC support ≠ approver) | SLA, escalade, impersonation journalisée |
 | Remédiation findings | Statuts client FICTIFS | Workflow retest / preuves / intégration ticketing |

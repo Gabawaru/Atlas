@@ -589,16 +589,13 @@ export function App() {
       )}
 
       {token && (
-        <section>
-          <h2>Suivi des corrections</h2>
+        <details>
+          <summary>Suivi des corrections (hors chemin démo → rapport)</summary>
           <p className="muted">
-            Findings → statut de remédiation (owner/operator). Données FICTIVES —
-            ne remplace pas un ticket SAV côté A.
+            Findings → remédiation. FICTIF — ≠ ticket SAV côté A.
           </p>
           {findings.length === 0 ? (
-            <p className="muted">
-              Aucun finding — lancez une mission démo ou consultez le seed.
-            </p>
+            <p className="muted">Aucun finding.</p>
           ) : (
             <ul>
               {findings.map((f) => (
@@ -608,23 +605,11 @@ export function App() {
                     {f.synthetic && <span className="muted">[FICTIF]</span>}
                   </strong>
                   <div className="muted">
-                    Gravité {f.severity}
-                    {f.confidence
-                      ? ` · confiance matching ${f.confidence} (≠ gravité)`
-                      : ""}
+                    {f.severity}
+                    {f.confidence ? ` · conf. ${f.confidence}` : ""}
                     {f.cveId ? ` · ${f.cveId}` : ""}
-                    {f.kevListed ? " · KEV" : ""}
-                    {f.mission ? ` · ${f.mission.title}` : ""}
                   </div>
-                  <div className="muted">{f.summary}</div>
-                  {f.matchDisclaimer && (
-                    <div className="muted">{f.matchDisclaimer}</div>
-                  )}
-                  <div className="muted">
-                    Remédiation : {f.remediationStatus ?? "open"}
-                    {f.remediationNote ? ` — ${f.remediationNote}` : ""}
-                  </div>
-                  <label>Mettre à jour le statut</label>
+                  <label>Statut</label>
                   <select
                     value={f.remediationStatus ?? "open"}
                     onChange={(e) =>
@@ -641,7 +626,7 @@ export function App() {
               ))}
             </ul>
           )}
-        </section>
+        </details>
       )}
 
       {info && <p className="muted">{info}</p>}

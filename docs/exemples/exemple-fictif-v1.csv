@@ -1,6 +1,0 @@
-section,severity,title,summary,synthetic
-disclaimer,,FICTIF — Données de démonstration — aucune cible réelle / pas une preuve juridique,,true
-bilan_decideur,,Bilan décideur,[FICTIF] Bilan décideur : exposition limitée sur example.com (domaine de documentation). Aucune cible réelle d'entreprise. Données de démonstration Atlas MVP.,true
-detail_technique,,Détail technique,"[FICTIF] Module web.passive.presence.v1 — DNS A/AAAA, HTTP HEAD, métadonnées TLS. Rate limit 30/min. Preuves dans le scope approuvé uniquement. Signature mock (pas eIDAS).",true
-finding,info,[FICTIF] En-tête Server observé,Finding de démonstration uniquement.,true
-finding,low,[FICTIF] HSTS non évalué en profondeur,Contrôle passif uniquement — pas de conclusion de conformité.,true

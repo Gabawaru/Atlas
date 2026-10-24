@@ -1,10 +1,10 @@
 {
   "format": "atlas.report.v1",
-  "generatedAt": "2026-10-23T16:37:10.920Z",
+  "generatedAt": "2026-10-24T06:25:16.626Z",
   "disclaimer": "FICTIF — Données de démonstration — aucune cible réelle / pas une preuve juridique",
   "synthetic": true,
   "missionId": "mission-demo-fictive",
-  "reportId": "exemple-fictif-v1",
+  "reportId": "rapport-presence-web-fictif",
   "title": "[FICTIF] Présence web — exemple versionné",
   "scopeHash": "demo-scope-hash-fictif",
   "moduleId": "web.passive.presence.v1",

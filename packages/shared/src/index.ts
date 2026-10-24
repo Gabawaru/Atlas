@@ -241,5 +241,3 @@ export const UX_NEEDS = [
 
 export type UxNeedId = (typeof UX_NEEDS)[number]["id"];
 
-export const CONNECTOR_WEB_PASSIVE = "web.passive.presence" as const;
-export const CONNECTOR_GITHUB_RO = "github.read_only" as const;

@@ -60,9 +60,10 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
 
-# 5) Vérification automatisée (option tout-en-un)
+# 5) Vérification automatisée courte
 pnpm demo:smoke
-# équivalent : build packages + migrate + seed + test:unit + test:acceptance + smoke
+# = build packages + migrate + seed + smoke e2e
+# CI : pnpm test:unit && pnpm test:acceptance
 ```
 
 **Attendu `demo:smoke` / `smoke` :** message `Smoke e2e OK` (exit 0). Exit **77** = Postgres ou Redis injoignable.
@@ -127,64 +128,27 @@ pnpm test:unit
 pnpm --filter @atlas/api run test:e2e
 pnpm test:acceptance    # AC-01…AC-12
 pnpm smoke              # Postgres + Redis
-pnpm demo:smoke         # checklist vérif complète
+pnpm demo:smoke         # smoke court (pas unit/AC)
 pnpm client:smoke       # build web + dist
-pnpm client:stub-desktop  # message Rust stub (pas tauri build)
 ```
 
-### Suite d’acceptation (AC plan)
+AC : `pnpm test:acceptance` (AC-01…AC-12 — voir `docs/developpeur.md`).
 
-```bash
-pnpm db:migrate && pnpm db:seed
-pnpm test:acceptance
-```
-
-| AC | Vérifié |
-|----|---------|
-| AC-02 / 03 / 04 | Sans owner / seule approbation A / seul abonnement → `REJECT` |
-| AC-05 | Policy Guard sans LLM |
-| AC-06 | Expiration, révocation, scope |
-| AC-07 | `verify_chain` + UPDATE simulée détectée |
-| AC-08 | Exports JSON/CSV/PDF FICTIF |
-| AC-09 | RBAC 5 rôles ; support/billing ≠ approver |
-| AC-10 | Sans route → `BLOCKED` ; démo → `A_SKIPPED_DEMO` |
-| AC-01 / 11 / 12 | Transitions, module hors jeton, marqueurs démo |
-| + | Hors périmètre, cancel, rate limit, isolation tenants (si DB) |
-
-## Parcours démo synthétique
+## Parcours démo
 
 1. Client `owner@demo.atlas.local` → mission FICTIVE présence web  
-2. Signature mock → `A_SKIPPED_DEMO`  
-3. BullMQ → preuves sur `example.com` → `REPORT_AVAILABLE`  
-4. Exports JSON/CSV/PDF  
-5. Admin : import stub hiérarchie (`isStub`) pour débloquer `NO_APPROVAL_ROUTE`  
+2. Signature mock → `A_SKIPPED_DEMO` → BullMQ → rapport  
+3. Admin : import stub/CSV pour débloquer missions **réelles** (`NO_APPROVAL_ROUTE`)
 
 ## Documentation (FR)
 
-| Doc | Public |
-|-----|--------|
-| [`docs/utilisateur.md`](docs/utilisateur.md) | Client terrain |
-| [`docs/administrateur.md`](docs/administrateur.md) | Staff entreprise A |
-| [`docs/developpeur.md`](docs/developpeur.md) | Contributeurs |
-| [`docs/limites-et-evolution.md`](docs/limites-et-evolution.md) | Limites honnêtes + suite |
-| [`docs/sauvegarde-maj-incidents.md`](docs/sauvegarde-maj-incidents.md) | Backup, maj, incidents MVP |
-| [`docs/exemples/`](docs/exemples/) | Rapport FICTIF versionné |
-| [`docs/tauri-stub.md`](docs/tauri-stub.md) | Desktop reporté |
+Guides : [`utilisateur`](docs/utilisateur.md) · [`administrateur`](docs/administrateur.md) · [`developpeur`](docs/developpeur.md) · [`limites`](docs/limites-et-evolution.md) · [`sauvegarde-maj`](docs/sauvegarde-maj-incidents.md) · [`exemples/`](docs/exemples/).  
+Détail modules : `docs/controle-web-passif.md`, `import-hierarchie.md`, `licences-abonnements.md`, `assistant-conversationnel.md`, `referentiels-vulnerabilites.md`, `modes-deploiement.md`, `retention-et-purge.md`, `versions-et-maintenance.md`, `tauri-stub.md`.
 
-## Connecteurs (MVP)
+## Hors scope (honnête)
 
-- **Présence web** (`web.passive.presence`) — réel, révocable, requis par Policy Guard avant exécution
-- **GitHub lecture seule** (`github.read_only`) — stub mock OAuth, **non production**, aucune exécution de contrôle
-- Conversation mock : oriente vers besoins/connecteurs **sans** contourner le Policy Guard
-
-## Hors scope de ce MVP (honnête)
-
-- OIDC / SSO réel ; e-sign / eIDAS réel (mock seulement)
-- Hiérarchie d’approbation **réelle** A
-- OAuth GitHub réel, réseau interne, CVE feeds, PSP
-- Shell Tauri empaqueté ; HA BullMQ ; RLS Postgres durcie
-- Analyse de contrats, scans agressifs
+Voir [`docs/limites-et-evolution.md`](docs/limites-et-evolution.md). En résumé : pas d’OIDC/e-sign/hiérarchie RH réelle/cloud UE ; OAuth GitHub réel et PSP reportés ; feeds vulns **live** et durcissement RLS prod hors MVP (les feeds passifs + RLS FORCE sont déjà livrés).
 
 ---
 
-*Atlas MVP — données de démonstration uniquement. Ne constitue pas un avis juridique ni une certification de légalité.*
+*Atlas MVP — données de démonstration uniquement. Voir limites — pas un avis juridique.*

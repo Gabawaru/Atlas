@@ -8,20 +8,16 @@ Fichiers générés par `apps/api/scripts/generate-exemple-rapport.ts` (même pi
 | `rapport-presence-web-fictif.csv` | CSV |
 | `rapport-presence-web-fictif.pdf` | PDF |
 
-**Marqueur :** `synthetic: true` / bannière FICTIF. Ne constitue pas une preuve juridique ni un pentest réel.
+**Marqueur :** `synthetic: true` / bannière FICTIF. Voir aussi `docs/limites-et-evolution.md`.
 
-Régénérer :
+Régénérer : `pnpm docs:exemple-rapport`
 
-```bash
-pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts
-```
-
-Hashes (sha256) de cette génération :
+Hashes (sha256) :
 
 ```json
 {
-  "json": "265fa5e5153e572b326e7a6906783ea7128fb5de1b5975c88836f1471a742649",
+  "json": "110d164a500bbe57575b9f40c57573493587521e3ce0b3e066091ce105139df0",
   "csv": "695e3f581bc8159400c518f3dd3993020f4d737fccfcba4bd9e3d40a1163a1f1",
-  "pdf": "d1f887c1c51a1f62699bf65cfe922f885e19d9831d90819e920ab5489409b10a"
+  "pdf": "e8f5ee6dbb17982a24ff2fd04ea133802c9da2cebb5089a1455de23443e1501c"
 }
 ```
