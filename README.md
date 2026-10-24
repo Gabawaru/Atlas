@@ -33,40 +33,17 @@ docs/             Guides FR + exemples de rapports FICTIFS
 - [pnpm](https://pnpm.io) 9 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
 - Docker (Postgres + Redis) — Redis **requis** pour la file d’exécution
 
-## Checklist install reproductible (testée)
-
-Cocher dans l’ordre — commandes exactes validées sur ce dépôt :
+## Checklist install (courte)
 
 ```bash
-# 0) Prérequis
-node -v                    # >= 20
-corepack enable && corepack prepare pnpm@9.15.0 --activate
-docker compose version     # ou Docker Desktop / engine
-
-# 1) Config (aucun secret réel)
-cp .env.example .env
-
-# 2) Infra
-docker compose up -d
-# Attendre healthy : postgres :5432, redis :6379
-
-# 3) Dépendances + packages partagés
+docker compose up -d          # Postgres + Redis
+cp -n .env.example .env
 pnpm install
-pnpm --filter @atlas/shared build
-pnpm --filter @atlas/policy-guard build
-
-# 4) Base de données
-pnpm db:generate
-pnpm db:migrate
-pnpm db:seed
-
-# 5) Vérification automatisée courte
-pnpm demo:smoke
-# = build packages + migrate + seed + smoke e2e
-# CI : pnpm test:unit && pnpm test:acceptance
+pnpm demo:smoke               # ~5 s à chaud (mesuré) ; docs/demo-smoke.md
 ```
 
-**Attendu `demo:smoke` / `smoke` :** message `Smoke e2e OK` (exit 0). Exit **77** = Postgres ou Redis injoignable.
+`demo:smoke` = build packages si besoin + smoke (migrate/seed/e2e). **Pas** de unit/AC ici.  
+CI : `pnpm test:unit` + `pnpm test:acceptance`. Exit **77** = infra absente.
 
 ### Lancer les UIs après install
 
@@ -142,7 +119,7 @@ AC : `pnpm test:acceptance` (AC-01…AC-12 — voir `docs/developpeur.md`).
 
 ## Documentation (FR)
 
-Guides : [`utilisateur`](docs/utilisateur.md) · [`administrateur`](docs/administrateur.md) · [`developpeur`](docs/developpeur.md) · [`limites`](docs/limites-et-evolution.md) · [`sauvegarde-maj`](docs/sauvegarde-maj-incidents.md) · [`exemples/`](docs/exemples/).  
+Guides : [`utilisateur`](docs/utilisateur.md) · [`administrateur`](docs/administrateur.md) · [`developpeur`](docs/developpeur.md) · [`demo-smoke`](docs/demo-smoke.md) · [`limites`](docs/limites-et-evolution.md) · [`sauvegarde-maj`](docs/sauvegarde-maj-incidents.md) · [`exemples/`](docs/exemples/).  
 Détail modules : `docs/controle-web-passif.md`, `import-hierarchie.md`, `licences-abonnements.md`, `assistant-conversationnel.md`, `referentiels-vulnerabilites.md`, `modes-deploiement.md`, `retention-et-purge.md`, `versions-et-maintenance.md`, `tauri-stub.md`.
 
 ## Hors scope (honnête)

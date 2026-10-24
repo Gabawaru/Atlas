@@ -4,10 +4,10 @@ Stack hypothèse : monorepo **pnpm**, NestJS API, Next admin, Vite client, Postg
 
 ## Démarrage local
 
-Checklist complète : `README.md`. Court :
+Checklist : `README.md`. Accélération : `docs/demo-smoke.md`.
 
 ```bash
-pnpm demo:smoke    # migrate + seed + smoke
+pnpm demo:smoke    # ~5 s à chaud mesuré (pas unit/AC)
 pnpm dev           # api :3001 · admin :3000 · client :3002
 ```
 
