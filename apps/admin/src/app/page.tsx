@@ -668,8 +668,16 @@ export default function AdminHome() {
             </div>
           )}
 
+          <details className="panel">
+            <summary>
+              <strong>Ops / commercial / SAV</strong>{" "}
+              <span className="muted">
+                — replié (hors chemin démo file + routage)
+              </span>
+            </summary>
+
           {canOps && opsStatus && (
-            <div className="panel">
+            <div>
               <h2>Versions / mises à jour / maintenance</h2>
               <p className="muted">{opsStatus.principle}</p>
               <div className="banner">
@@ -745,7 +753,7 @@ export default function AdminHome() {
           )}
 
           {canBilling && (
-            <div className="panel">
+            <div>
               <h2>Licences &amp; abonnements (stub)</h2>
               <p className="muted">
                 {billingPrinciple ??
@@ -871,7 +879,7 @@ export default function AdminHome() {
           )}
 
           {entitlements && (
-            <div className="panel">
+            <div>
               <h2>Abonnement ≠ autorisation de test</h2>
               <p className="muted">{entitlements.principle}</p>
               <div className="banner">
@@ -936,7 +944,7 @@ export default function AdminHome() {
             </div>
           )}
 
-          <div className="panel">
+          <div>
             <h2>SAV / tickets / incidents</h2>
             <p className="muted">
               Support client lié au tenant (et optionnellement à une mission).
@@ -1051,6 +1059,8 @@ export default function AdminHome() {
               </ul>
             )}
           </div>
+
+          </details>
 
           <div className="panel">
             <h2>Demandes en file</h2>

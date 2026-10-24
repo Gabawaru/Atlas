@@ -15,31 +15,10 @@ Console admin distincte du client. Auth locale seedée — **pas d’OIDC / SSO*
 | `billing@a.atlas.local` | billing | Non (licences commerciales seulement) |
 | `ops@a.atlas.local` | ops | Non (audit + **versions / maintenance**) |
 
-## Versions / maintenance
+## Ops / commercial (replié dans l’UI)
 
-Écran **« Versions / mises à jour / maintenance »** (`/v1/admin/ops/…`) — rôles `ops` / `admin` (lecture `support`) :
-
-- catalogue versions + notes de release ;
-- **flag maintenance** : si ON, aucune nouvelle exécution (Policy Guard `POLICY_DENY`) ;
-- journal ops (maintenance, versions, notes) ;
-- détail : `docs/versions-et-maintenance.md`.
-
-## Licences & abonnements (stub)
-
-Écran **« Licences & abonnements (stub) »** (`/v1/admin/billing/…`) — rôles `billing` / `admin` (lecture `ops`) :
-
-- plans seed (`atlas-starter-fictif`, `atlas-pro-fictif`), activation / expiration ;
-- paiement **stub** uniquement (pas de PSP réel) ;
-- le rôle billing **ne voit pas** RoE, jetons ni findings (données commerciales seulement) ;
-- détail : `docs/licences-abonnements.md`.
-
-## Abonnement ≠ autorisation de test
-
-Écran **« Abonnement ≠ autorisation de test »** (`GET /v1/admin/entitlements`) — rôles sécu (`admin` / `ops` / `support` / `approver`, **pas billing**) :
-
-- montre par tenant : statut d’**abonnement** (droit logiciel) vs missions (RoE, co-signature 2 parties, jeton) ;
-- une licence **active** n’implique **jamais** seule le droit d’exécuter ;
-- l’indice « exécutable » reste soumis au Policy Guard à l’exécution.
+Hors chemin démo (file + routage). Détail : `docs/versions-et-maintenance.md`, `docs/licences-abonnements.md`.  
+Matrice pédagogique abonnement ≠ autorisation : `GET /v1/admin/entitlements` (pas le rôle billing).
 
 ## File d’approbation
 

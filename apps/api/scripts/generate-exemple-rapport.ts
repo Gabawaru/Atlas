@@ -2,7 +2,7 @@
  * Génère docs/exemples/rapport-presence-web-fictif.{json,csv,pdf}
  * Marqué FICTIF — même pipeline que les exports runtime.
  */
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateReportExports } from "../src/reports/report-export";
@@ -17,7 +17,7 @@ async function main() {
 
   const result = await generateReportExports(
     {
-      reportId: "exemple-fictif-v1",
+      reportId: "rapport-presence-web-fictif",
       missionId: "mission-demo-fictive",
       missionTitle: "[FICTIF] Présence web — exemple versionné",
       synthetic: true,
@@ -54,15 +54,8 @@ async function main() {
     out,
   );
 
-  const base = path.join(out, "exemple-fictif-v1");
-  const stable = path.join(out, "rapport-presence-web-fictif");
-  await writeFile(
-    `${stable}.json`,
-    await readFile(`${base}.json`, "utf8"),
-  );
-  await copyFile(`${base}.csv`, `${stable}.csv`);
-  await copyFile(`${base}.pdf`, `${stable}.pdf`);
-
+  // generateReportExports écrit sous reportId — renommer si besoin
+  // Ici reportId = nom stable attendu.
   await writeFile(
     path.join(out, "README.md"),
     `# Exemples de rapports — FICTIF
@@ -75,15 +68,11 @@ Fichiers générés par \`apps/api/scripts/generate-exemple-rapport.ts\` (même 
 | \`rapport-presence-web-fictif.csv\` | CSV |
 | \`rapport-presence-web-fictif.pdf\` | PDF |
 
-**Marqueur :** \`synthetic: true\` / bannière FICTIF. Ne constitue pas une preuve juridique ni un pentest réel.
+**Marqueur :** \`synthetic: true\` / bannière FICTIF. Voir aussi \`docs/limites-et-evolution.md\`.
 
-Régénérer :
+Régénérer : \`pnpm docs:exemple-rapport\`
 
-\`\`\`bash
-pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts
-\`\`\`
-
-Hashes (sha256) de cette génération :
+Hashes (sha256) :
 
 \`\`\`json
 ${JSON.stringify(result.contentHashes, null, 2)}
