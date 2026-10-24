@@ -4,8 +4,12 @@ Parcours **court** Inscription→rapport. Données **FICTIF**. Limites : `docs/l
 
 ## Install
 
-Voir checklist `README.md`, puis `pnpm demo:smoke` et `pnpm dev:client` (`http://localhost:3002`).  
-Compte : `owner@demo.atlas.local` / `atlas-demo`.
+```bash
+docker compose up -d && cp -n .env.example .env && pnpm install && pnpm demo:smoke
+pnpm dev:client   # http://localhost:3002
+```
+
+Temps : voir `docs/demo-smoke.md`. Compte : `owner@demo.atlas.local` / `atlas-demo`.
 
 ## Parcours démo (3 étapes)
 
