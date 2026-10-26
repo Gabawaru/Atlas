@@ -24,7 +24,9 @@ pnpm --filter @atlas/client run build
 pnpm client:smoke
 ```
 
-Parcours manuel démo (avec API + seed) : connexion `owner@demo.atlas.local` → mission présence web → bilans. Voir `docs/utilisateur.md`.
+Parcours manuel démo (avec API + seed) : ouvrir le client → CTA **Scanner** (disabled + motif si pas prêt) → résultats unifiés. Compte `owner@demo.atlas.local`. Voir `docs/utilisateur.md`.
+
+**macOS :** UI web via `pnpm dev:client` ; stub `cargo run` dans `apps/client/src-tauri` (pas d’installateur `.dmg` tant que `bundle.active: false`). Détail : `apps/client/src-tauri/README.md`.
 
 ## Suite
 

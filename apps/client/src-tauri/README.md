@@ -25,6 +25,14 @@ Le stub Rust compile **sans** dépendance `tauri` pour rester vérifiable (`carg
 3. Ne **jamais** exécuter de contrôles dans le process UI — uniquement appels API `/v1`.
 4. Secrets : plugins coffre OS — pas de secret en clair.
 
+## macOS (plateforme stage)
+
+1. Prérequis Node 20 + pnpm ; API locale optionnelle (`pnpm demo:smoke` puis `pnpm dev:api`).
+2. UI web (chemin supporté) : `pnpm dev:client` → http://localhost:3002 (Safari / Chrome).
+3. Vérifier le packaging : `pnpm --filter @atlas/client run build` puis `pnpm client:smoke`.
+4. Stub desktop (message-only, pas de `.dmg`) : `cd apps/client/src-tauri && cargo run`.
+5. CTA **Scanner** visible dès l’ouverture ; exécution uniquement via API + Policy Guard.
+
 ## Commandes
 
 ```bash
