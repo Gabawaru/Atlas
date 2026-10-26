@@ -113,6 +113,30 @@ type OpsJournalRow = {
   createdAt: string;
 };
 
+type HierarchyStaff = {
+  userId: string;
+  email: string;
+  displayName: string;
+  staffRoles: string[];
+};
+
+type HierarchyAssignmentRow = {
+  id: string;
+  userId: string;
+  canApprove: boolean;
+  user: { id: string; email: string; displayName: string };
+};
+
+type HierarchyNodeRow = {
+  id: string;
+  title: string;
+  parentId: string | null;
+  sortOrder: number;
+  isStub: boolean;
+  assignments: HierarchyAssignmentRow[];
+  children?: HierarchyNodeRow[];
+};
+
 export default function AdminHome() {
   const [email, setEmail] = useState("approver@a.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
@@ -146,6 +170,13 @@ export default function AdminHome() {
   const [hierarchyCsv, setHierarchyCsv] = useState(
     "email,role\napprover@a.atlas.local,approver\n",
   );
+  const [hierarchyTree, setHierarchyTree] = useState<HierarchyNodeRow[]>([]);
+  const [hierarchyStaff, setHierarchyStaff] = useState<HierarchyStaff[]>([]);
+  const [newNodeTitle, setNewNodeTitle] = useState("");
+  const [newNodeParentId, setNewNodeParentId] = useState<string>("");
+  const [assignUserByNode, setAssignUserByNode] = useState<
+    Record<string, string>
+  >({});
   const [ticketSubject, setTicketSubject] = useState(
     "[FICTIF] Incident démo — accès rapport",
   );
@@ -267,7 +298,21 @@ export default function AdminHome() {
     }
     if (e?.principle) setEntitlements(e);
     setTickets(Array.isArray(tk) ? tk : []);
-  }, [token, headers, tenantId, user?.staffRoles]);
+
+    if (roles.includes("admin") || roles.includes("ops") || roles.includes("approver")) {
+      const orgQ = user?.orgId ? `?orgId=${encodeURIComponent(user.orgId)}` : "";
+      const hier = await fetch(`${API}/v1/admin/hierarchy${orgQ}`, {
+        headers: headers(),
+      }).then((x) => x.json());
+      setHierarchyTree(Array.isArray(hier?.tree) ? hier.tree : []);
+      if (roles.includes("admin") || roles.includes("ops")) {
+        const staff = await fetch(`${API}/v1/admin/hierarchy/staff${orgQ}`, {
+          headers: headers(),
+        }).then((x) => x.json());
+        setHierarchyStaff(Array.isArray(staff) ? staff : []);
+      }
+    }
+  }, [token, headers, tenantId, user?.staffRoles, user?.orgId]);
 
   useEffect(() => {
     void refresh();
@@ -353,6 +398,230 @@ export default function AdminHome() {
           : `Import OK (${data.imported} approver(s)).`),
     );
     await refresh();
+  }
+
+  function flattenHierarchy(
+    nodes: HierarchyNodeRow[],
+    acc: HierarchyNodeRow[] = [],
+  ): HierarchyNodeRow[] {
+    for (const n of nodes) {
+      acc.push(n);
+      if (n.children?.length) flattenHierarchy(n.children, acc);
+    }
+    return acc;
+  }
+
+  async function createHierarchyNode() {
+    setError(null);
+    setMsg(null);
+    if (!newNodeTitle.trim() || !user?.orgId) return;
+    const res = await fetch(`${API}/v1/admin/hierarchy/nodes`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        orgId: user.orgId,
+        title: newNodeTitle.trim(),
+        parentId: newNodeParentId || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setNewNodeTitle("");
+    setMsg(`Poste « ${data.title} » créé (isStub).`);
+    await refresh();
+  }
+
+  async function deleteHierarchyNode(id: string) {
+    setError(null);
+    setMsg(null);
+    const res = await fetch(`${API}/v1/admin/hierarchy/nodes/${id}`, {
+      method: "DELETE",
+      headers: headers(),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(JSON.stringify(data.message ?? data));
+      return;
+    }
+    setMsg("Poste (et sous-arbre) supprimé.");
+    await refresh();
+  }
+
+  async function assignToNode(nodeId: string) {
+    setError(null);
+    setMsg(null);
+    const userId = assignUserByNode[nodeId];
+    if (!userId) return;
+    const res = await fetch(
+      `${API}/v1/admin/hierarchy/nodes/${nodeId}/assignments`,
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ userId, canApprove: false }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      setError(
+        typeof data.message === "string"
+          ? data.message
+          : JSON.stringify(data.message ?? data),
+      );
+      return;
+    }
+    setMsg(
+      `Affectation ${data.user?.displayName ?? userId} — multi-postes OK (même User).`,
+    );
+    await refresh();
+  }
+
+  async function toggleCanApprove(assignmentId: string, canApprove: boolean) {
+    setError(null);
+    const res = await fetch(
+      `${API}/v1/admin/hierarchy/assignments/${assignmentId}`,
+      {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ canApprove }),
+      },
+    );
+    if (!res.ok) {
+      const data = await res.json();
+      setError(JSON.stringify(data.message ?? data));
+      return;
+    }
+    await refresh();
+  }
+
+  async function removeAssignment(assignmentId: string) {
+    setError(null);
+    const res = await fetch(
+      `${API}/v1/admin/hierarchy/assignments/${assignmentId}`,
+      { method: "DELETE", headers: headers() },
+    );
+    if (!res.ok) {
+      const data = await res.json();
+      setError(JSON.stringify(data.message ?? data));
+      return;
+    }
+    await refresh();
+  }
+
+  async function publishHierarchyRouting() {
+    setError(null);
+    setMsg(null);
+    if (!user?.orgId) return;
+    const res = await fetch(`${API}/v1/admin/hierarchy/publish-routing`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        orgId: user.orgId,
+        tenantId: tenantId || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(JSON.stringify(data.message ?? data));
+      return;
+    }
+    setMsg(data.disclaimer ?? "Publish routing terminé.");
+    await refresh();
+  }
+
+  function renderHierarchyNode(node: HierarchyNodeRow, depth: number) {
+    return (
+      <li key={node.id} className="item" style={{ paddingLeft: depth * 12 }}>
+        <div>
+          <strong>{node.title}</strong>{" "}
+          {node.isStub && <span className="muted">[STUB]</span>}
+        </div>
+        <div className="muted">
+          Affectations :{" "}
+          {node.assignments.length === 0
+            ? "aucune"
+            : node.assignments.map((a) => (
+                <span key={a.id} style={{ display: "inline-block", marginRight: 8 }}>
+                  {a.user.displayName}
+                  {a.canApprove ? " ✓approve" : ""}{" "}
+                  {isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ marginTop: 0, padding: "0.15rem 0.4rem" }}
+                        onClick={() =>
+                          void toggleCanApprove(a.id, !a.canApprove)
+                        }
+                      >
+                        {a.canApprove ? "ôter approve" : "canApprove"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ marginTop: 0, padding: "0.15rem 0.4rem" }}
+                        onClick={() => void removeAssignment(a.id)}
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
+                </span>
+              ))}
+        </div>
+        {isAdmin && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+            <select
+              value={assignUserByNode[node.id] ?? ""}
+              onChange={(e) =>
+                setAssignUserByNode((prev) => ({
+                  ...prev,
+                  [node.id]: e.target.value,
+                }))
+              }
+              style={{
+                padding: "0.35rem",
+                background: "#10161d",
+                color: "#e8eef4",
+                border: "1px solid #2a3542",
+              }}
+            >
+              <option value="">— staff —</option>
+              {hierarchyStaff.map((s) => (
+                <option key={s.userId} value={s.userId}>
+                  {s.displayName} ({s.email})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="secondary"
+              style={{ marginTop: 0 }}
+              onClick={() => void assignToNode(node.id)}
+            >
+              Affecter
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              style={{ marginTop: 0 }}
+              onClick={() => void deleteHierarchyNode(node.id)}
+            >
+              Supprimer poste
+            </button>
+          </div>
+        )}
+        {node.children && node.children.length > 0 && (
+          <ul>{node.children.map((c) => renderHierarchyNode(c, depth + 1))}</ul>
+        )}
+      </li>
+    );
   }
 
   async function verifyAudit() {
@@ -665,6 +934,66 @@ export default function AdminHome() {
               >
                 Valider / importer CSV
               </button>
+            </div>
+          )}
+
+          {(isAdmin ||
+            user?.staffRoles?.includes("ops") ||
+            user?.staffRoles?.includes("approver")) && (
+            <div className="panel">
+              <h2>Arbre de hiérarchie (postes)</h2>
+              <p className="muted">
+                Poste ≠ personne : une même identité peut occuper plusieurs
+                postes. <code>isStub</code> tant que pas source A réelle. Ne
+                remplace pas l&apos;import CSV (vide → BLOCKED). Publish
+                routing = canApprove → StaffGroup stub.
+              </p>
+              {isAdmin && (
+                <>
+                  <label>Nouveau poste</label>
+                  <input
+                    value={newNodeTitle}
+                    onChange={(e) => setNewNodeTitle(e.target.value)}
+                    placeholder="ex. Cofondateur, Expert cyber"
+                  />
+                  <label>Parent (optionnel)</label>
+                  <select
+                    value={newNodeParentId}
+                    onChange={(e) => setNewNodeParentId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      background: "#10161d",
+                      color: "#e8eef4",
+                      border: "1px solid #2a3542",
+                    }}
+                  >
+                    <option value="">— racine —</option>
+                    {flattenHierarchy(hierarchyTree).map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => void createHierarchyNode()}>
+                    Ajouter poste
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void publishHierarchyRouting()}
+                  >
+                    Publier canApprove → routage (stub)
+                  </button>
+                </>
+              )}
+              {hierarchyTree.length === 0 ? (
+                <p className="muted">Aucun poste — saisissez l&apos;arbre ci-dessus.</p>
+              ) : (
+                <ul>
+                  {hierarchyTree.map((n) => renderHierarchyNode(n, 0))}
+                </ul>
+              )}
             </div>
           )}
 

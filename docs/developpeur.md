@@ -29,6 +29,7 @@ pnpm dev           # api :3001 · admin :3000 · client :3002
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation (sécu ; pas billing) |
 | Import hiérarchie | `POST /v1/admin/routing/import` CSV/JSON — vide → BLOCKED — `docs/import-hierarchie.md` |
+| Arbre postes | `GET/POST /v1/admin/hierarchy…` — `HierarchyNode` + multi-affectations — `docs/import-hierarchie.md` |
 | Web passif | cookies + redirects (max 5, in-scope) — `docs/controle-web-passif.md` |
 | Billing / licences | `GET/POST /v1/admin/billing/…` — plans, activate/expire, payment stub — `docs/licences-abonnements.md` |
 | Ops / versions | `GET/POST /v1/admin/ops/…` — versions, maintenance (kill-switch), journal — `docs/versions-et-maintenance.md` |

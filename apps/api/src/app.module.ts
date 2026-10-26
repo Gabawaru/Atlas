@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "./auth/auth.module";
 import { MissionsModule } from "./missions/missions.module";
 import { ApprovalsModule } from "./approvals/approvals.module";
+import { HierarchyModule } from "./hierarchy/hierarchy.module";
 import { AssetsModule } from "./assets/assets.module";
 import { QueueModule } from "./queue/queue.module";
 import { SignaturesModule } from "./signatures/signatures.module";
@@ -25,6 +26,7 @@ import { PrismaService } from "./prisma/prisma.service";
     ConnectorsModule,
     MissionsModule,
     ApprovalsModule,
+    HierarchyModule,
     AssetsModule,
     TicketsModule,
     RemediationModule,

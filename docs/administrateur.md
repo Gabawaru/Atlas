@@ -37,6 +37,13 @@ Sans politique de routage, les missions **réelles** restent `BLOCKED` (`NO_APPR
 4. Fichier **vide** → aucune route — missions réelles restent BLOCKED ; **aucun** approbateur inventé.
 5. Groupe marqué `isStub` — **pas** l’organigramme réel A. Voir `docs/import-hierarchie.md`.
 
+## Arbre de hiérarchie (postes)
+
+1. Section **Arbre de hiérarchie** (admin) : créer des postes parent–enfant.
+2. Affecter un **staff existant** à un ou plusieurs postes (multi-affectations — pas de user dupliqué).
+3. Cocher **canApprove** sur l’affectation, puis **Publier canApprove → routage (stub)** pour alimenter `StaffGroup` / Policy Guard (`isStub` tant que pas source A).
+4. L’import CSV vide reste BLOCKED ; aucun email inventé.
+
 ## Vérifier le journal d’audit
 
 - Bouton **Vérifier chaîne audit** (admin / ops) → `GET /v1/admin/audit/verify`
@@ -56,4 +63,4 @@ Sans politique de routage, les missions **réelles** restent `BLOCKED` (`NO_APPR
 
 - Facturation = stub paiement (pas de PSP réel) ; pas de catalogue connecteurs production.
 - SAV minimal (pas de SLA, pas d’escalade RH, pas d’impersonation journalisée complète).
-- Pas de hiérarchie RH réelle — uniquement config stub / seed.
+- Arbre saisissable en admin (`isStub`) — pas une org chart RH certifiée A ; OIDC hors MVP.

@@ -2,7 +2,24 @@
 
 **Pas** une hiérarchie RH réelle A. Aucun approbateur inventé.
 
-## Endpoint
+## Arbre éditable (complément)
+
+Saisie directe parent–enfant + multi-affectations (même User, plusieurs postes) :
+
+| Méthode | Path | Rôle |
+|---------|------|------|
+| `GET` | `/v1/admin/hierarchy?orgId=` | admin, ops, approver |
+| `GET` | `/v1/admin/hierarchy/staff?orgId=` | admin, ops |
+| `POST` | `/v1/admin/hierarchy/nodes` | admin |
+| `PATCH` | `/v1/admin/hierarchy/nodes/:id` | admin |
+| `DELETE` | `/v1/admin/hierarchy/nodes/:id` | admin (cascade sous-arbre) |
+| `POST` | `/v1/admin/hierarchy/nodes/:id/assignments` | admin — staff org existant uniquement |
+| `PATCH`/`DELETE` | `/v1/admin/hierarchy/assignments/:id` | admin |
+| `POST` | `/v1/admin/hierarchy/publish-routing` | admin — `canApprove` → StaffGroup stub (`isStub`) |
+
+Modèle : `HierarchyNode` + `HierarchyAssignment` (N:N). `StaffGroup` / `ApprovalRoutingPolicy` / Policy Guard `NO_APPROVAL_ROUTE` **inchangés**. Import CSV vide → toujours BLOCKED.
+
+## Endpoint import fichier
 
 `POST /v1/admin/routing/import` (rôle **admin**)
 
