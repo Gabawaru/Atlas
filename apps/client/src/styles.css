@@ -133,3 +133,56 @@ pre {
   padding: 1rem;
   border: 1px solid var(--sand);
 }
+
+.scanner-hero {
+  padding: 1.1rem 0 0.5rem;
+  border-bottom: 1px solid #c9d2c6;
+  margin-bottom: 0.5rem;
+}
+
+.cta-scanner {
+  font-size: 1.15rem;
+  padding: 0.75rem 1.4rem;
+  min-width: 10rem;
+}
+
+.cta-scanner:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.block-reason {
+  margin: 0.65rem 0 0;
+  color: var(--alert);
+  font-size: 0.95rem;
+  max-width: 36rem;
+}
+
+.results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.result-row {
+  padding: 0.7rem 0;
+  border-top: 1px solid #c9d2c6;
+}
+
+.kind {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 0.45rem;
+  color: var(--moss);
+}
+
+.kind-finding {
+  color: var(--alert);
+}
+
+.kind-report {
+  color: #3a4a42;
+}

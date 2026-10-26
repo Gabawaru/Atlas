@@ -1,4 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  EXECUTABLE_NEED,
+  evaluateScannerReadiness,
+} from "./scannerReadiness";
+import {
+  buildUnifiedResults,
+  kindLabel,
+  type UnifiedResultRow,
+} from "./unifiedResults";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -119,7 +128,7 @@ export function App() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [grants, setGrants] = useState<ConnectorGrant[]>([]);
-  const [selectedNeed, setSelectedNeed] = useState("web_presence");
+  const [selectedNeed, setSelectedNeed] = useState(EXECUTABLE_NEED);
   const [chat, setChat] = useState("Que voit-on de nous sur Internet ?");
   const [chatReply, setChatReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +146,23 @@ export function App() {
         "Content-Type": "application/json",
       }) as Record<string, string>,
     [token],
+  );
+
+  const selected = needs.find((n) => n.id === selectedNeed);
+  const webGrantActive = grants.some(
+    (g) => g.connectorId === "web.passive.presence" && g.status === "active",
+  );
+  const readiness = evaluateScannerReadiness({
+    authenticated: Boolean(token),
+    selectedNeedId: selectedNeed,
+    needExecutable: selected?.mvpReady ?? selectedNeed === EXECUTABLE_NEED,
+    assetCount: assets.length,
+    webConnectorActive: webGrantActive,
+  });
+
+  const unified: UnifiedResultRow[] = useMemo(
+    () => buildUnifiedResults(missions, findings),
+    [missions, findings],
   );
 
   async function login() {
@@ -257,23 +283,12 @@ export function App() {
     await refresh();
   }
 
-  async function createAndRunDemo() {
+  /** Parcours démo autorisé : mission + signatures mock + execute (Policy Guard). Pas d'agressif. */
+  async function runScanner() {
+    if (!readiness.ready) return;
     setBusy(true);
     setError(null);
     try {
-      if (selectedNeed !== "web_presence") {
-        setError("Seul le besoin « présence web » est exécutable dans ce MVP.");
-        return;
-      }
-      const webGrant = grants.find(
-        (g) => g.connectorId === "web.passive.presence" && g.status === "active",
-      );
-      if (!webGrant) {
-        await connectConnector("web.passive.presence");
-      }
-      if (assets.length === 0) {
-        await addAsset();
-      }
       const assetList = await fetch(`${API}/v1/assets`, { headers }).then((r) =>
         r.json(),
       );
@@ -355,24 +370,52 @@ export function App() {
     await refresh();
   }
 
-  const latestReport = missions.find((m) => m.reports && m.reports.length > 0);
-  const selected = needs.find((n) => n.id === selectedNeed);
-
   return (
     <div className="shell">
       <p className="brand">Atlas</p>
       <p className="tagline">
-        Parcours démo court : connexion → présence web → rapport. Policy Guard
-        ; l&apos;IA n&apos;exécute rien.
+        Scanner autorisé — un CTA, résultats unifiés. Policy Guard décide ;
+        l&apos;IA n&apos;exécute rien.
       </p>
       <div className="banner">
         <strong>Données de démonstration</strong> — aucune cible réelle.
         Abonnement ≠ autorisation. Pas de faux « terminé » sur besoins non branchés.
       </div>
 
+      <section className="scanner-hero" aria-labelledby="scanner-cta-title">
+        <h2 id="scanner-cta-title">Scanner</h2>
+        <p className="muted">
+          Contrôle passif in-scope uniquement. Exécution refusée sans session,
+          cible, connecteur et autorisation valides.
+        </p>
+        <button
+          type="button"
+          className="cta-scanner"
+          disabled={busy || !readiness.ready}
+          onClick={() => void runScanner()}
+        >
+          {busy ? "Exécution…" : "Scanner"}
+        </button>
+        {!token && (
+          <button type="button" className="ghost" onClick={() => void login()}>
+            Se connecter pour activer
+          </button>
+        )}
+        {token && (
+          <button type="button" className="ghost" onClick={() => void refresh()}>
+            Rafraîchir
+          </button>
+        )}
+        {readiness.blockReason && (
+          <p className="block-reason" role="status">
+            {readiness.blockReason}
+          </p>
+        )}
+      </section>
+
       {!token ? (
         <section>
-          <h2>1 · Connexion</h2>
+          <h2>Connexion</h2>
           <label>Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
           <label>Mot de passe</label>
@@ -389,7 +432,7 @@ export function App() {
       ) : (
         <>
           <section>
-            <h2>2 · Besoin (états honnêtes)</h2>
+            <h2>Besoin</h2>
             <p className="muted">
               Un seul besoin exécutable en démo. Les autres restent visibles sans
               faux succès.
@@ -416,42 +459,51 @@ export function App() {
             ))}
           </section>
 
-          <section>
-            <h2>3 · Mission démo → rapport</h2>
+          <section className="results-unified" aria-labelledby="results-title">
+            <h2 id="results-title">Résultats</h2>
             <p className="muted">
-              Actif seed / example.com · RoE mock · Policy Guard · contrôles
-              passifs (headers, cookies, redirects in-scope).
+              Services (contrôles) et findings ensemble — pas de silo par
+              connecteur.
             </p>
-            <button
-              type="button"
-              disabled={busy || selectedNeed !== "web_presence"}
-              onClick={() => void createAndRunDemo()}
-            >
-              {busy ? "Exécution…" : "Lancer présence web (démo)"}
-            </button>
-            <button type="button" className="ghost" onClick={() => void refresh()}>
-              Rafraîchir
-            </button>
-            {selectedNeed !== "web_presence" && (
-              <p className="muted">
-                Sélectionnez « présence web » pour lancer — les autres besoins
-                n&apos;exécutent rien.
-              </p>
+            {unified.length === 0 ? (
+              <p className="muted">Aucun résultat pour l&apos;instant.</p>
+            ) : (
+              <ul className="results-list">
+                {unified.map((row) => (
+                  <li key={row.id} className="result-row">
+                    <span className={`kind kind-${row.kind}`}>
+                      {kindLabel(row.kind)}
+                    </span>
+                    <strong>
+                      {row.title}{" "}
+                      {row.synthetic && (
+                        <span className="muted">[FICTIF]</span>
+                      )}
+                    </strong>
+                    {row.severity && (
+                      <div className="muted">Sévérité : {row.severity}</div>
+                    )}
+                    <div className="muted">{row.detail}</div>
+                  </li>
+                ))}
+              </ul>
             )}
-            <ul>
-              {missions.slice(0, 3).map((m) => (
-                <li key={m.id}>
-                  <strong>{m.title}</strong> — {m.status}
-                  {m.blockedReason && (
-                    <div className="muted">{m.blockedReason}</div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            {missions.some((m) => m.reports?.[0]?.technicalDetail) && (
+              <details>
+                <summary>Détail technique des bilans</summary>
+                {missions.map((m) =>
+                  m.reports?.map((r) => (
+                    <p key={r.id} className="muted">
+                      <strong>{m.title}</strong> — {r.technicalDetail}
+                    </p>
+                  )),
+                )}
+              </details>
+            )}
           </section>
 
           <details>
-            <summary>Options avancées (RoE, connecteurs, chat)</summary>
+            <summary>Options avancées (RoE, connecteurs, chat, remédiation)</summary>
             <section>
               <h3>Conversation (mock — n&apos;exécute pas)</h3>
               <textarea
@@ -564,69 +616,46 @@ export function App() {
                 Charger RoE mission récente
               </button>
             )}
+            <section>
+              <h3>Remédiation findings</h3>
+              <p className="muted">
+                FICTIF — ≠ ticket SAV côté A. Liste aussi dans Résultats ci-dessus.
+              </p>
+              {findings.length === 0 ? (
+                <p className="muted">Aucun finding.</p>
+              ) : (
+                <ul>
+                  {findings.map((f) => (
+                    <li key={f.id} className="need">
+                      <strong>
+                        {f.title}{" "}
+                        {f.synthetic && <span className="muted">[FICTIF]</span>}
+                      </strong>
+                      <div className="muted">
+                        {f.severity}
+                        {f.confidence ? ` · conf. ${f.confidence}` : ""}
+                        {f.cveId ? ` · ${f.cveId}` : ""}
+                      </div>
+                      <label>Statut</label>
+                      <select
+                        value={f.remediationStatus ?? "open"}
+                        onChange={(e) =>
+                          void updateRemediation(f.id, e.target.value)
+                        }
+                      >
+                        {REMEDIATION_OPTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </details>
         </>
-      )}
-
-      {latestReport?.jobRuns?.[0] && (
-        <section>
-          <h2>Progression job</h2>
-          <p className="muted">
-            {latestReport.jobRuns[0].status} —{" "}
-            {latestReport.jobRuns[0].progressPercent}%{" "}
-            {latestReport.jobRuns[0].progressMessage}
-          </p>
-        </section>
-      )}
-
-      {latestReport?.reports?.[0] && (
-        <section className="report">
-          <h2>Bilan décideur</h2>
-          <p>{latestReport.reports[0].executiveSummary}</p>
-          <h2>Détail technique</h2>
-          <p>{latestReport.reports[0].technicalDetail}</p>
-        </section>
-      )}
-
-      {token && (
-        <details>
-          <summary>Suivi des corrections (hors chemin démo → rapport)</summary>
-          <p className="muted">
-            Findings → remédiation. FICTIF — ≠ ticket SAV côté A.
-          </p>
-          {findings.length === 0 ? (
-            <p className="muted">Aucun finding.</p>
-          ) : (
-            <ul>
-              {findings.map((f) => (
-                <li key={f.id} className="need">
-                  <strong>
-                    {f.title}{" "}
-                    {f.synthetic && <span className="muted">[FICTIF]</span>}
-                  </strong>
-                  <div className="muted">
-                    {f.severity}
-                    {f.confidence ? ` · conf. ${f.confidence}` : ""}
-                    {f.cveId ? ` · ${f.cveId}` : ""}
-                  </div>
-                  <label>Statut</label>
-                  <select
-                    value={f.remediationStatus ?? "open"}
-                    onChange={(e) =>
-                      void updateRemediation(f.id, e.target.value)
-                    }
-                  >
-                    {REMEDIATION_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </li>
-              ))}
-            </ul>
-          )}
-        </details>
       )}
 
       {info && <p className="muted">{info}</p>}

@@ -11,7 +11,7 @@
     "dev:admin": "pnpm --filter @atlas/admin run dev",
     "dev:client": "pnpm --filter @atlas/client run dev",
     "test": "pnpm -r run test",
-    "test:unit": "pnpm --filter @atlas/shared run test && pnpm --filter @atlas/policy-guard run test && pnpm --filter @atlas/api run test:unit",
+    "test:unit": "pnpm --filter @atlas/shared run test && pnpm --filter @atlas/policy-guard run test && pnpm --filter @atlas/api run test:unit && pnpm --filter @atlas/client run test",
     "test:e2e": "pnpm --filter @atlas/api run test:e2e",
     "test:acceptance": "pnpm --filter @atlas/api run test:acceptance",
     "db:migrate": "pnpm --filter @atlas/api run db:migrate",
