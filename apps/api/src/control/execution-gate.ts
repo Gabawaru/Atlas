@@ -2,7 +2,10 @@
  * Policy Guard input assembly for enqueue + worker re-gate.
  * Deterministic; no LLM. Worker must not trust enqueue-time ALLOW alone.
  */
-import { evaluateExecution } from "@atlas/policy-guard";
+import {
+  evaluateExecution,
+  isSignedAuthzAttested,
+} from "@atlas/policy-guard";
 import {
   isSubscriptionCommerciallyActive,
   type PolicyEvaluationInput,
@@ -34,6 +37,8 @@ export type GateMissionSlice = {
   ownerAuths: Array<{
     status: string;
     scopeHash: string;
+    /** Mock SignatureProvider / stub — fail-closed when omitted. */
+    isStubSignature?: boolean;
   }>;
   approvalReqs: Array<{
     decisions: Array<{
@@ -85,6 +90,9 @@ export function buildExecutionGateInput(args: {
       sub?.plan.modulesEntitled.includes(moduleId) ?? false,
     ownerAuthorizationValid: owner?.status === "valid",
     ownerAuthorizationScopeHash: owner?.scopeHash ?? null,
+    // Fail-closed: no owner ⇒ stub; mock SignatureProvider ⇒ stub
+    ownerAuthorizationIsStub: owner?.isStubSignature ?? true,
+    signedAuthzAttested: isSignedAuthzAttested(),
     approvalApproved: mission.synthetic
       ? true
       : approval?.decision === "approved",

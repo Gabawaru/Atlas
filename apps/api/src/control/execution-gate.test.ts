@@ -34,7 +34,7 @@ function mission(partial: Partial<GateMissionSlice> = {}): GateMissionSlice {
         revokedAt: null,
       },
     ],
-    ownerAuths: [{ status: "valid", scopeHash }],
+    ownerAuths: [{ status: "valid", scopeHash, isStubSignature: false }],
     approvalReqs: [],
     ...partial,
   };
@@ -148,5 +148,36 @@ describe("execution-gate (worker re-gate inputs)", () => {
     });
     assert.equal(input.claimedScopeHash, "scope-abc");
     assert.equal(input.subscriptionActive, false);
+    assert.equal(input.ownerAuthorizationIsStub, false);
+  });
+
+  it("REJECT mission réelle si owner stub sans ATLAS_AUTHZ=signed", () => {
+    const prev = process.env.ATLAS_AUTHZ;
+    delete process.env.ATLAS_AUTHZ;
+    try {
+      const gate = evaluateMissionExecution({
+        mission: mission({
+          synthetic: false,
+          isRealMission: true,
+          ownerAuths: [
+            { status: "valid", scopeHash: "scope-abc", isStubSignature: true },
+          ],
+        }),
+        subscription: {
+          status: "active",
+          endsAt: null,
+          plan: { modulesEntitled: [WEB_PASSIVE_MODULE_ID] },
+        },
+        approvalRouteConfigured: true,
+        assetsCount: 1,
+        connectorGuard: okConnector,
+        killSwitch: false,
+      });
+      assert.equal(gate.decision, "REJECT");
+      assert.equal(gate.code, "OWNER_AUTH_STUB");
+    } finally {
+      if (prev === undefined) delete process.env.ATLAS_AUTHZ;
+      else process.env.ATLAS_AUTHZ = prev;
+    }
   });
 });

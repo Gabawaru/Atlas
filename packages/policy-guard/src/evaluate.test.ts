@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateExecution } from "./index";
+import {
+  evaluateExecution,
+  isAggressiveModule,
+  isSignedAuthzAttested,
+} from "./index";
 import type { PolicyEvaluationInput } from "@atlas/shared";
 import { MODULE_WEB_PASSIVE } from "@atlas/shared";
 
@@ -18,6 +22,9 @@ function base(overrides: Partial<PolicyEvaluationInput> = {}): PolicyEvaluationI
     entitlementAllowsModule: true,
     ownerAuthorizationValid: true,
     ownerAuthorizationScopeHash: scopeHash,
+    // Happy-path réel = preuve non-stub (Sesign / provider réel) ; stub testé à part
+    ownerAuthorizationIsStub: false,
+    signedAuthzAttested: false,
     approvalApproved: true,
     approvalScopeHash: scopeHash,
     approvalRouteConfigured: true,
@@ -65,6 +72,45 @@ describe("Policy Guard (sans LLM)", () => {
     assert.equal(r.code, "OWNER_AUTH_MISSING");
   });
 
+  it("REJECT mission réelle avec signature stub (sans ATLAS_AUTHZ)", () => {
+    const r = evaluateExecution(
+      base({ ownerAuthorizationIsStub: true, signedAuthzAttested: false }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "OWNER_AUTH_STUB");
+  });
+
+  it("REJECT mission réelle si ownerAuthorizationIsStub omis (fail-closed)", () => {
+    const r = evaluateExecution(
+      base({ ownerAuthorizationIsStub: undefined, signedAuthzAttested: false }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "OWNER_AUTH_STUB");
+  });
+
+  it("ALLOW mission réelle stub si ATLAS_AUTHZ attesté (Sesign hors bande)", () => {
+    const r = evaluateExecution(
+      base({ ownerAuthorizationIsStub: true, signedAuthzAttested: true }),
+    );
+    assert.equal(r.decision, "ALLOW");
+  });
+
+  it("REJECT module agressif unsigned même si dans le jeton", () => {
+    const r = evaluateExecution(
+      base({
+        moduleId: "network.aggressive.scan.v1",
+        tokenModuleIds: ["network.aggressive.scan.v1"],
+        ownerAuthorizationIsStub: true,
+        signedAuthzAttested: false,
+        // agressif : refus même hors mission réelle
+        isRealMission: false,
+        isSyntheticDemo: true,
+      }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "MODULE_OUT_OF_SCOPE");
+  });
+
   it("REJECT mission réelle sans route approbateur", () => {
     const r = evaluateExecution(
       base({ approvalRouteConfigured: false, approvalApproved: false }),
@@ -78,6 +124,7 @@ describe("Policy Guard (sans LLM)", () => {
       base({
         isRealMission: false,
         isSyntheticDemo: true,
+        ownerAuthorizationIsStub: true,
         approvalApproved: false,
         approvalRouteConfigured: false,
         approvalScopeHash: null,
@@ -144,5 +191,19 @@ describe("Policy Guard (sans LLM)", () => {
     );
     assert.equal(r.decision, "REJECT");
     assert.equal(r.code, "CONNECTOR_MISSING");
+  });
+});
+
+describe("ATLAS_AUTHZ / signed-authz helpers", () => {
+  it("isSignedAuthzAttested seulement si ATLAS_AUTHZ=signed", () => {
+    assert.equal(isSignedAuthzAttested({}), false);
+    assert.equal(isSignedAuthzAttested({ ATLAS_AUTHZ: "pending" }), false);
+    assert.equal(isSignedAuthzAttested({ ATLAS_AUTHZ: "signed" }), true);
+  });
+
+  it("isAggressiveModule détecte packs agressifs, pas le passif MVP", () => {
+    assert.equal(isAggressiveModule(MODULE_WEB_PASSIVE), false);
+    assert.equal(isAggressiveModule("network.aggressive.scan.v1"), true);
+    assert.equal(isAggressiveModule("web.exploit.probe.v1"), true);
   });
 });

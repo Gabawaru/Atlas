@@ -83,6 +83,7 @@ pnpm --filter @atlas/api exec prisma migrate deploy
 | `ATLAS_ENV` | `development` \| `ci` \| `test` \| autre (prod-like fail-closed JWT) |
 | `ATLAS_FORCE_MOCK_NETWORK` | `true` = mocks DNS/HTTP (CI offline) |
 | `ATLAS_CHAT_SIGNATURE_STUB` | Gate chat `sign()` : `signed` \| `pending` \| `rejected` (défaut code = pending ; démo/CI = signed) — **≠** signature propriétaire RoE |
+| `ATLAS_AUTHZ` | `signed` = attestation Sesign/papier hors bande pour mission réelle / agressif si owner auth encore stub ; absent = fail-closed (`OWNER_AUTH_STUB`) |
 
 ## Hors scope code (ne pas « finir » en silence)
 
