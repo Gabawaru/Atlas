@@ -13,10 +13,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Cheap fail-closed hygiene: internship/stage personal paths must not reappear.
+  repo-hygiene:
+    name: no stage/personal paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Gate STAGE.md / docs/stage / convention personal
+        run: bash scripts/check-no-stage-personal.sh
+
   test:
     name: unit + acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: repo-hygiene
 
     services:
       postgres:

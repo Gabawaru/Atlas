@@ -3,8 +3,14 @@ import assert from "node:assert/strict";
 import {
   cutoffDate,
   DEFAULT_RETENTION_TTL_DAYS,
+  isAllowedProcessingPurpose,
+  isAllowedSignPurpose,
+  isPurposeEnforceEnabled,
+  PROCESSING_PURPOSES,
+  PURPOSE_DISCLAIMER,
   RETENTION_CATEGORIES,
   RETENTION_DISCLAIMER,
+  SIGN_PURPOSES,
 } from "./retention.policy";
 
 describe("rétention & purge — politique", () => {
@@ -31,6 +37,49 @@ describe("rétention & purge — politique", () => {
     const now = new Date("2026-10-23T12:00:00.000Z");
     const c = cutoffDate(90, now);
     assert.equal(c.toISOString().slice(0, 10), "2026-07-25");
+  });
+});
+
+describe("limitation de finalité — politique", () => {
+  it("disclaimer purpose n'est pas un avis juridique", () => {
+    assert.match(PURPOSE_DISCLAIMER, /hypothèse/i);
+    assert.match(PURPOSE_DISCLAIMER, /pas une base légale/i);
+  });
+
+  it("PROCESSING_PURPOSES couvre contrôle passif + authz + chat + audit + rétention + billing", () => {
+    for (const p of [
+      "authorized_passive_control",
+      "mission_authorization",
+      "assistant_chat",
+      "audit_trail",
+      "retention_ops",
+      "subscription_billing",
+    ] as const) {
+      assert.ok(PROCESSING_PURPOSES.includes(p));
+      assert.equal(isAllowedProcessingPurpose(p), true);
+    }
+    assert.equal(isAllowedProcessingPurpose("ad_targeting"), false);
+  });
+
+  it("SIGN_PURPOSES = chat|mission ; vide autorisé", () => {
+    assert.deepEqual([...SIGN_PURPOSES], ["chat", "mission"]);
+    assert.equal(isAllowedSignPurpose("chat"), true);
+    assert.equal(isAllowedSignPurpose("mission"), true);
+    assert.equal(isAllowedSignPurpose(undefined), true);
+    assert.equal(isAllowedSignPurpose(""), true);
+    assert.equal(isAllowedSignPurpose("newsletter"), false);
+  });
+
+  it("ATLAS_PURPOSE_ENFORCE défaut true ; false désactive", () => {
+    assert.equal(isPurposeEnforceEnabled({}), true);
+    assert.equal(isPurposeEnforceEnabled({ ATLAS_PURPOSE_ENFORCE: "true" }), true);
+    assert.equal(isPurposeEnforceEnabled({ ATLAS_PURPOSE_ENFORCE: "false" }), false);
+  });
+
+  it("TTL env flags sont des nombres positifs (hooks rétention)", () => {
+    for (const n of Object.values(DEFAULT_RETENTION_TTL_DAYS)) {
+      assert.ok(Number.isFinite(n) && n > 0);
+    }
   });
 });
 

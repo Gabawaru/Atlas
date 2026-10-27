@@ -1,5 +1,5 @@
 /**
- * TTL par catégorie — HYPOTHÈSES de conception FR/RGPD.
+ * TTL + finalités produit — HYPOTHÈSES de conception FR/RGPD.
  * Ce n'est PAS une certification CNIL, ni un avis juridique, ni une AIPD.
  * À valider avec DPO / conseil d'A avant prod.
  *
@@ -41,6 +41,52 @@ export const RETENTION_DISCLAIMER =
   "Hypothèses de rétention FR/RGPD documentées comme telles — " +
   "pas une analyse d'impact, pas une base légale validée, pas une certification. " +
   "Legal hold bloque toute auto-suppression.";
+
+/**
+ * Finalités de traitement produit (limitation de finalité — hypothèse code).
+ * Pas une liste exhaustive légale ; sous-ensemble MVP Atlas.
+ */
+export const PROCESSING_PURPOSES = [
+  "authorized_passive_control",
+  "mission_authorization",
+  "assistant_chat",
+  "audit_trail",
+  "retention_ops",
+  "subscription_billing",
+] as const;
+
+export type ProcessingPurpose = (typeof PROCESSING_PURPOSES)[number];
+
+/**
+ * Purposes acceptés par SignatureProvider.sign — sous-ensemble opérationnel.
+ * Absent / vide = autorisé (champ historique optionnel).
+ */
+export const SIGN_PURPOSES = ["chat", "mission"] as const;
+
+export type SignPurpose = (typeof SIGN_PURPOSES)[number];
+
+export const PURPOSE_DISCLAIMER =
+  "Finalités produit déclarées dans le code (hypothèse limitation) — " +
+  "pas une base légale validée, pas un registre des traitements, pas un avis DPO.";
+
+/** true sauf si ATLAS_PURPOSE_ENFORCE=false (opt-out démo uniquement). */
+export function isPurposeEnforceEnabled(
+  env: NodeJS.Dict<string> | Record<string, string | undefined> = process.env,
+): boolean {
+  const raw = (env.ATLAS_PURPOSE_ENFORCE ?? "true").toLowerCase().trim();
+  return raw !== "false" && raw !== "0" && raw !== "off";
+}
+
+export function isAllowedProcessingPurpose(purpose: string): boolean {
+  return (PROCESSING_PURPOSES as readonly string[]).includes(purpose);
+}
+
+export function isAllowedSignPurpose(
+  purpose: string | undefined | null,
+): boolean {
+  if (purpose === undefined || purpose === null || purpose === "") return true;
+  return (SIGN_PURPOSES as readonly string[]).includes(purpose);
+}
 
 export function cutoffDate(days: number, now = new Date()): Date {
   const d = new Date(now);
