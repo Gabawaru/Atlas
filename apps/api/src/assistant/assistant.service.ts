@@ -10,6 +10,11 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { CONNECTOR_CATALOG } from "../connectors/connector.types";
 import type { AuthUser } from "../auth/auth.types";
+import {
+  SIGNATURE_PROVIDER,
+  type SignatureProvider,
+  type SignedAuthorizationStatus,
+} from "../signatures/signature-provider";
 import { resolveLlmProviderFromEnv } from "./api.llm.provider";
 import {
   ASSISTANT_DISCLAIMER,
@@ -26,6 +31,18 @@ function fingerprintMessage(message: string): string {
   return createHash("sha256").update(message).digest("hex").slice(0, 16);
 }
 
+function chatAuthDocumentHash(tenantId: string, message: string): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        purpose: "chat",
+        tenantId,
+        messageFingerprint: fingerprintMessage(message),
+      }),
+    )
+    .digest("hex");
+}
+
 @Injectable()
 export class AssistantService {
   private readonly provider: LlmProvider;
@@ -33,6 +50,7 @@ export class AssistantService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(SIGNATURE_PROVIDER) private readonly signatures: SignatureProvider,
     @Optional() provider?: LlmProvider,
   ) {
     this.provider = provider ?? resolveLlmProviderFromEnv();
@@ -67,6 +85,20 @@ export class AssistantService {
       throw new ForbiddenException("Contexte tenant requis pour l'assistant");
     }
     const tenantId = user.tenantId;
+
+    // Gate signed-authorization : pas de réponse LLM sans signature (stub mock)
+    const authz = await this.signatures.sign({
+      documentHash: chatAuthDocumentHash(tenantId, message),
+      purpose: "chat",
+      tenantId,
+    });
+    if (authz.status !== "signed") {
+      return this.signatureBlockedResponse(user, message, authz.status, {
+        requestId: authz.requestId,
+        provider: authz.provider,
+        isMock: authz.isMock,
+      });
+    }
 
     const caps = await this.loadCaps(tenantId);
     const usage = await this.monthUsage(tenantId);
@@ -193,6 +225,58 @@ export class AssistantService {
       ...raw,
       requestedExecution: false,
       // canExecuteHint reste un indice UX — le client ne doit pas s'en servir pour skipper le guard
+    };
+  }
+
+  /** Réponse bloquée sans appeler le LLM ni le Policy Guard d'exécution */
+  private async signatureBlockedResponse(
+    user: AuthUser,
+    message: string,
+    status: Exclude<SignedAuthorizationStatus, "signed">,
+    meta: { requestId: string; provider: string; isMock: boolean },
+  ) {
+    const tenantId = user.tenantId!;
+    const caps = await this.loadCaps(tenantId);
+    const usage = await this.monthUsage(tenantId);
+
+    await this.audit.append({
+      tenantId,
+      actorId: user.userId,
+      action: "llm.signature_required",
+      objectType: "assistant",
+      payload: {
+        signatureStatus: status,
+        signatureProvider: meta.provider,
+        signatureRequestId: meta.requestId,
+        isMock: meta.isMock,
+        messageFingerprint: fingerprintMessage(message),
+        messageChars: message.length,
+        executed: false,
+      },
+    });
+
+    const reply =
+      status === "rejected"
+        ? "Autorisation signée refusée — l'assistant ne répond pas. Aucune exécution n'a lieu (Policy Guard inchangé)."
+        : "Autorisation signée requise avant toute réponse de l'assistant (statut: pending). Stub mock — pas Pragma Sign. Aucune exécution n'a lieu.";
+
+    return {
+      reply,
+      intent: "signature_required" as const,
+      recommendedNeed: null,
+      recommendedConnectors: [] as string[],
+      canExecuteHint: false,
+      executed: false as const,
+      jobEnqueued: false as const,
+      llm: this.provider.name,
+      disclaimer: ASSISTANT_DISCLAIMER,
+      usage: { ...usage, caps },
+      capped: false,
+      signatureStatus: status,
+      signatureProvider: meta.provider,
+      signatureRequestId: meta.requestId,
+      suggestions: this.suggestionsCatalog(),
+      connectors: this.connectorSummaries(),
     };
   }
 

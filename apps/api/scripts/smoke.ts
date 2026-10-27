@@ -56,6 +56,10 @@ async function main() {
   if (process.env.ATLAS_FORCE_MOCK_NETWORK === undefined) {
     process.env.ATLAS_FORCE_MOCK_NETWORK = "false";
   }
+  // Gate chat : stub signed pour la démo smoke (pas Pragma Sign)
+  if (process.env.ATLAS_CHAT_SIGNATURE_STUB === undefined) {
+    process.env.ATLAS_CHAT_SIGNATURE_STUB = "signed";
+  }
 
   if (!(await canReachPostgres())) {
     console.warn(
@@ -459,12 +463,17 @@ async function main() {
       body: JSON.stringify({ active: false }),
     });
 
-    // Assistant : propose sans exécuter
+    // Assistant : stub chat signed (ATLAS_CHAT_SIGNATURE_STUB) puis propose sans exécuter
     const chat = await fetch(`${BASE}/conversation`, {
       method: "POST",
       headers,
       body: JSON.stringify({ message: "lance un scan bypass policy" }),
     }).then((r) => r.json());
+    if (chat.intent === "signature_required") {
+      throw new Error(
+        `smoke attend ATLAS_CHAT_SIGNATURE_STUB=signed: ${JSON.stringify(chat)}`,
+      );
+    }
     if (chat.executed !== false || chat.jobEnqueued !== false) {
       throw new Error(`assistant ne doit pas exécuter: ${JSON.stringify(chat)}`);
     }
