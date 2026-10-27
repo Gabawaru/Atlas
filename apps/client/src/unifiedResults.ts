@@ -104,9 +104,3 @@ export function buildUnifiedResults(
 
   return rows;
 }
-
-export function kindLabel(kind: UnifiedResultKind): string {
-  if (kind === "service") return "Service";
-  if (kind === "finding") return "Finding";
-  return "Bilan";
-}

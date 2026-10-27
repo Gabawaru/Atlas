@@ -13,13 +13,13 @@ Temps : voir `docs/demo-smoke.md`. Compte : `owner@demo.atlas.local` / `atlas-de
 
 ## Parcours démo (3 étapes)
 
-1. **Scanner** — CTA dominant dès l’ouverture ; disabled + motif si session / cible / connecteur / besoin pas prêts
-2. **Connexion** (seed) puis besoin — seule « présence web » est exécutable
-3. **Scanner** → Policy Guard → **résultats unifiés** (services + findings, pas de silo)
+1. **Scanner** — CTA dominant dès l’ouverture ; disabled + motif si session / cible / connecteur pas prêts
+2. **Connexion** (seed) — besoin fixe « présence web » (seul exécutable en démo)
+3. **Scanner** → Policy Guard → **résultats unifiés** (services + findings + remédiation, pas de silo)
 
-Options (RoE, connecteurs, chat, remédiation) sont repliées — le chat **n’exécute jamais**.
+Options (RoE, connecteurs, actifs) sont repliées.
 
-macOS stage : `pnpm dev:client` ; stub Tauri message-only — `apps/client/src-tauri/README.md`.
+macOS stage : voir `apps/client/src-tauri/README.md` § « macOS (plateforme stage) ».
 
 ## Interdits (honnêtes)
 
