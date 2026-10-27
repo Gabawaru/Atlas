@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { ApprovalsService } from "../approvals/approvals.service";
 import { buildHierarchyTree, uniqueApproverIds } from "./hierarchy-tree";
+import type { AuthUser } from "../auth/auth.types";
 
 @Injectable()
 export class HierarchyService {
@@ -264,5 +266,41 @@ export class HierarchyService {
       where: { id: orgId },
     });
     if (!org) throw new BadRequestException("orgId introuvable");
+  }
+
+  /**
+   * Lie les opérations hiérarchie à l'org du caller.
+   * Staff `admin` peut cibler une autre org (cross-org explicite).
+   * Sinon fail-closed si orgId ≠ user.orgId.
+   */
+  assertCallerOrg(user: AuthUser, orgId: string) {
+    if (user.staffRoles.includes("admin")) return;
+    if (!user.orgId) {
+      throw new ForbiddenException("Contexte org staff requis");
+    }
+    if (user.orgId !== orgId) {
+      throw new ForbiddenException(
+        "Org hors périmètre — binding hiérarchie (pas de cross-org sans admin)",
+      );
+    }
+  }
+
+  async assertCallerOwnsNode(user: AuthUser, nodeId: string) {
+    const node = await this.prisma.hierarchyNode.findUnique({
+      where: { id: nodeId },
+    });
+    if (!node) throw new NotFoundException("Nœud introuvable");
+    this.assertCallerOrg(user, node.orgId);
+    return node;
+  }
+
+  async assertCallerOwnsAssignment(user: AuthUser, assignmentId: string) {
+    const existing = await this.prisma.hierarchyAssignment.findUnique({
+      where: { id: assignmentId },
+      include: { node: true },
+    });
+    if (!existing) throw new NotFoundException();
+    this.assertCallerOrg(user, existing.node.orgId);
+    return existing;
   }
 }

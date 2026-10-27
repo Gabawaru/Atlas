@@ -11,7 +11,9 @@ import { resolveJwtSecret } from "./jwt-secret";
     JwtModule.register({
       global: true,
       secret: resolveJwtSecret(),
-      signOptions: { expiresIn: "12h" },
+      // Access court : rôles rechargés à chaque requête via userFromPayload (DB).
+      // Sans refresh OIDC, 1h borne le blast si DB reload échoue.
+      signOptions: { expiresIn: "1h" },
     }),
   ],
   controllers: [AuthController],

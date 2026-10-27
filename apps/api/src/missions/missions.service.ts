@@ -5,11 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import {
-  hashScope,
-  evaluateExecution,
-  isSignedAuthzAttested,
-} from "@atlas/policy-guard";
+import { hashScope } from "@atlas/policy-guard";
 import {
   MODULE_WEB_PASSIVE,
   PASSIVE_ROE_METHODS,
@@ -25,6 +21,7 @@ import {
   nextAfterAuthValid,
 } from "../mission/mission-state";
 import { WEB_PASSIVE_MODULE_ID } from "../control/web-passive";
+import { evaluateMissionExecution } from "../control/execution-gate";
 import type { AuthUser } from "../auth/auth.types";
 import { ControlQueueService } from "../queue/control-queue.service";
 import {
@@ -589,10 +586,6 @@ export class MissionsService {
     const token = mission.tokens.find((t) => !t.revokedAt);
     // Garde-fou mode déploiement / offline (avant Policy Guard)
     this.deploy.assertExecutionAllowed(Boolean(token && !token.revokedAt));
-    const owner = mission.ownerAuths.find((o) => o.status === "valid");
-    const approval = mission.approvalReqs
-      .flatMap((r) => r.decisions)
-      .find((d) => d.decision === "approved");
     const now = new Date();
     const candidates = await this.prisma.subscription.findMany({
       where: {
@@ -614,41 +607,13 @@ export class MissionsService {
       WEB_PASSIVE_MODULE_ID,
     );
 
-    const gate = evaluateExecution({
+    const gate = evaluateMissionExecution({
+      mission,
       now,
-      moduleId: WEB_PASSIVE_MODULE_ID,
-      claimedScopeHash: scope?.scopeHash ?? "",
-      subscriptionActive: sub
-        ? isSubscriptionCommerciallyActive(sub, now)
-        : false,
-      entitlementAllowsModule:
-        sub?.plan.modulesEntitled.includes(WEB_PASSIVE_MODULE_ID) ?? false,
-      ownerAuthorizationValid: owner?.status === "valid",
-      ownerAuthorizationScopeHash: owner?.scopeHash ?? null,
-      // Fail-closed : pas d'owner ⇒ stub ; mock SignatureProvider ⇒ stub
-      ownerAuthorizationIsStub: owner?.isStubSignature ?? true,
-      signedAuthzAttested: isSignedAuthzAttested(),
-      approvalApproved: mission.synthetic
-        ? true
-        : approval?.decision === "approved",
-      approvalScopeHash: mission.synthetic
-        ? (scope?.scopeHash ?? null)
-        : (approval?.scopeHash ?? null),
-      approvalRouteConfigured: mission.synthetic ? true : routeOk,
-      isRealMission: mission.isRealMission,
-      isSyntheticDemo: mission.synthetic,
-      periodStart: scope?.periodStart ?? new Date(0),
-      periodEnd: scope?.periodEnd ?? new Date(0),
-      tokenPresent: !!token,
-      tokenRevoked: !!token?.revokedAt,
-      tokenExpiresAt: token?.expiresAt ?? null,
-      tokenScopeHash: token?.scopeHash ?? null,
-      tokenModuleIds: token?.moduleIds ?? [],
-      scopeRevoked: !!scope?.revokedAt,
-      targetInApprovedScope: assets.length > 0,
-      connectorRequired: connectorGuard.connectorRequired,
-      connectorPresent: connectorGuard.connectorPresent,
-      connectorActive: connectorGuard.connectorActive,
+      subscription: sub,
+      approvalRouteConfigured: routeOk,
+      assetsCount: assets.length,
+      connectorGuard,
       killSwitch: await this.ops.isMaintenanceOn(),
     });
 

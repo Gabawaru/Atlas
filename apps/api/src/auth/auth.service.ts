@@ -58,15 +58,34 @@ export class AuthService {
     return { accessToken, user };
   }
 
+  /**
+   * JWT authentifie l'identité ; rôles / tenant / org / status viennent de la DB.
+   * Fail-closed si user absent ou inactif (révocation membership sans attendre l'expiry 12h).
+   */
   async userFromPayload(payload: Record<string, unknown>): Promise<AuthUser> {
+    const userId = String(payload.sub ?? "");
+    if (!userId) {
+      throw new UnauthorizedException("Token sans sujet");
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        tenantMemberships: true,
+        staffMemberships: true,
+      },
+    });
+    if (!user || user.status !== "active") {
+      throw new UnauthorizedException("Utilisateur inactif ou introuvable");
+    }
+    const membership = user.tenantMemberships[0];
     return {
-      userId: String(payload.sub),
-      email: String(payload.email),
-      displayName: String(payload.displayName ?? ""),
-      tenantId: payload.tenantId ? String(payload.tenantId) : undefined,
-      tenantRole: payload.tenantRole as TenantRole | undefined,
-      staffRoles: (payload.staffRoles as StaffRole[]) ?? [],
-      orgId: payload.orgId ? String(payload.orgId) : undefined,
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      tenantId: membership?.tenantId,
+      tenantRole: membership?.role as TenantRole | undefined,
+      staffRoles: user.staffMemberships.map((s) => s.staffRole as StaffRole),
+      orgId: user.staffMemberships[0]?.orgId,
     };
   }
 

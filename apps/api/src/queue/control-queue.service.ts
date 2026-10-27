@@ -21,10 +21,16 @@ import {
   runWebPassivePresence,
   WEB_PASSIVE_MODULE_ID,
 } from "../control/web-passive";
+import { evaluateMissionExecution } from "../control/execution-gate";
 import { generateReportExports } from "../reports/report-export";
 import { assertTransition } from "../mission/mission-state";
-import type { MissionStatus } from "@atlas/shared";
+import {
+  isSubscriptionCommerciallyActive,
+  type MissionStatus,
+} from "@atlas/shared";
 import { VulnService } from "../vuln/vuln.service";
+import { OpsService } from "../ops/ops.service";
+import { ConnectorsService } from "../connectors/connectors.service";
 
 @Injectable()
 export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
@@ -40,6 +46,8 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(VulnService) private readonly vuln: VulnService,
+    @Inject(OpsService) private readonly ops: OpsService,
+    @Inject(ConnectorsService) private readonly connectors: ConnectorsService,
   ) {}
 
   async onModuleInit() {
@@ -325,6 +333,13 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       return row?.cancelRequested === true;
     };
 
+    // Re-gate Policy Guard at worker start — do not trust enqueue-time ALLOW.
+    const reGate = await this.reEvaluatePolicy(p);
+    if (reGate.decision === "REJECT") {
+      await this.finishPolicyBlocked(p, reGate);
+      return { blocked: true, code: reGate.code, reason: reGate.reason };
+    }
+
     await this.prisma.jobRun.update({
       where: { id: p.jobRunId },
       data: {
@@ -332,6 +347,8 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         startedAt: new Date(),
         progressPercent: 1,
         progressMessage: "Démarrage contrôle passif",
+        gateDecision: "ALLOW",
+        gateReason: reGate.reason,
       },
     });
 
@@ -573,6 +590,138 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     });
     await this.safeMissionTransition(p.missionId, "CANCELLING");
     await this.safeMissionTransition(p.missionId, "CANCELLED");
+  }
+
+  /**
+   * Recharge mission/token/scope/ops et réévalue Policy Guard avant sondes.
+   * Refuse les jobs stale (token/scope révoqués, kill-switch, etc.).
+   */
+  private async reEvaluatePolicy(p: WebPassiveJobPayload) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: p.missionId },
+      include: {
+        scopeVersions: { orderBy: { version: "desc" } },
+        ownerAuths: true,
+        approvalReqs: { include: { decisions: true } },
+        tokens: true,
+      },
+    });
+    if (!mission || mission.tenantId !== p.tenantId) {
+      return {
+        decision: "REJECT" as const,
+        code: "POLICY_DENY" as const,
+        reason: "Mission introuvable pour re-gate worker",
+      };
+    }
+
+    const now = new Date();
+    const scope = mission.scopeVersions[0];
+    const candidates = await this.prisma.subscription.findMany({
+      where: {
+        tenantId: mission.tenantId,
+        status: { in: ["active", "trialing"] },
+      },
+      include: { plan: true },
+      orderBy: { startsAt: "desc" },
+    });
+    const sub =
+      candidates.find((c) => isSubscriptionCommerciallyActive(c, now)) ?? null;
+
+    const policies = await this.prisma.approvalRoutingPolicy.findMany({
+      where: {
+        enabled: true,
+        OR: [{ tenantId: mission.tenantId }, { orgWide: true }],
+      },
+      include: { staffGroup: true },
+    });
+    const routeOk = policies.some(
+      (pol) => pol.staffGroup && pol.staffGroup.memberIds.length > 0,
+    );
+
+    const assetsCount = await this.prisma.asset.count({
+      where: { id: { in: scope?.assetIds ?? [] } },
+    });
+    const connectorGuard = await this.connectors.guardStateForModule(
+      mission.tenantId,
+      WEB_PASSIVE_MODULE_ID,
+    );
+
+    const gate = evaluateMissionExecution({
+      mission,
+      now,
+      subscription: sub,
+      approvalRouteConfigured: routeOk,
+      assetsCount,
+      connectorGuard,
+      killSwitch: await this.ops.isMaintenanceOn(),
+    });
+
+    await this.audit
+      .append({
+        tenantId: p.tenantId,
+        actorId: p.actorUserId,
+        action: "policy_guard.evaluate",
+        objectType: "job_run",
+        objectId: p.jobRunId,
+        payload: { ...gate, via: "bullmq" },
+      })
+      .catch(() => undefined);
+
+    return gate;
+  }
+
+  private async finishPolicyBlocked(
+    p: WebPassiveJobPayload,
+    gate: { code?: string; reason: string },
+  ) {
+    const reason = `${gate.code ?? "POLICY_DENY"}: ${gate.reason}`;
+    await this.prisma.jobRun.update({
+      where: { id: p.jobRunId },
+      data: {
+        status: "failed",
+        finishedAt: new Date(),
+        progressPercent: 100,
+        progressMessage: `Re-gate Policy Guard: ${reason}`,
+        gateDecision: "REJECT",
+        gateReason: reason,
+      },
+    });
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: p.missionId },
+    });
+    if (mission) {
+      const from = mission.status as MissionStatus;
+      if (from !== "BLOCKED") {
+        try {
+          assertTransition(from, "BLOCKED");
+          await this.prisma.mission.update({
+            where: { id: p.missionId },
+            data: { status: "BLOCKED", blockedReason: reason },
+          });
+          await this.audit
+            .append({
+              tenantId: mission.tenantId,
+              action: "mission.transition",
+              objectType: "mission",
+              objectId: p.missionId,
+              payload: { from, to: "BLOCKED", via: "bullmq", blockedReason: reason },
+            })
+            .catch(() => undefined);
+        } catch {
+          this.logger.warn(`Transition ignorée ${from} → BLOCKED`);
+        }
+      }
+    }
+    await this.audit
+      .append({
+        tenantId: p.tenantId,
+        actorId: p.actorUserId,
+        action: "job.policy_blocked",
+        objectType: "job_run",
+        objectId: p.jobRunId,
+        payload: { reason, via: "bullmq" },
+      })
+      .catch(() => undefined);
   }
 
   private async safeMissionTransition(
