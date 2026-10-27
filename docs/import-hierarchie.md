@@ -8,10 +8,9 @@ Saisie directe parent–enfant + multi-affectations (même User, plusieurs poste
 
 | Méthode | Path | Rôle |
 |---------|------|------|
-| `GET` | `/v1/admin/hierarchy?orgId=` | admin, ops, approver |
+| `GET` | `/v1/admin/hierarchy?orgId=` | admin, ops, approver — réponse `{ tree }` |
 | `GET` | `/v1/admin/hierarchy/staff?orgId=` | admin, ops |
 | `POST` | `/v1/admin/hierarchy/nodes` | admin |
-| `PATCH` | `/v1/admin/hierarchy/nodes/:id` | admin |
 | `DELETE` | `/v1/admin/hierarchy/nodes/:id` | admin (cascade sous-arbre) |
 | `POST` | `/v1/admin/hierarchy/nodes/:id/assignments` | admin — staff org existant uniquement |
 | `PATCH`/`DELETE` | `/v1/admin/hierarchy/assignments/:id` | admin |

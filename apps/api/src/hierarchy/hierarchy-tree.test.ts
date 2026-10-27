@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import {
   buildHierarchyTree,
   uniqueApproverIds,
-  wouldCreateCycle,
 } from "./hierarchy-tree.ts";
 
 describe("hierarchy-tree", () => {
@@ -27,18 +26,6 @@ describe("hierarchy-tree", () => {
       { id: "2", parentId: null, title: "Cofondateur", sortOrder: 0 },
     ]);
     assert.equal(tree.length, 2);
-  });
-
-  it("wouldCreateCycle — self / descendant", () => {
-    const nodes = [
-      { id: "a", parentId: null },
-      { id: "b", parentId: "a" },
-      { id: "c", parentId: "b" },
-    ];
-    assert.equal(wouldCreateCycle(nodes, "a", "a"), true);
-    assert.equal(wouldCreateCycle(nodes, "a", "c"), true);
-    assert.equal(wouldCreateCycle(nodes, "c", "a"), false);
-    assert.equal(wouldCreateCycle(nodes, "b", null), false);
   });
 
   it("uniqueApproverIds — même user multi-postes dédupliqué", () => {

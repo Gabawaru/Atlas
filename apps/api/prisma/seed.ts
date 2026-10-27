@@ -443,10 +443,6 @@ async function main() {
     },
   });
 
-  // Cofondateurs Benjamin / Romain — UNIQUEMENT si comptes déjà présents.
-  // N'invente jamais d'emails / users hors seed.
-  await seedOptionalCofounderTree(org.id);
-
   console.log("✅ Seed OK");
   console.log("Comptes locaux (mot de passe: atlas-demo) :");
   console.log("  owner@demo.atlas.local     — client owner");
@@ -459,80 +455,6 @@ async function main() {
   console.log("Tenant sans routage A (test BLOCKED): acme-sans-route");
   console.log("Tenant licence expirée (endsAt passé): licence-expiree");
   console.log("Version courante seed: 0.1.1-mvp · maintenance OFF");
-}
-
-/**
- * Benjamin Mathias + Romain cofondateurs même niveau — skip si absents.
- * Multi-affectation démo : Benjamin aussi « Expert cyber » si présent.
- */
-async function seedOptionalCofounderTree(orgId: string) {
-  const staffUsers = await prisma.user.findMany({
-    where: { staffMemberships: { some: { orgId } } },
-  });
-  const findByHint = (hints: string[]) =>
-    staffUsers.find((u) => {
-      const hay = `${u.email} ${u.displayName}`.toLowerCase();
-      return hints.some((h) => hay.includes(h.toLowerCase()));
-    });
-
-  const benjamin = findByHint(["benjamin mathias", "benjamin"]);
-  const romain = findByHint(["romain"]);
-
-  if (!benjamin && !romain) {
-    console.log(
-      "ℹ️  Hiérarchie cofondateurs : skip (Benjamin/Romain absents du seed — aucun compte inventé).",
-    );
-    return;
-  }
-
-  const nodes: { id: string; userId: string; title: string }[] = [];
-  if (benjamin) {
-    const n = await prisma.hierarchyNode.create({
-      data: {
-        orgId,
-        title: "Cofondateur",
-        parentId: null,
-        sortOrder: 0,
-        isStub: true,
-      },
-    });
-    await prisma.hierarchyAssignment.create({
-      data: { nodeId: n.id, userId: benjamin.id, canApprove: true },
-    });
-    nodes.push({ id: n.id, userId: benjamin.id, title: "Cofondateur" });
-
-    const expert = await prisma.hierarchyNode.create({
-      data: {
-        orgId,
-        title: "Expert cyber",
-        parentId: null,
-        sortOrder: 10,
-        isStub: true,
-      },
-    });
-    await prisma.hierarchyAssignment.create({
-      data: { nodeId: expert.id, userId: benjamin.id, canApprove: false },
-    });
-  }
-  if (romain) {
-    const n = await prisma.hierarchyNode.create({
-      data: {
-        orgId,
-        title: "Cofondateur",
-        parentId: null,
-        sortOrder: 1,
-        isStub: true,
-      },
-    });
-    await prisma.hierarchyAssignment.create({
-      data: { nodeId: n.id, userId: romain.id, canApprove: true },
-    });
-    nodes.push({ id: n.id, userId: romain.id, title: "Cofondateur" });
-  }
-
-  console.log(
-    `ℹ️  Hiérarchie cofondateurs seedée (isStub) : ${nodes.map((n) => n.title).join(", ")} — multi-affectation Benjamin si présent.`,
-  );
 }
 
 main()

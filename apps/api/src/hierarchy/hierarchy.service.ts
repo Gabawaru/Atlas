@@ -7,11 +7,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { ApprovalsService } from "../approvals/approvals.service";
-import {
-  buildHierarchyTree,
-  uniqueApproverIds,
-  wouldCreateCycle,
-} from "./hierarchy-tree";
+import { buildHierarchyTree, uniqueApproverIds } from "./hierarchy-tree";
 
 @Injectable()
 export class HierarchyService {
@@ -91,7 +87,6 @@ export class HierarchyService {
       orgId,
       disclaimer:
         "Arbre éditable — postes ≠ identités ; multi-affectations OK. isStub tant que pas source A réelle. Routage Policy Guard via StaffGroup (import CSV/stub ou publish).",
-      nodes: flat,
       tree: buildHierarchyTree(flat),
     };
   }
@@ -127,62 +122,6 @@ export class HierarchyService {
       payload: { orgId: input.orgId, title, parentId: node.parentId, isStub: true },
     });
     return node;
-  }
-
-  async updateNode(
-    nodeId: string,
-    input: {
-      title?: string;
-      parentId?: string | null;
-      sortOrder?: number;
-    },
-  ) {
-    const node = await this.prisma.hierarchyNode.findUnique({
-      where: { id: nodeId },
-    });
-    if (!node) throw new NotFoundException();
-
-    const data: {
-      title?: string;
-      parentId?: string | null;
-      sortOrder?: number;
-    } = {};
-    if (input.title !== undefined) {
-      const t = input.title.trim();
-      if (!t) throw new BadRequestException("title requis");
-      data.title = t;
-    }
-    if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
-    if (input.parentId !== undefined) {
-      if (input.parentId) {
-        const parent = await this.prisma.hierarchyNode.findFirst({
-          where: { id: input.parentId, orgId: node.orgId },
-        });
-        if (!parent) {
-          throw new BadRequestException("parentId introuvable dans l'org");
-        }
-        const siblings = await this.prisma.hierarchyNode.findMany({
-          where: { orgId: node.orgId },
-          select: { id: true, parentId: true },
-        });
-        if (wouldCreateCycle(siblings, nodeId, input.parentId)) {
-          throw new BadRequestException("parentId créerait un cycle");
-        }
-      }
-      data.parentId = input.parentId;
-    }
-
-    const updated = await this.prisma.hierarchyNode.update({
-      where: { id: nodeId },
-      data,
-    });
-    await this.audit.append({
-      action: "hierarchy.node_updated",
-      objectType: "hierarchy_node",
-      objectId: nodeId,
-      payload: data,
-    });
-    return updated;
   }
 
   async deleteNode(nodeId: string) {

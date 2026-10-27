@@ -18,7 +18,6 @@ import {
   IsOptional,
   IsString,
   MinLength,
-  ValidateIf,
 } from "class-validator";
 import { AuthGuard } from "../auth/auth.guard";
 import { AuthService } from "../auth/auth.service";
@@ -36,23 +35,6 @@ class CreateNodeDto {
   @IsOptional()
   @IsString()
   parentId?: string;
-
-  @IsOptional()
-  @IsInt()
-  sortOrder?: number;
-}
-
-class UpdateNodeDto {
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  title?: string;
-
-  /** null = racine */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null && v !== undefined)
-  @IsString()
-  parentId?: string | null;
 
   @IsOptional()
   @IsInt()
@@ -110,16 +92,6 @@ export class HierarchyController {
   createNode(@Body() body: CreateNodeDto, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin"]);
     return this.hierarchy.createNode(body);
-  }
-
-  @Patch("nodes/:id")
-  updateNode(
-    @Param("id") id: string,
-    @Body() body: UpdateNodeDto,
-    @Req() req: { user: AuthUser },
-  ) {
-    this.auth.requireStaff(req.user, ["admin"]);
-    return this.hierarchy.updateNode(id, body);
   }
 
   @Delete("nodes/:id")

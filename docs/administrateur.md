@@ -39,10 +39,7 @@ Sans politique de routage, les missions **réelles** restent `BLOCKED` (`NO_APPR
 
 ## Arbre de hiérarchie (postes)
 
-1. Section **Arbre de hiérarchie** (admin) : créer des postes parent–enfant.
-2. Affecter un **staff existant** à un ou plusieurs postes (multi-affectations — pas de user dupliqué).
-3. Cocher **canApprove** sur l’affectation, puis **Publier canApprove → routage (stub)** pour alimenter `StaffGroup` / Policy Guard (`isStub` tant que pas source A).
-4. L’import CSV vide reste BLOCKED ; aucun email inventé.
+Source unique : `docs/import-hierarchie.md` (CRUD postes, multi-affectations, publish → stub, CSV vide → BLOCKED).
 
 ## Vérifier le journal d’audit
 

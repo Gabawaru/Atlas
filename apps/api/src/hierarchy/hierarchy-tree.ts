@@ -41,30 +41,6 @@ export function buildHierarchyTree<T extends FlatHierarchyNode>(
   return roots;
 }
 
-/**
- * Refuse un parentId qui créerait un cycle (self ou descendant).
- * `nodes` = liste plate id → parentId courant (avant mutation).
- */
-export function wouldCreateCycle(
-  nodes: Iterable<{ id: string; parentId: string | null }>,
-  nodeId: string,
-  newParentId: string | null,
-): boolean {
-  if (!newParentId) return false;
-  if (newParentId === nodeId) return true;
-  const parentOf = new Map<string, string | null>();
-  for (const n of nodes) parentOf.set(n.id, n.parentId);
-  let cur: string | null = newParentId;
-  const seen = new Set<string>();
-  while (cur) {
-    if (cur === nodeId) return true;
-    if (seen.has(cur)) return true;
-    seen.add(cur);
-    cur = parentOf.get(cur) ?? null;
-  }
-  return false;
-}
-
 /** Déduplique les userIds canApprove (ordre stable). */
 export function uniqueApproverIds(
   assignments: Iterable<{ userId: string; canApprove: boolean }>,
