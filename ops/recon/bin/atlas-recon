@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# atlas-recon — safety wrapper around ops/recon templates.
+# Refuses to run unless ATLAS_AUTHZ=signed (lab / signed RoE).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATES="${ROOT}/templates"
+
+usage() {
+  cat <<EOF
+Usage: ATLAS_AUTHZ=signed atlas-recon <command> [env overrides via shell]
+
+Commands:
+  dns         → templates/01-dns.sh        (needs TARGET_DOMAIN)
+  ports       → templates/02-ports.sh      (needs TARGET_HOST)
+  subdomains  → templates/03-subdomains.sh (needs TARGET_DOMAIN)
+  nuclei      → templates/04-nuclei.sh     (needs TARGET_URL)
+  fuzz        → templates/05-fuzz.sh       (needs TARGET_URL, WORDLIST)
+  help        → this message
+
+Safety: export ATLAS_AUTHZ=signed only when you have written authorization
+(lab asset or signed RoE + company A approval). This wrapper does not
+grant legal authority; it only gates accidental runs.
+
+Example (placeholders):
+  export ATLAS_AUTHZ=signed
+  export TARGET_DOMAIN=lab.example.invalid
+  export OUT_DIR=${ROOT}/targets/example-lab/raw
+  atlas-recon dns
+EOF
+}
+
+if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "${ATLAS_AUTHZ:-}" != "signed" ]]; then
+  cat >&2 <<EOF
+atlas-recon: refused — ATLAS_AUTHZ is not 'signed'.
+Set ATLAS_AUTHZ=signed only for lab work or a signed RoE engagement.
+See ${ROOT}/README.md
+EOF
+  exit 2
+fi
+
+cmd="${1:-}"
+shift || true
+
+case "${cmd}" in
+  dns)        script="${TEMPLATES}/01-dns.sh" ;;
+  ports)      script="${TEMPLATES}/02-ports.sh" ;;
+  subdomains) script="${TEMPLATES}/03-subdomains.sh" ;;
+  nuclei)     script="${TEMPLATES}/04-nuclei.sh" ;;
+  fuzz)       script="${TEMPLATES}/05-fuzz.sh" ;;
+  "")
+    usage >&2
+    exit 1
+    ;;
+  *)
+    echo "atlas-recon: unknown command '${cmd}'" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+
+# Ensure Go CLIs are on PATH when installed under default GOPATH
+export PATH="${PATH}:$(go env GOPATH 2>/dev/null)/bin:${HOME}/go/bin"
+
+exec bash "${script}" "$@"

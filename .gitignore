@@ -14,3 +14,12 @@ apps/client/src-tauri/target/
 *.tsbuildinfo
 .vercel
 dump.rdb
+
+# Recon engagement artifacts (keep skeleton; never commit real captures)
+ops/recon/targets/*/raw/*
+!ops/recon/targets/*/raw/.gitkeep
+ops/recon/targets/*/reports/*
+!ops/recon/targets/*/reports/.gitkeep
+ops/recon/targets/*/notes/*
+!ops/recon/targets/*/notes/README.md
+!ops/recon/targets/_example-lab/
