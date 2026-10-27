@@ -17,6 +17,8 @@ model Organization {
   tenants   Tenant[]
   staff     StaffMembership[]
   groups    StaffGroup[]
+  /// Arbres de postes (parent–enfant) — distinct de StaffGroup (routage)
+  hierarchyNodes HierarchyNode[]
 }
 
 model Tenant {
@@ -56,6 +58,8 @@ model User {
   createdAt    DateTime @default(now())
   tenantMemberships TenantMembership[]
   staffMemberships  StaffMembership[]
+  /// Multi-affectations : un User peut occuper plusieurs postes
+  hierarchyAssignments HierarchyAssignment[]
 }
 
 model TenantMembership {
@@ -89,6 +93,41 @@ model StaffGroup {
   memberIds String[] @default([])
   org       Organization @relation(fields: [orgId], references: [id])
   policies  ApprovalRoutingPolicy[]
+}
+
+/// Poste / nœud d'organigramme (parent–enfant). Identité ≠ poste.
+model HierarchyNode {
+  id        String   @id @default(cuid())
+  orgId     String
+  title     String
+  parentId  String?
+  sortOrder Int      @default(0)
+  /// Stub tant qu'aucune source A réelle n'a certifié l'arbre
+  isStub    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  org         Organization @relation(fields: [orgId], references: [id])
+  parent      HierarchyNode?  @relation("HierarchyTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    HierarchyNode[] @relation("HierarchyTree")
+  assignments HierarchyAssignment[]
+
+  @@index([orgId, parentId])
+  @@index([orgId, sortOrder])
+}
+
+/// Affectation User ↔ poste (N:N). Même personne sur plusieurs nœuds = OK.
+model HierarchyAssignment {
+  id         String   @id @default(cuid())
+  nodeId     String
+  userId     String
+  /// Capacité sur l'affectation (pas sur le libellé du poste)
+  canApprove Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  node       HierarchyNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, userId])
+  @@index([userId])
 }
 
 model Plan {

@@ -536,6 +536,95 @@ describe("AC smoke DB — isolation tenants + audit (si Postgres)", () => {
     assert.equal(broken.ok, false);
     assert.match(broken.reason ?? "", /hash mismatch/);
   });
+
+  it("hiérarchie : multi-affectations même User + isStub ; CSV vide reste BLOCKED", async (t) => {
+    if (!dbOk || !prisma) {
+      t.skip("Postgres injoignable");
+      return;
+    }
+    await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
+    const org = await prisma.organization.findFirst();
+    const approver = await prisma.user.findUnique({
+      where: { email: "approver@a.atlas.local" },
+    });
+    if (!org || !approver) {
+      t.skip("Seed org / approver requis");
+      return;
+    }
+
+    const { buildHierarchyTree, uniqueApproverIds } = await import(
+      "../../src/hierarchy/hierarchy-tree"
+    );
+    const { parseHierarchyCsv, matchExistingApprovers } = await import(
+      "../../src/approvals/hierarchy-import"
+    );
+
+    const empty = parseHierarchyCsv("");
+    assert.equal(empty.empty, true);
+
+    const root = await prisma.hierarchyNode.create({
+      data: {
+        orgId: org.id,
+        title: "[AC] Cofondateur",
+        parentId: null,
+        isStub: true,
+      },
+    });
+    const expert = await prisma.hierarchyNode.create({
+      data: {
+        orgId: org.id,
+        title: "[AC] Expert cyber",
+        parentId: null,
+        isStub: true,
+      },
+    });
+    await prisma.hierarchyAssignment.create({
+      data: { nodeId: root.id, userId: approver.id, canApprove: true },
+    });
+    await prisma.hierarchyAssignment.create({
+      data: { nodeId: expert.id, userId: approver.id, canApprove: false },
+    });
+
+    const assignments = await prisma.hierarchyAssignment.findMany({
+      where: { nodeId: { in: [root.id, expert.id] } },
+    });
+    assert.equal(assignments.length, 2);
+    assert.equal(
+      new Set(assignments.map((a) => a.userId)).size,
+      1,
+      "même User sur 2 postes",
+    );
+    assert.ok(assignments.every((a) => a.userId === approver.id));
+
+    const nodes = await prisma.hierarchyNode.findMany({
+      where: { id: { in: [root.id, expert.id] } },
+    });
+    assert.ok(nodes.every((n) => n.isStub));
+    const tree = buildHierarchyTree(
+      nodes.map((n) => ({
+        id: n.id,
+        parentId: n.parentId,
+        title: n.title,
+        sortOrder: n.sortOrder,
+      })),
+    );
+    assert.equal(tree.length, 2);
+
+    assert.deepEqual(uniqueApproverIds(assignments), [approver.id]);
+
+    const ghost = matchExistingApprovers(
+      [{ email: "ghost-invente@nowhere.test" }],
+      new Map([["approver@a.atlas.local", approver.id]]),
+    );
+    assert.equal(ghost.matchedUserIds.length, 0);
+
+    await prisma.hierarchyAssignment.deleteMany({
+      where: { nodeId: { in: [root.id, expert.id] } },
+    });
+    await prisma.hierarchyNode.deleteMany({
+      where: { id: { in: [root.id, expert.id] } },
+    });
+  });
 });
 
 describe("RoE versioning + co-signature mock (unit fixtures)", () => {

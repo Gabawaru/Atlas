@@ -34,6 +34,8 @@ async function main() {
   await prisma.mission.deleteMany();
   await prisma.approvalRoutingPolicy.deleteMany();
   await prisma.staffGroup.deleteMany();
+  await prisma.hierarchyAssignment.deleteMany();
+  await prisma.hierarchyNode.deleteMany();
   await prisma.secretRef.deleteMany();
   await prisma.connectorGrant.deleteMany();
   await prisma.asset.deleteMany();
