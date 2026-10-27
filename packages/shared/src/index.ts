@@ -127,6 +127,7 @@ export type PolicyRejectCode =
   | "ENTITLEMENT_MISSING"
   | "OWNER_AUTH_INVALID"
   | "OWNER_AUTH_MISSING"
+  | "OWNER_AUTH_STUB"
   | "APPROVAL_MISSING"
   | "APPROVAL_INVALID"
   | "NO_APPROVAL_ROUTE"
@@ -152,6 +153,16 @@ export interface PolicyEvaluationInput {
   entitlementAllowsModule: boolean;
   ownerAuthorizationValid: boolean;
   ownerAuthorizationScopeHash: string | null;
+  /**
+   * true = SignatureProvider mock / isStubSignature.
+   * Absent → traité comme stub (fail-closed) pour missions réelles.
+   */
+  ownerAuthorizationIsStub?: boolean;
+  /**
+   * Attestation opérateur hors bande (Sesign / papier) via ATLAS_AUTHZ=signed.
+   * Absent → false (fail-closed).
+   */
+  signedAuthzAttested?: boolean;
   approvalApproved: boolean;
   approvalScopeHash: string | null;
   approvalRouteConfigured: boolean;
