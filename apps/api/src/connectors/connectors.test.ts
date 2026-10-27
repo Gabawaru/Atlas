@@ -27,6 +27,8 @@ describe("Policy Guard + révocation connecteur", () => {
     entitlementAllowsModule: true,
     ownerAuthorizationValid: true,
     ownerAuthorizationScopeHash: scopeHash,
+    ownerAuthorizationIsStub: false,
+    signedAuthzAttested: false,
     approvalApproved: true,
     approvalScopeHash: scopeHash,
     approvalRouteConfigured: true,

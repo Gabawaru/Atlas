@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import { hashScope, evaluateExecution } from "@atlas/policy-guard";
+import {
+  hashScope,
+  evaluateExecution,
+  isSignedAuthzAttested,
+} from "@atlas/policy-guard";
 import {
   MODULE_WEB_PASSIVE,
   PASSIVE_ROE_METHODS,
@@ -621,6 +625,9 @@ export class MissionsService {
         sub?.plan.modulesEntitled.includes(WEB_PASSIVE_MODULE_ID) ?? false,
       ownerAuthorizationValid: owner?.status === "valid",
       ownerAuthorizationScopeHash: owner?.scopeHash ?? null,
+      // Fail-closed : pas d'owner ⇒ stub ; mock SignatureProvider ⇒ stub
+      ownerAuthorizationIsStub: owner?.isStubSignature ?? true,
+      signedAuthzAttested: isSignedAuthzAttested(),
       approvalApproved: mission.synthetic
         ? true
         : approval?.decision === "approved",

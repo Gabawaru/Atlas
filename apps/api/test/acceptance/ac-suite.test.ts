@@ -46,6 +46,8 @@ function gate(overrides: Partial<Parameters<typeof evaluateExecution>[0]> = {}) 
     entitlementAllowsModule: true,
     ownerAuthorizationValid: true,
     ownerAuthorizationScopeHash: scopeHash,
+    ownerAuthorizationIsStub: false,
+    signedAuthzAttested: false,
     approvalApproved: true,
     approvalScopeHash: scopeHash,
     approvalRouteConfigured: true,
@@ -104,6 +106,15 @@ describe("AC suite — critères d'acceptation MVP", () => {
       });
       assert.equal(r.decision, "REJECT");
       assert.equal(r.code, "OWNER_AUTH_MISSING");
+    });
+
+    it("mission réelle + signature stub sans ATLAS_AUTHZ → OWNER_AUTH_STUB", () => {
+      const r = gate({
+        ownerAuthorizationIsStub: true,
+        signedAuthzAttested: false,
+      });
+      assert.equal(r.decision, "REJECT");
+      assert.equal(r.code, "OWNER_AUTH_STUB");
     });
   });
 
@@ -353,6 +364,18 @@ describe("AC suite — critères d'acceptation MVP", () => {
         tokenModuleIds: [MODULE_WEB_PASSIVE],
       });
       assert.equal(r.code, "MODULE_NOT_IN_TOKEN");
+    });
+
+    it("module agressif unsigned même listé dans le jeton → MODULE_OUT_OF_SCOPE", () => {
+      const r = gate({
+        moduleId: "network.aggressive.scan.v1",
+        tokenModuleIds: ["network.aggressive.scan.v1"],
+        ownerAuthorizationIsStub: true,
+        signedAuthzAttested: false,
+        isRealMission: false,
+        isSyntheticDemo: true,
+      });
+      assert.equal(r.code, "MODULE_OUT_OF_SCOPE");
     });
   });
 

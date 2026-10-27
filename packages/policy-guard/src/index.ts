@@ -5,11 +5,13 @@
  * Rappels :
  * - Abonnement ≠ autorisation pentest
  * - Approbation A ≠ autorisation propriétaire
+ * - Signature mock/stub ≠ autorisation signée (Sesign) pour mission réelle
  */
 import type {
   PolicyEvaluationInput,
   PolicyEvaluationResult,
 } from "@atlas/shared";
+import { MODULE_WEB_PASSIVE } from "@atlas/shared";
 
 export type { PolicyEvaluationInput, PolicyEvaluationResult };
 
@@ -18,6 +20,21 @@ function reject(
   reason: string,
 ): PolicyEvaluationResult {
   return { decision: "REJECT", code, reason };
+}
+
+/** ATLAS_AUTHZ=signed — attestation opérateur (Sesign / papier hors bande). */
+export function isSignedAuthzAttested(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  return env.ATLAS_AUTHZ === "signed";
+}
+
+/** Modules agressifs / non-MVP — refusés sans authz signée. */
+export function isAggressiveModule(moduleId: string): boolean {
+  if (moduleId === MODULE_WEB_PASSIVE) return false;
+  return /aggressive|exploit|active\.scan|bruteforce|fuzz\.active/i.test(
+    moduleId,
+  );
 }
 
 /**
@@ -80,6 +97,26 @@ export function evaluateExecution(
     return reject(
       "OWNER_AUTH_INVALID",
       "Autorisation propriétaire non liée à ce scope_hash.",
+    );
+  }
+
+  // Fail-closed : stub absent ⇒ stub ; attestation absente ⇒ non signée
+  const ownerIsStub = input.ownerAuthorizationIsStub !== false;
+  const authzAttested = input.signedAuthzAttested === true;
+
+  // Mission réelle / cible réelle : mock ≠ Sesign sauf ATLAS_AUTHZ=signed
+  if (input.isRealMission && ownerIsStub && !authzAttested) {
+    return reject(
+      "OWNER_AUTH_STUB",
+      "Autorisation stub/mock — mission réelle refusée sans preuve signée (ATLAS_AUTHZ=signed).",
+    );
+  }
+
+  // Pack agressif : même règle signed-authz (démo synthétique ne contourne pas)
+  if (isAggressiveModule(input.moduleId) && ownerIsStub && !authzAttested) {
+    return reject(
+      "MODULE_OUT_OF_SCOPE",
+      "Module agressif refusé sans autorisation signée (ATLAS_AUTHZ=signed).",
     );
   }
 
