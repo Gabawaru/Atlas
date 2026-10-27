@@ -79,9 +79,10 @@ pnpm --filter @atlas/api exec prisma migrate deploy
 |----------|------|
 | `DATABASE_URL` | Postgres |
 | `REDIS_URL` | BullMQ |
-| `JWT_SECRET` | Auth locale (dev only dans `.env.example`) |
+| `JWT_SECRET` | Auth locale ; **obligatoire** hors `ATLAS_ENV` ∈ development\|ci\|test (défaut d’exemple refusé) |
+| `ATLAS_ENV` | `development` \| `ci` \| `test` \| autre (prod-like fail-closed JWT) |
 | `ATLAS_FORCE_MOCK_NETWORK` | `true` = mocks DNS/HTTP (CI offline) |
-| `ATLAS_CHAT_SIGNATURE_STUB` | Gate chat `sign()` : `signed` \| `pending` \| `rejected` (défaut code = pending ; démo/CI = signed) |
+| `ATLAS_CHAT_SIGNATURE_STUB` | Gate chat `sign()` : `signed` \| `pending` \| `rejected` (défaut code = pending ; démo/CI = signed) — **≠** signature propriétaire RoE |
 
 ## Hors scope code (ne pas « finir » en silence)
 

@@ -114,3 +114,10 @@ jobs:
 
       - name: Client packaging smoke
         run: pnpm client:smoke
+
+      # Musk étape 5 — après harden execute-path. Fail-closed critique différé :
+      # admin Next 14.x a encore des advisories critiques → upgrade Next d'abord
+      # (TODO humain/eng), puis retirer continue-on-error.
+      - name: Audit critical deps (informational)
+        continue-on-error: true
+        run: pnpm audit --audit-level=critical

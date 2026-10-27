@@ -4,6 +4,16 @@ Assistant conversationnel de **pentest autorisé** (entreprise A), accessible au
 
 Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard déterministe (sans LLM), machine d’états mission, présence web passive bornée, file BullMQ, exports rapport, consoles client & admin minimales, seeds fictives.
 
+## Jalon d’acceptation (figé)
+
+**Une** mission passive autorisée par écrit + Policy Guard → résultats unifiés.  
+Billing / SAV / feeds live / retention / matrice deploy / OIDC / e-sign prod = **décor démo**, pas critères d’acceptation. Détail : [`docs/jalon-passive-reel.md`](docs/jalon-passive-reel.md).
+
+## Isolation tenant (une histoire)
+
+Runtime API : filtre applicatif `where: { tenantId }` + `requireTenant` sur les routes tenant (GET mission/job inclus).  
+Postgres RLS + `PrismaService.asTenant` existent pour les **tests d’isolation** ; le process API tourne encore en `bypass_rls=on` (seed/worker/staff). Ne pas prétendre que RLS protège le runtime tant que ce n’est pas branché.
+
 ## Principes non négociables
 
 | Principe | Conséquence produit |
@@ -49,7 +59,7 @@ CI : `pnpm test:unit` + `pnpm test:acceptance`. Exit **77** = infra absente.
 
 ```bash
 pnpm dev:api      # http://localhost:3001/v1/health
-pnpm dev:admin    # http://localhost:3000
+pnpm dev:admin    # http://localhost:3000 — localhost / confiance uniquement (Next 14 advisories)
 pnpm dev:client   # http://localhost:3002
 ```
 
@@ -90,8 +100,9 @@ Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) sur `push` / `pu
 4. Build `@atlas/shared` + `@atlas/policy-guard`  
 5. `pnpm db:generate` + `pnpm db:migrate` + `pnpm db:seed`  
 6. `pnpm test:unit` puis `pnpm test:acceptance`  
+7. `pnpm audit --audit-level=critical` (informatif tant que Next admin n’est pas upgradé)
 
-Variables CI (alignées `.env.example`) : `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (valeur CI uniquement), `ATLAS_FORCE_MOCK_NETWORK=true`.
+Variables CI (alignées `.env.example`) : `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (valeur CI uniquement), `ATLAS_FORCE_MOCK_NETWORK=true`, `ATLAS_ENV=ci`.
 
 **RLS Postgres :** politiques FORCE multi-tenant ; rôle `atlas_app` (NOSUPERUSER, créé en migration — **ne pas** `ALTER ROLE atlas` sur GHA) ; `ATLAS_RLS_DATABASE_URL` pour les tests d’isolation ; seed via `atlas` + `app.bypass_rls=on`.  
 **BullMQ :** retry 3× + backoff, DLQ `atlas-control-passive-dlq`, kill → failed + DLQ.

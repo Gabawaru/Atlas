@@ -49,6 +49,11 @@ export class MissionsService {
     private readonly ops: OpsService,
   ) {}
 
+  private requireUserTenantId(user: AuthUser): string {
+    if (!user.tenantId) throw new BadRequestException("tenant requis");
+    return user.tenantId;
+  }
+
   async listForTenant(tenantId: string) {
     return this.prisma.mission.findMany({
       where: { tenantId },
@@ -63,9 +68,10 @@ export class MissionsService {
     });
   }
 
-  async get(id: string, tenantId?: string) {
+  async get(id: string, tenantId: string) {
+    if (!tenantId) throw new BadRequestException("tenant requis");
     const mission = await this.prisma.mission.findFirst({
-      where: { id, ...(tenantId ? { tenantId } : {}) },
+      where: { id, tenantId },
       include: {
         scopeVersions: { orderBy: { version: "desc" } },
         ownerAuths: true,
@@ -164,11 +170,11 @@ export class MissionsService {
       payload: { synthetic, scopeHash, exclusions },
     });
 
-    return this.get(mission.id, user.tenantId);
+    return this.get(mission.id, this.requireUserTenantId(user));
   }
 
   /** RoE machine-readable de la dernière ScopeVersion */
-  async getRoe(missionId: string, tenantId?: string): Promise<MachineReadableRoe> {
+  async getRoe(missionId: string, tenantId: string): Promise<MachineReadableRoe> {
     const mission = await this.get(missionId, tenantId);
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope / RoE manquant");
@@ -201,7 +207,7 @@ export class MissionsService {
       periodEnd?: string;
     },
   ) {
-    const mission = await this.get(missionId, user.tenantId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const prev = mission.scopeVersions[0];
     if (!prev) throw new BadRequestException("Scope manquant");
 
@@ -295,7 +301,7 @@ export class MissionsService {
       },
     });
 
-    return this.get(missionId, user.tenantId);
+    return this.get(missionId, this.requireUserTenantId(user));
   }
 
   async transition(
@@ -347,7 +353,7 @@ export class MissionsService {
     user: AuthUser,
     signerLabel: string,
   ) {
-    const mission = await this.get(missionId, user.tenantId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope manquant");
     if (scope.revokedAt) {
@@ -429,7 +435,7 @@ export class MissionsService {
       });
     }
 
-    return this.get(missionId, user.tenantId);
+    return this.get(missionId, this.requireUserTenantId(user));
   }
 
   /** 2e partie du circuit mock (contrepartie A) */
@@ -438,7 +444,7 @@ export class MissionsService {
     user: AuthUser,
     opts?: { autoDemo?: boolean },
   ) {
-    const mission = await this.get(missionId, user.tenantId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
     const pending = mission.ownerAuths.find(
       (o) => o.status === "pending" && !o.revokedAt,
@@ -482,7 +488,7 @@ export class MissionsService {
     });
 
     if (status !== "signed") {
-      return this.get(missionId, user.tenantId);
+      return this.get(missionId, this.requireUserTenantId(user));
     }
 
     await this.transition(missionId, "AUTH_VALID", user);
@@ -506,7 +512,7 @@ export class MissionsService {
       await this.issueToken(missionId, user);
     }
 
-    return this.get(missionId, user.tenantId);
+    return this.get(missionId, this.requireUserTenantId(user));
   }
 
   private async hasApprovalRoute(tenantId: string): Promise<boolean> {
@@ -527,7 +533,7 @@ export class MissionsService {
     user: AuthUser,
     routeOk: boolean,
   ) {
-    const mission = await this.get(missionId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
     const owner = mission.ownerAuths.find((o) => o.status === "valid");
     if (!scope || !owner) return;
@@ -544,7 +550,7 @@ export class MissionsService {
   }
 
   async issueToken(missionId: string, user: AuthUser) {
-    const mission = await this.get(missionId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope manquant");
     const token = await this.prisma.authorizationToken.create({
@@ -567,7 +573,7 @@ export class MissionsService {
   }
 
   async queueAndRun(missionId: string, user: AuthUser) {
-    const mission = await this.get(missionId, user.tenantId);
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
     const status = mission.status as MissionStatus;
     if (status !== "A_APPROVED" && status !== "A_SKIPPED_DEMO") {
       throw new BadRequestException(
@@ -652,7 +658,7 @@ export class MissionsService {
       await this.transition(missionId, "BLOCKED", user, {
         blockedReason: `${gate.code}: ${gate.reason}`,
       });
-      return { gate, mission: await this.get(missionId) };
+      return { gate, mission: await this.get(missionId, mission.tenantId) };
     }
 
     await this.transition(missionId, "QUEUED", user);
@@ -697,7 +703,7 @@ export class MissionsService {
     return {
       gate,
       bullJobId,
-      mission: await this.get(missionId),
+      mission: await this.get(missionId, mission.tenantId),
     };
   }
 
@@ -709,14 +715,13 @@ export class MissionsService {
     return this.controlQueue.kill(missionId);
   }
 
-  async getJob(missionId: string, jobRunId: string, tenantId?: string) {
+  async getJob(missionId: string, jobRunId: string, tenantId: string) {
+    if (!tenantId) throw new BadRequestException("tenant requis");
     const job = await this.prisma.jobRun.findFirst({
       where: {
         id: jobRunId,
         missionId,
-        ...(tenantId
-          ? { mission: { tenantId } }
-          : {}),
+        mission: { tenantId },
       },
     });
     if (!job) throw new NotFoundException("Job introuvable");
@@ -727,13 +732,14 @@ export class MissionsService {
     missionId: string,
     reportId: string,
     format: "json" | "csv" | "pdf",
-    tenantId?: string,
+    tenantId: string,
   ) {
+    if (!tenantId) throw new BadRequestException("tenant requis");
     const report = await this.prisma.report.findFirst({
       where: {
         id: reportId,
         missionId,
-        ...(tenantId ? { mission: { tenantId } } : {}),
+        mission: { tenantId },
       },
       include: { mission: true },
     });
