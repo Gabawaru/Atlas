@@ -26,7 +26,7 @@ pnpm client:smoke
 
 Parcours manuel démo (avec API + seed) : ouvrir le client → CTA **Scanner** (disabled + motif si pas prêt) → résultats unifiés. Compte `owner@demo.atlas.local`. Voir `docs/utilisateur.md`.
 
-**macOS :** UI web via `pnpm dev:client` ; stub `cargo run` dans `apps/client/src-tauri` (pas d’installateur `.dmg` tant que `bundle.active: false`). Détail : `apps/client/src-tauri/README.md`.
+**macOS (stage) :** une seule source — `apps/client/src-tauri/README.md` § « macOS (plateforme stage) ».
 
 ## Suite
 

@@ -5,21 +5,10 @@ import {
 } from "./scannerReadiness";
 import {
   buildUnifiedResults,
-  kindLabel,
   type UnifiedResultRow,
 } from "./unifiedResults";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-
-type Need = {
-  id: string;
-  label: string;
-  mvpReady: boolean;
-  status?: string;
-  statusLabel?: string;
-  note: string;
-  connectorIds?: string[];
-};
 
 type Asset = { id: string; value: string; normalized: string; synthetic: boolean };
 type ConnectorGrant = {
@@ -48,9 +37,6 @@ type Finding = {
   synthetic?: boolean;
   confidence?: string | null;
   cveId?: string | null;
-  kevListed?: boolean;
-  feedSources?: string[];
-  matchDisclaimer?: string | null;
   remediationStatus?: string;
   remediationNote?: string | null;
   remediatedAt?: string | null;
@@ -61,7 +47,6 @@ type Mission = {
   id: string;
   title: string;
   status: string;
-  blockedReason?: string | null;
   synthetic: boolean;
   findings?: Finding[];
   jobRuns?: {
@@ -76,21 +61,6 @@ type Mission = {
     technicalDetail: string;
     synthetic: boolean;
   }[];
-  scopeVersions?: {
-    version: number;
-    scopeHash: string;
-    exclusions?: string[];
-    methods?: string[];
-    periodStart?: string;
-    periodEnd?: string;
-  }[];
-  ownerAuths?: {
-    status: string;
-    signerLabel: string;
-    counterpartyLabel?: string | null;
-    ownerSignedAt?: string | null;
-    counterpartySignedAt?: string | null;
-  }[];
 };
 
 const REMEDIATION_OPTIONS = [
@@ -101,6 +71,12 @@ const REMEDIATION_OPTIONS = [
   "wont_fix",
   "retest_requested",
 ] as const;
+
+const KIND_LABEL: Record<UnifiedResultRow["kind"], string> = {
+  service: "Service",
+  finding: "Finding",
+  report: "Bilan",
+};
 
 type Roe = {
   version: number;
@@ -113,24 +89,14 @@ type Roe = {
   notes?: string | null;
 };
 
-function needBadge(status?: string) {
-  if (status === "usable") return "OK démo";
-  if (status === "coming_soon") return "Partiel";
-  return "Non branché";
-}
-
 export function App() {
   const [email, setEmail] = useState("owner@demo.atlas.local");
   const [password, setPassword] = useState("atlas-demo");
   const [token, setToken] = useState<string | null>(null);
-  const [needs, setNeeds] = useState<Need[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [grants, setGrants] = useState<ConnectorGrant[]>([]);
-  const [selectedNeed, setSelectedNeed] = useState(EXECUTABLE_NEED);
-  const [chat, setChat] = useState("Que voit-on de nous sur Internet ?");
-  const [chatReply, setChatReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -148,22 +114,17 @@ export function App() {
     [token],
   );
 
-  const selected = needs.find((n) => n.id === selectedNeed);
   const webGrantActive = grants.some(
     (g) => g.connectorId === "web.passive.presence" && g.status === "active",
   );
   const readiness = evaluateScannerReadiness({
     authenticated: Boolean(token),
-    selectedNeedId: selectedNeed,
-    needExecutable: selected?.mvpReady ?? selectedNeed === EXECUTABLE_NEED,
+    selectedNeedId: EXECUTABLE_NEED,
     assetCount: assets.length,
     webConnectorActive: webGrantActive,
   });
 
-  const unified: UnifiedResultRow[] = useMemo(
-    () => buildUnifiedResults(missions, findings),
-    [missions, findings],
-  );
+  const unified = buildUnifiedResults(missions, findings);
 
   async function login() {
     setError(null);
@@ -182,15 +143,13 @@ export function App() {
 
   async function refresh() {
     if (!token) return;
-    const [n, a, m, c, g, f] = await Promise.all([
-      fetch(`${API}/v1/ux-needs`, { headers }).then((r) => r.json()),
+    const [a, m, c, g, f] = await Promise.all([
       fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/findings`, { headers }).then((r) => r.json()),
     ]);
-    setNeeds(n);
     setAssets(a);
     setMissions(m);
     setCatalog(Array.isArray(c) ? c : []);
@@ -225,28 +184,6 @@ export function App() {
   useEffect(() => {
     if (token) void refresh();
   }, [token]);
-
-  async function ask() {
-    const res = await fetch(`${API}/v1/conversation`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ message: chat }),
-    }).then((r) => r.json());
-    const lines = [
-      res.reply,
-      res.recommendedNeed ? `Besoin orienté : ${res.recommendedNeed}` : null,
-      res.recommendedConnectors?.length
-        ? `Connecteurs suggérés : ${res.recommendedConnectors.join(", ")}`
-        : null,
-      res.executed === false
-        ? "Exécution : non (assistant ≠ Policy Guard)"
-        : null,
-      res.llm ? `Provider LLM : ${res.llm}` : null,
-      `(${res.disclaimer})`,
-    ].filter(Boolean);
-    setChatReply(lines.join("\n\n"));
-    if (res.recommendedNeed) setSelectedNeed(res.recommendedNeed);
-  }
 
   async function addAsset() {
     await fetch(`${API}/v1/assets`, {
@@ -297,7 +234,7 @@ export function App() {
         headers,
         body: JSON.stringify({
           title: "[FICTIF] Mission présence web",
-          uxNeedIds: [selectedNeed],
+          uxNeedIds: [EXECUTABLE_NEED],
           assetIds: [assetList[0].id],
           synthetic: true,
           exclusions: ["mail.example.com"],
@@ -319,11 +256,6 @@ export function App() {
       if (run.gate?.decision === "REJECT") {
         setError(`${run.gate.code}: ${run.gate.reason}`);
       }
-      setRoeMissionId(mission.id);
-      const roeData = await fetch(`${API}/v1/missions/${mission.id}/roe`, {
-        headers,
-      }).then((r) => r.json());
-      setRoe(roeData);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -396,16 +328,6 @@ export function App() {
         >
           {busy ? "Exécution…" : "Scanner"}
         </button>
-        {!token && (
-          <button type="button" className="ghost" onClick={() => void login()}>
-            Se connecter pour activer
-          </button>
-        )}
-        {token && (
-          <button type="button" className="ghost" onClick={() => void refresh()}>
-            Rafraîchir
-          </button>
-        )}
         {readiness.blockReason && (
           <p className="block-reason" role="status">
             {readiness.blockReason}
@@ -431,61 +353,56 @@ export function App() {
         </section>
       ) : (
         <>
-          <section>
-            <h2>Besoin</h2>
-            <p className="muted">
-              Un seul besoin exécutable en démo. Les autres restent visibles sans
-              faux succès.
-            </p>
-            {needs.map((n) => (
-              <div
-                key={n.id}
-                className={`need ${n.mvpReady ? "" : "disabled"}`}
-              >
-                <label>
-                  <input
-                    type="radio"
-                    name="need"
-                    checked={selectedNeed === n.id}
-                    onChange={() => setSelectedNeed(n.id)}
-                  />{" "}
-                  {n.label}{" "}
-                  <span className="muted">[{needBadge(n.status)}]</span>
-                </label>
-                {!n.mvpReady && (
-                  <div className="muted">{n.statusLabel ?? n.note}</div>
-                )}
-              </div>
-            ))}
-          </section>
-
-          <section className="results-unified" aria-labelledby="results-title">
+          <section aria-labelledby="results-title">
             <h2 id="results-title">Résultats</h2>
             <p className="muted">
               Services (contrôles) et findings ensemble — pas de silo par
-              connecteur.
+              connecteur. Remédiation sur chaque finding.
             </p>
             {unified.length === 0 ? (
               <p className="muted">Aucun résultat pour l&apos;instant.</p>
             ) : (
               <ul className="results-list">
-                {unified.map((row) => (
-                  <li key={row.id} className="result-row">
-                    <span className={`kind kind-${row.kind}`}>
-                      {kindLabel(row.kind)}
-                    </span>
-                    <strong>
-                      {row.title}{" "}
-                      {row.synthetic && (
-                        <span className="muted">[FICTIF]</span>
+                {unified.map((row) => {
+                  const finding =
+                    row.kind === "finding"
+                      ? findings.find((f) => `finding:${f.id}` === row.id)
+                      : undefined;
+                  return (
+                    <li key={row.id} className="result-row">
+                      <span className={`kind kind-${row.kind}`}>
+                        {KIND_LABEL[row.kind]}
+                      </span>
+                      <strong>
+                        {row.title}{" "}
+                        {row.synthetic && (
+                          <span className="muted">[FICTIF]</span>
+                        )}
+                      </strong>
+                      {row.severity && (
+                        <div className="muted">Sévérité : {row.severity}</div>
                       )}
-                    </strong>
-                    {row.severity && (
-                      <div className="muted">Sévérité : {row.severity}</div>
-                    )}
-                    <div className="muted">{row.detail}</div>
-                  </li>
-                ))}
+                      <div className="muted">{row.detail}</div>
+                      {finding && (
+                        <>
+                          <label>Remédiation</label>
+                          <select
+                            value={finding.remediationStatus ?? "open"}
+                            onChange={(e) =>
+                              void updateRemediation(finding.id, e.target.value)
+                            }
+                          >
+                            {REMEDIATION_OPTIONS.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {missions.some((m) => m.reports?.[0]?.technicalDetail) && (
@@ -503,24 +420,12 @@ export function App() {
           </section>
 
           <details>
-            <summary>Options avancées (RoE, connecteurs, chat, remédiation)</summary>
-            <section>
-              <h3>Conversation (mock — n&apos;exécute pas)</h3>
-              <textarea
-                rows={2}
-                value={chat}
-                onChange={(e) => setChat(e.target.value)}
-              />
-              <button type="button" className="ghost" onClick={() => void ask()}>
-                Demander conseil
-              </button>
-              {chatReply && <pre>{chatReply}</pre>}
-            </section>
+            <summary>Options avancées (RoE, connecteurs, actifs)</summary>
             <section>
               <h3>Connecteurs</h3>
               <ul>
                 {catalog
-                  .filter((c) => c.id === "web.passive.presence" || c.isStub)
+                  .filter((c) => c.id === "web.passive.presence")
                   .map((c) => {
                     const grant = grants.find(
                       (g) => g.connectorId === c.id && g.status === "active",
@@ -616,44 +521,6 @@ export function App() {
                 Charger RoE mission récente
               </button>
             )}
-            <section>
-              <h3>Remédiation findings</h3>
-              <p className="muted">
-                FICTIF — ≠ ticket SAV côté A. Liste aussi dans Résultats ci-dessus.
-              </p>
-              {findings.length === 0 ? (
-                <p className="muted">Aucun finding.</p>
-              ) : (
-                <ul>
-                  {findings.map((f) => (
-                    <li key={f.id} className="need">
-                      <strong>
-                        {f.title}{" "}
-                        {f.synthetic && <span className="muted">[FICTIF]</span>}
-                      </strong>
-                      <div className="muted">
-                        {f.severity}
-                        {f.confidence ? ` · conf. ${f.confidence}` : ""}
-                        {f.cveId ? ` · ${f.cveId}` : ""}
-                      </div>
-                      <label>Statut</label>
-                      <select
-                        value={f.remediationStatus ?? "open"}
-                        onChange={(e) =>
-                          void updateRemediation(f.id, e.target.value)
-                        }
-                      >
-                        {REMEDIATION_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
           </details>
         </>
       )}

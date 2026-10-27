@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildUnifiedResults, kindLabel } from "./unifiedResults.js";
+import { buildUnifiedResults } from "./unifiedResults.js";
 
 describe("buildUnifiedResults", () => {
   it("mélange services et findings sans silo", () => {
@@ -44,7 +44,6 @@ describe("buildUnifiedResults", () => {
       rows.map((r) => r.kind),
       ["service", "finding", "report"],
     );
-    assert.equal(kindLabel("service"), "Service");
   });
 
   it("n'ajoute pas deux fois le même finding", () => {

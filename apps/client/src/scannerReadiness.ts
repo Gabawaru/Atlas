@@ -3,7 +3,6 @@
 export type ScannerReadinessInput = {
   authenticated: boolean;
   selectedNeedId: string;
-  needExecutable: boolean;
   assetCount: number;
   webConnectorActive: boolean;
 };
@@ -29,7 +28,7 @@ export function evaluateScannerReadiness(
       blockReason: "Connexion requise — le Scanner n'exécute rien sans session.",
     };
   }
-  if (!input.needExecutable || input.selectedNeedId !== EXECUTABLE_NEED) {
+  if (input.selectedNeedId !== EXECUTABLE_NEED) {
     return {
       ready: false,
       blockReason:

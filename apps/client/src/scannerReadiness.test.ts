@@ -6,7 +6,6 @@ describe("evaluateScannerReadiness", () => {
   const readyBase = {
     authenticated: true,
     selectedNeedId: "web_presence",
-    needExecutable: true,
     assetCount: 1,
     webConnectorActive: true,
   };
@@ -21,7 +20,6 @@ describe("evaluateScannerReadiness", () => {
     const r = evaluateScannerReadiness({
       ...readyBase,
       selectedNeedId: "internal_network",
-      needExecutable: false,
     });
     assert.equal(r.ready, false);
     assert.match(r.blockReason ?? "", /présence web|Policy Guard/i);
