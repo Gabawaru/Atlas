@@ -120,30 +120,7 @@ AC : `pnpm test:acceptance` (AC-01…AC-12 — voir `docs/developpeur.md`).
 ## Documentation (FR)
 
 Guides : [`utilisateur`](docs/utilisateur.md) · [`administrateur`](docs/administrateur.md) · [`developpeur`](docs/developpeur.md) · [`demo-smoke`](docs/demo-smoke.md) · [`limites`](docs/limites-et-evolution.md) · [`sauvegarde-maj`](docs/sauvegarde-maj-incidents.md) · [`exemples/`](docs/exemples/).  
-Détail modules : `docs/controle-web-passif.md`, `import-hierarchie.md`, `licences-abonnements.md`, `assistant-conversationnel.md`, `referentiels-vulnerabilites.md`, `modes-deploiement.md`, `retention-et-purge.md`, `versions-et-maintenance.md`, `tauri-stub.md`.  
-Stage CNED / DataPerl : [`STAGE.md`](STAGE.md) · [`docs/stage/`](docs/stage/).
-
-## Stage DataPerl (CNED BTS CIEL) — Gabriel Carbunaru
-
-Période : 28 sept. – 20 nov. 2026 · Tuteur : Benjamin Mathias (DataPerl SASU).
-
-**Atlas** est l’outil **interne** de vérification sécurité / scanner (missions stage 3–5).  
-Ce n’est **pas** la plateforme publique Pragma Serve.
-
-| Axe annexe | Couverture Atlas |
-|------------|------------------|
-| 3 `make secure` | CI / analyses SAST-secrets-deps — [`docs/stage/make-secure.md`](docs/stage/make-secure.md) (outils encore TBD) |
-| 4 Scanner OWASP + rapport | Policy Guard + exports — [`docs/stage/owasp-rapport.md`](docs/stage/owasp-rapport.md) |
-| 5 Durcissement | Suivi findings / limites — [`docs/limites-et-evolution.md`](docs/limites-et-evolution.md) |
-| 1 / 7 | Tests plateforme & wiki : support / doc ; pas le produit public |
-| 2 / 6 | Hors repo (clients / partenariat) |
-
-**Confidentialité :** secret professionnel (convention Art. 3). Aucune donnée client réelle ni secret dans le dépôt public / issues / samples. Scans hors cible autorisée interdits ; agressif / exploit uniquement avec autorisation écrite ([`docs/modele-autorisation-pentest.md`](docs/modele-autorisation-pentest.md)).
-
-**D1** (cahier des charges) : [`docs/stage/d1-cahier-des-charges.md`](docs/stage/d1-cahier-des-charges.md).  
-**Livrables CNED hors code** (journal, certificat, rapport de stage) : pointeurs dans [`STAGE.md`](STAGE.md) — ne pas versionner les PDF nominatifs ici.
-
-Détail axes + mapping fichiers : [`STAGE.md`](STAGE.md).
+Détail modules : `docs/controle-web-passif.md`, `import-hierarchie.md`, `licences-abonnements.md`, `assistant-conversationnel.md`, `referentiels-vulnerabilites.md`, `modes-deploiement.md`, `retention-et-purge.md`, `versions-et-maintenance.md`, `tauri-stub.md`.
 
 ## Hors scope (honnête)
 
@@ -151,4 +128,4 @@ Voir [`docs/limites-et-evolution.md`](docs/limites-et-evolution.md). En résumé
 
 ---
 
-*Atlas MVP — données de démonstration uniquement. Voir limites — pas un avis juridique. Cadre stage : [`STAGE.md`](STAGE.md).*
+*Atlas MVP — données de démonstration uniquement. Voir limites — pas un avis juridique.*
