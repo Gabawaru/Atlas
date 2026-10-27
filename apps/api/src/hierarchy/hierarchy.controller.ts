@@ -72,41 +72,49 @@ export class HierarchyController {
     @Inject(AuthService) private readonly auth: AuthService,
   ) {}
 
+  private resolveOrgId(orgId: string | undefined, user: AuthUser): string {
+    const id = orgId || user.orgId;
+    if (!id) throw new BadRequestException("orgId requis");
+    this.hierarchy.assertCallerOrg(user, id);
+    return id;
+  }
+
   @Get()
   getTree(@Query("orgId") orgId: string, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin", "ops", "approver"]);
-    const id = orgId || req.user.orgId;
-    if (!id) throw new BadRequestException("orgId requis");
+    const id = this.resolveOrgId(orgId, req.user);
     return this.hierarchy.getTree(id);
   }
 
   @Get("staff")
   listStaff(@Query("orgId") orgId: string, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin", "ops"]);
-    const id = orgId || req.user.orgId;
-    if (!id) throw new BadRequestException("orgId requis");
+    const id = this.resolveOrgId(orgId, req.user);
     return this.hierarchy.listStaffForOrg(id);
   }
 
   @Post("nodes")
   createNode(@Body() body: CreateNodeDto, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin"]);
+    this.hierarchy.assertCallerOrg(req.user, body.orgId);
     return this.hierarchy.createNode(body);
   }
 
   @Delete("nodes/:id")
-  deleteNode(@Param("id") id: string, @Req() req: { user: AuthUser }) {
+  async deleteNode(@Param("id") id: string, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin"]);
+    await this.hierarchy.assertCallerOwnsNode(req.user, id);
     return this.hierarchy.deleteNode(id);
   }
 
   @Post("nodes/:id/assignments")
-  assign(
+  async assign(
     @Param("id") nodeId: string,
     @Body() body: AssignDto,
     @Req() req: { user: AuthUser },
   ) {
     this.auth.requireStaff(req.user, ["admin"]);
+    await this.hierarchy.assertCallerOwnsNode(req.user, nodeId);
     return this.hierarchy.assign({
       nodeId,
       userId: body.userId,
@@ -115,18 +123,20 @@ export class HierarchyController {
   }
 
   @Patch("assignments/:id")
-  updateAssignment(
+  async updateAssignment(
     @Param("id") id: string,
     @Body() body: UpdateAssignmentDto,
     @Req() req: { user: AuthUser },
   ) {
     this.auth.requireStaff(req.user, ["admin"]);
+    await this.hierarchy.assertCallerOwnsAssignment(req.user, id);
     return this.hierarchy.updateAssignment(id, body.canApprove);
   }
 
   @Delete("assignments/:id")
-  unassign(@Param("id") id: string, @Req() req: { user: AuthUser }) {
+  async unassign(@Param("id") id: string, @Req() req: { user: AuthUser }) {
     this.auth.requireStaff(req.user, ["admin"]);
+    await this.hierarchy.assertCallerOwnsAssignment(req.user, id);
     return this.hierarchy.unassign(id);
   }
 
@@ -137,6 +147,7 @@ export class HierarchyController {
     @Req() req: { user: AuthUser },
   ) {
     this.auth.requireStaff(req.user, ["admin"]);
+    this.hierarchy.assertCallerOrg(req.user, body.orgId);
     return this.hierarchy.publishRouting(body.orgId, body.tenantId);
   }
 }
