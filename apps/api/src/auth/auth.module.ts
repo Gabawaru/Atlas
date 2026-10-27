@@ -4,12 +4,13 @@ import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
 import { PrismaService } from "../prisma/prisma.service";
+import { resolveJwtSecret } from "./jwt-secret";
 
 @Module({
   imports: [
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET ?? "dev-only-change-me-not-a-real-secret",
+      secret: resolveJwtSecret(),
       signOptions: { expiresIn: "12h" },
     }),
   ],

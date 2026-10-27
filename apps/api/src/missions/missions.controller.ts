@@ -91,7 +91,8 @@ export class MissionsController {
 
   @Get("missions/:id")
   get(@Param("id") id: string, @Req() req: { user: AuthUser }) {
-    return this.missions.get(id, req.user.tenantId);
+    this.auth.requireTenant(req.user);
+    return this.missions.get(id, req.user.tenantId!);
   }
 
   @Post("missions")
@@ -103,7 +104,7 @@ export class MissionsController {
   @Get("missions/:id/roe")
   getRoe(@Param("id") id: string, @Req() req: { user: AuthUser }) {
     this.auth.requireTenant(req.user);
-    return this.missions.getRoe(id, req.user.tenantId);
+    return this.missions.getRoe(id, req.user.tenantId!);
   }
 
   @Post("missions/:id/roe")
@@ -156,7 +157,8 @@ export class MissionsController {
     @Param("jobId") jobId: string,
     @Req() req: { user: AuthUser },
   ) {
-    return this.missions.getJob(id, jobId, req.user.tenantId);
+    this.auth.requireTenant(req.user);
+    return this.missions.getJob(id, jobId, req.user.tenantId!);
   }
 
   @Get("missions/:id/reports/:reportId/export")
@@ -176,7 +178,7 @@ export class MissionsController {
       id,
       reportId,
       fmt,
-      req.user.tenantId,
+      req.user.tenantId!,
     );
     res.setHeader("Content-Type", file.contentType);
     res.setHeader(

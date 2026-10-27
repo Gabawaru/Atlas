@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   assertInScope,
   expandPassiveTargets,
+  hasDeniedConnectAddress,
   isApexInAllowlist,
+  isDeniedConnectAddress,
   parseCookieFlags,
   runWebPassivePresence,
   WEB_PASSIVE_LIMITS,
@@ -67,7 +69,7 @@ describe("web.passive.presence.v1", () => {
         isCancelled: () => cancelled,
         lookupFn: async (host) => {
           if (host === "demo.atlas.local") cancelled = true;
-          return { a: ["127.0.0.1"], aaaa: [] };
+          return { a: ["93.184.216.34"], aaaa: [] };
         },
         fetchFn: async () => ({
           status: 200,
@@ -135,7 +137,7 @@ describe("web.passive.presence.v1", () => {
           progress.push(`${p.current}/${p.total}:${p.host}`);
         },
         lookupFn: async () => ({
-          a: ["127.0.0.1"],
+          a: ["93.184.216.34"],
           aaaa: [],
           ns: ["ns1.test"],
           mx: ["mx.test"],
@@ -186,7 +188,7 @@ describe("web.passive.presence.v1", () => {
       rateLimitPerMinute: 1000,
       expandCommonSubdomains: false,
       isCancelled: () => false,
-      lookupFn: async () => ({ a: ["127.0.0.1"], aaaa: [] }),
+      lookupFn: async () => ({ a: ["93.184.216.34"], aaaa: [] }),
       fetchFn: async () => ({
         status: 200,
         headers: {
@@ -203,5 +205,45 @@ describe("web.passive.presence.v1", () => {
     assert.ok(results[0]!.http?.cookies?.length);
     assert.equal(results[0]!.http!.cookies![0]!.secure, true);
     assert.equal(results[0]!.http!.redirectChain?.length, 2);
+  });
+
+  it("classifie loopback / RFC1918 / link-local / ULA comme non connectables", () => {
+    assert.equal(isDeniedConnectAddress("127.0.0.1"), true);
+    assert.equal(isDeniedConnectAddress("10.0.0.1"), true);
+    assert.equal(isDeniedConnectAddress("192.168.1.1"), true);
+    assert.equal(isDeniedConnectAddress("172.16.5.5"), true);
+    assert.equal(isDeniedConnectAddress("169.254.169.254"), true);
+    assert.equal(isDeniedConnectAddress("::1"), true);
+    assert.equal(isDeniedConnectAddress("fd12::1"), true);
+    assert.equal(isDeniedConnectAddress("fe80::1"), true);
+    assert.equal(isDeniedConnectAddress("93.184.216.34"), false);
+    assert.equal(hasDeniedConnectAddress(["93.184.216.34", "10.1.1.1"]), true);
+  });
+
+  it("refuse HTTP/TLS si DNS résout vers IP privée (SSRF)", async () => {
+    let fetched = 0;
+    let tlsTried = 0;
+    const results = await runWebPassivePresence([{ host: "a.test" }], {
+      allowedHosts: new Set(["a.test"]),
+      rateLimitPerMinute: 1000,
+      expandCommonSubdomains: false,
+      includeOsintRdap: false,
+      isCancelled: () => false,
+      lookupFn: async () => ({ a: ["127.0.0.1"], aaaa: [] }),
+      fetchFn: async () => {
+        fetched += 1;
+        return { status: 200, headers: {} };
+      },
+      tlsFn: async () => {
+        tlsTried += 1;
+        return { protocol: "TLSv1.3" };
+      },
+      sleepFn: async () => undefined,
+    });
+    assert.equal(fetched, 0);
+    assert.equal(tlsTried, 0);
+    assert.equal(results[0]!.dns.error, "PRIVATE_IP_DENIED");
+    assert.match(results[0]!.http?.error ?? "", /PRIVATE_IP_DENIED/);
+    assert.match(results[0]!.tls?.error ?? "", /PRIVATE_IP_DENIED/);
   });
 });

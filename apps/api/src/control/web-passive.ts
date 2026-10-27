@@ -177,6 +177,47 @@ export function normalizeHost(value: string): string {
   return value.toLowerCase().replace(/\.$/, "").split("/")[0]!;
 }
 
+/**
+ * Adresses non routables / métadonnées — pas de connect HTTP/TLS après DNS
+ * (SSRF / rebinding). Dual-stack : A et AAAA.
+ */
+export function isDeniedConnectAddress(ip: string): boolean {
+  const raw = ip.trim().toLowerCase();
+  if (!raw) return true;
+
+  // IPv4-mapped IPv6 → IPv4
+  const v4mapped = raw.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4mapped) return isDeniedConnectAddress(v4mapped[1]!);
+
+  if (raw.includes(":")) {
+    if (raw === "::1" || raw === "::") return true;
+    // ULA fc00::/7, link-local fe80::/10
+    if (raw.startsWith("fc") || raw.startsWith("fd")) return true;
+    if (raw.startsWith("fe8") || raw.startsWith("fe9") || raw.startsWith("fea") || raw.startsWith("feb")) {
+      return true;
+    }
+    return false;
+  }
+
+  const parts = raw.split(".").map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true;
+  }
+  const [a, b] = parts as [number, number, number, number];
+  if (a === 0 || a === 127 || a === 10) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast / reserved
+  return false;
+}
+
+/** true si au moins une adresse résolue est non connectable (deny). */
+export function hasDeniedConnectAddress(addresses: string[]): boolean {
+  return addresses.some((a) => isDeniedConnectAddress(a));
+}
+
 export function isExcluded(
   host: string,
   exclusions: Set<string> | undefined,
@@ -699,9 +740,44 @@ export async function runWebPassivePresence(
       };
     }
 
+    const resolvedIps = [
+      ...entryCore.dns.addresses,
+      ...(entryCore.dns.aaaa ?? []),
+    ];
+    const privateIpDenied =
+      entryCore.dns.resolved && hasDeniedConnectAddress(resolvedIps);
+    if (privateIpDenied) {
+      entryCore.dns.error = "PRIVATE_IP_DENIED";
+    }
+
     const url = target.url ?? `https://${host}/`;
     const urlHost = normalizeHost(url);
     assertInScope(urlHost, opts.allowedHosts, opts.exclusions);
+
+    // Pas de connect HTTP/TLS vers loopback / RFC1918 / link-local / ULA / metadata.
+    // RDAP reste OK (endpoint public fixe, pas de connect vers l'IP résolue).
+    if (privateIpDenied) {
+      entryCore.http = {
+        ok: false,
+        method: "HEAD",
+        url,
+        error: "PRIVATE_IP_DENIED: refus de connexion après résolution DNS",
+        observedAt: new Date().toISOString(),
+      };
+      entryCore.tls = {
+        error: "PRIVATE_IP_DENIED: TLS non tenté",
+      };
+      if (
+        includeOsint &&
+        isApexInAllowlist(host, opts.allowedHosts) &&
+        !opts.isCancelled()
+      ) {
+        entryCore.osint = await rdapImpl(host);
+      }
+      results.push({ ...entryCore, evidenceHash: hashEvidence(entryCore) });
+      if (i < expanded.length - 1) await sleep(intervalMs);
+      continue;
+    }
 
     try {
       const http = await fetchImpl(url);

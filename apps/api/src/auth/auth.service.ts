@@ -82,8 +82,12 @@ export class AuthService {
     if (!user.tenantId) {
       throw new ForbiddenException("Contexte tenant requis");
     }
-    if (roles && user.tenantRole && !roles.includes(user.tenantRole)) {
-      throw new ForbiddenException(`Rôle tenant requis: ${roles.join("|")}`);
+    // Rôles demandés + membership absente → refuse (pas de skip silencieux).
+    if (roles && roles.length > 0) {
+      if (!user.tenantRole || !roles.includes(user.tenantRole)) {
+        throw new ForbiddenException(`Rôle tenant requis: ${roles.join("|")}`);
+      }
     }
   }
 }
+
