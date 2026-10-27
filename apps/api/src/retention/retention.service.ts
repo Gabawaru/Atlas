@@ -11,10 +11,15 @@ import type { AuthUser } from "../auth/auth.types";
 import {
   cutoffDate,
   DEFAULT_RETENTION_TTL_DAYS,
+  PROCESSING_PURPOSES,
+  PURPOSE_DISCLAIMER,
   RETENTION_CATEGORIES,
   RETENTION_DISCLAIMER,
+  SIGN_PURPOSES,
+  type ProcessingPurpose,
   type RetentionCategory,
   type RetentionTtlDays,
+  type SignPurpose,
 } from "./retention.policy";
 
 export interface PurgeCounts {
@@ -36,11 +41,17 @@ export class RetentionService {
     ttlDays: RetentionTtlDays;
     categories: readonly RetentionCategory[];
     disclaimer: string;
+    purposes: readonly ProcessingPurpose[];
+    signPurposes: readonly SignPurpose[];
+    purposeDisclaimer: string;
   } {
     return {
       ttlDays: { ...DEFAULT_RETENTION_TTL_DAYS },
       categories: RETENTION_CATEGORIES,
       disclaimer: RETENTION_DISCLAIMER,
+      purposes: PROCESSING_PURPOSES,
+      signPurposes: SIGN_PURPOSES,
+      purposeDisclaimer: PURPOSE_DISCLAIMER,
     };
   }
 

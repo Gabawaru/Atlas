@@ -4,14 +4,18 @@ import { MockSignatureProvider } from "./mock-signature.provider";
 
 describe("MockSignatureProvider", () => {
   const prevStub = process.env.ATLAS_CHAT_SIGNATURE_STUB;
+  const prevPurpose = process.env.ATLAS_PURPOSE_ENFORCE;
 
   beforeEach(() => {
     delete process.env.ATLAS_CHAT_SIGNATURE_STUB;
+    delete process.env.ATLAS_PURPOSE_ENFORCE;
   });
 
   afterEach(() => {
     if (prevStub === undefined) delete process.env.ATLAS_CHAT_SIGNATURE_STUB;
     else process.env.ATLAS_CHAT_SIGNATURE_STUB = prevStub;
+    if (prevPurpose === undefined) delete process.env.ATLAS_PURPOSE_ENFORCE;
+    else process.env.ATLAS_PURPOSE_ENFORCE = prevPurpose;
   });
 
   it("exige deux parties et reste pending jusqu'à co-signature", async () => {
@@ -71,5 +75,19 @@ describe("MockSignatureProvider", () => {
     );
     process.env.ATLAS_CHAT_SIGNATURE_STUB = "rejected";
     assert.equal((await p.sign({ documentHash: "z" })).status, "rejected");
+  });
+
+  it("sign() rejette purpose hors allowlist (limitation de finalité)", async () => {
+    const p = new MockSignatureProvider();
+    process.env.ATLAS_CHAT_SIGNATURE_STUB = "signed";
+    const bad = await p.sign({
+      documentHash: "doc-bad",
+      purpose: "marketing_newsletter",
+    });
+    assert.equal(bad.status, "rejected");
+    assert.match(bad.requestId, /^mock-authz-purpose-/);
+
+    const ok = await p.sign({ documentHash: "doc-ok", purpose: "mission" });
+    assert.equal(ok.status, "signed");
   });
 });

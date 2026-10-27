@@ -1,4 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  isAllowedSignPurpose,
+  isPurposeEnforceEnabled,
+} from "../retention/retention.policy";
 import type {
   CreateEnvelopeResult,
   SignatureArtifact,
@@ -115,6 +119,18 @@ export class MockSignatureProvider implements SignatureProvider {
   async sign(
     request: SignedAuthorizationRequest,
   ): Promise<SignedAuthorizationResult> {
+    // Limitation de finalité : purpose hors allowlist → rejected (hypothèse code).
+    if (
+      isPurposeEnforceEnabled() &&
+      !isAllowedSignPurpose(request.purpose)
+    ) {
+      return {
+        status: "rejected",
+        provider: this.name,
+        requestId: `mock-authz-purpose-${randomUUID()}`,
+        isMock: true,
+      };
+    }
     const status = resolveStubOutcome(request);
     const requestId = `mock-authz-${randomUUID()}`;
     return {
