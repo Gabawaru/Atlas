@@ -53,6 +53,8 @@ jobs:
       ATLAS_VULN_FEEDS_MODE: "fixture"
       ATLAS_ENV: ci
       ATLAS_SYNTHETIC_DEMO: "true"
+      # Stub chat signed-authorization (pas Pragma Sign) — démo CI
+      ATLAS_CHAT_SIGNATURE_STUB: "signed"
       CI: "true"
 
     steps:

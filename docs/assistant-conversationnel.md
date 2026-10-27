@@ -28,14 +28,26 @@ Table `LlmUsageLog` + audit `llm.turn` / `llm.capped` :
 
 ## API
 
-- `POST /v1/conversation` — tour assistant (`executed: false`, `jobEnqueued: false`)
+- `POST /v1/conversation` — tour assistant (`executed: false`, `jobEnqueued: false`) ; **exige** une autorisation signée via `SignatureProvider.sign` (stub mock)
 - `GET /v1/ux-needs` — catalogue (sans LLM)
 - `GET /v1/assistant/usage` — consommation vs plafonds
 
+## Gate signature (chat)
+
+Avant tout appel LLM, l’assistant appelle `SignatureProvider.sign({ purpose: "chat", … })`.
+
+| Statut stub | Comportement |
+|-------------|--------------|
+| `signed` | Réponse LLM autorisée (toujours `executed: false`) |
+| `pending` / `rejected` | Pas d’appel LLM ; `intent: signature_required` |
+
+Hook démo / CI : `ATLAS_CHAT_SIGNATURE_STUB=signed|pending|rejected` (défaut code = `pending`). **Pas de Pragma Sign réel** — même `MockSignatureProvider` que les missions (`createEnvelope` inchangé).
+
 ## Non-bypass
 
-Tests `assistant.nobypass.test.ts` : une demande « lance / bypass » ne passe pas le Policy Guard ; `stripExecution` ignore `requestedExecution` du provider.
+Tests `assistant.nobypass.test.ts` : une demande « lance / bypass » ne passe pas le Policy Guard ; `stripExecution` ignore `requestedExecution` du provider.  
+Tests `assistant.chat-signature.test.ts` : gate signature avant réponse LLM.
 
 ## Hors scope
 
-OIDC, e-sign eIDAS, hiérarchie A réelle — non concernés.
+OIDC, e-sign eIDAS / Pragma Sign réel, hiérarchie A réelle — non concernés.

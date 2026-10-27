@@ -5,11 +5,29 @@ import type {
   SignatureProvider,
   SignatureSigner,
   SignatureStatus,
+  SignedAuthorizationRequest,
+  SignedAuthorizationResult,
+  SignedAuthorizationStatus,
 } from "./signature-provider";
+
+function resolveStubOutcome(
+  request?: SignedAuthorizationRequest,
+): SignedAuthorizationStatus {
+  const fromReq = request?.stubOutcome;
+  if (fromReq === "signed" || fromReq === "pending" || fromReq === "rejected") {
+    return fromReq;
+  }
+  const env = (process.env.ATLAS_CHAT_SIGNATURE_STUB ?? "").toLowerCase().trim();
+  if (env === "signed" || env === "pending" || env === "rejected") {
+    return env;
+  }
+  // Défaut démo-safe sans API externe : pending (gate chat bloque)
+  return "pending";
+}
 
 /**
  * Mock pluggable — circuit à deux parties (owner + contrepartie).
- * Ne constitue PAS une signature électronique réelle ni eIDAS.
+ * Ne constitue PAS une signature électronique réelle ni eIDAS / Pragma Sign.
  */
 export class MockSignatureProvider implements SignatureProvider {
   readonly name = "mock";
@@ -87,6 +105,23 @@ export class MockSignatureProvider implements SignatureProvider {
       contentHash: createHash("sha256").update(payload).digest("hex"),
       isMock: true,
       signedBy,
+    };
+  }
+
+  /**
+   * Gate signed-authorization (chat). Pas d'appel réseau — stub local.
+   * Missions continuent d'utiliser createEnvelope / completeSigner.
+   */
+  async sign(
+    request: SignedAuthorizationRequest,
+  ): Promise<SignedAuthorizationResult> {
+    const status = resolveStubOutcome(request);
+    const requestId = `mock-authz-${randomUUID()}`;
+    return {
+      status,
+      provider: this.name,
+      requestId,
+      isMock: true,
     };
   }
 }
