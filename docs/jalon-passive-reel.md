@@ -16,8 +16,8 @@ Ce n’est **pas** : plateforme billing/SAV/vuln-live complète, OIDC, eIDAS, cl
 
 3. **Autorisation écrite**  
    - [ ] Modèle FR + checklist Monaco remplis pour **cette** cible  
-   - [ ] **TODO (humain) :** signature réelle — Sesign / papier / autre. Ne pas inventer de compte Sesign ni de lien.  
-   - [ ] En démo locale uniquement : SignatureProvider **mock** / `ATLAS_CHAT_SIGNATURE_STUB` (chat ≠ countersign owner)  
+   - [ ] **TODO (humain) :** signature réelle via **Pragma Sign** (`PRAGMA_SIGN_API_KEY` + enveloppe `status=signed`).  
+   - [ ] En démo locale sans clé : SignatureProvider **mock** / `ATLAS_CHAT_SIGNATURE_STUB` (chat ≠ countersign owner) ; `ATLAS_AUTHZ=signed` local/dev only 
 
 4. **Exécution**  
    - [ ] Client : CTA Scanner → readiness → execute  

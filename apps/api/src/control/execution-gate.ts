@@ -2,15 +2,13 @@
  * Policy Guard input assembly for enqueue + worker re-gate.
  * Deterministic; no LLM. Worker must not trust enqueue-time ALLOW alone.
  */
-import {
-  evaluateExecution,
-  isSignedAuthzAttested,
-} from "@atlas/policy-guard";
+import { evaluateExecution } from "@atlas/policy-guard";
 import {
   isSubscriptionCommerciallyActive,
   type PolicyEvaluationInput,
   type PolicyEvaluationResult,
 } from "@atlas/shared";
+import { resolveSignedAuthzAttested } from "../signatures/authz-attestation";
 import { WEB_PASSIVE_MODULE_ID } from "./web-passive";
 
 export type GateMissionSlice = {
@@ -39,6 +37,8 @@ export type GateMissionSlice = {
     scopeHash: string;
     /** Mock SignatureProvider / stub — fail-closed when omitted. */
     isStubSignature?: boolean;
+    /** Pragma Sign envelope id — polled when PRAGMA_SIGN_API_KEY is set. */
+    signatureEnvelopeId?: string | null;
   }>;
   approvalReqs: Array<{
     decisions: Array<{
@@ -54,7 +54,7 @@ export type ConnectorGuardState = {
   connectorActive: boolean;
 };
 
-export function buildExecutionGateInput(args: {
+export type BuildExecutionGateArgs = {
   mission: GateMissionSlice;
   now?: Date;
   subscription: {
@@ -67,7 +67,13 @@ export function buildExecutionGateInput(args: {
   connectorGuard: ConnectorGuardState;
   killSwitch: boolean;
   moduleId?: string;
-}): PolicyEvaluationInput {
+  /** Override attestation (tests). Prefer resolveSignedAuthzAttested. */
+  signedAuthzAttested?: boolean;
+};
+
+export async function buildExecutionGateInput(
+  args: BuildExecutionGateArgs,
+): Promise<PolicyEvaluationInput> {
   const now = args.now ?? new Date();
   const moduleId = args.moduleId ?? WEB_PASSIVE_MODULE_ID;
   const mission = args.mission;
@@ -78,6 +84,13 @@ export function buildExecutionGateInput(args: {
     .flatMap((r) => r.decisions)
     .find((d) => d.decision === "approved");
   const sub = args.subscription;
+
+  const signedAuthzAttested =
+    args.signedAuthzAttested !== undefined
+      ? args.signedAuthzAttested
+      : await resolveSignedAuthzAttested({
+          envelopeId: owner?.signatureEnvelopeId,
+        });
 
   return {
     now,
@@ -92,7 +105,7 @@ export function buildExecutionGateInput(args: {
     ownerAuthorizationScopeHash: owner?.scopeHash ?? null,
     // Fail-closed: no owner ⇒ stub; mock SignatureProvider ⇒ stub
     ownerAuthorizationIsStub: owner?.isStubSignature ?? true,
-    signedAuthzAttested: isSignedAuthzAttested(),
+    signedAuthzAttested,
     approvalApproved: mission.synthetic
       ? true
       : approval?.decision === "approved",
@@ -120,8 +133,8 @@ export function buildExecutionGateInput(args: {
   };
 }
 
-export function evaluateMissionExecution(
-  args: Parameters<typeof buildExecutionGateInput>[0],
-): PolicyEvaluationResult {
-  return evaluateExecution(buildExecutionGateInput(args));
+export async function evaluateMissionExecution(
+  args: BuildExecutionGateArgs,
+): Promise<PolicyEvaluationResult> {
+  return evaluateExecution(await buildExecutionGateInput(args));
 }

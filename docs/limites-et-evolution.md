@@ -44,7 +44,7 @@ Document honnête : ce qui **est** livré vs ce qui **n’est pas** le produit f
 ## Priorités suggérées (hors cette PR)
 
 1. OIDC + séparation secrets Vault/SOPS  
-2. SignatureProvider réel (Yousign / DocuSign / …) derrière la même interface  
+2. SignatureProvider réel : **Pragma Sign** branché (`PRAGMA_SIGN_API_KEY`) ; mock reste pour CI  
 3. Config routage A réelle (fichier / API admin)  
 4. Module connecteur authentifié borné  
 5. RLS + runbooks prod UE  

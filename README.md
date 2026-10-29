@@ -27,7 +27,7 @@ Postgres RLS + `PrismaService.asTenant` existent pour les **tests d’isolation*
 ## Structure
 
 ```
-apps/api          NestJS — auth, missions, BullMQ, exports, connecteurs, SignatureProvider mock
+apps/api          NestJS — auth, missions, BullMQ, exports, connecteurs, SignatureProvider (Pragma Sign ou mock)
 apps/admin        Next.js — file d’approbation + config routage (stub)
 apps/client       React — 5 besoins, connecteurs, conversation mock, bilans ; `pnpm client:smoke`
 apps/client/src-tauri  Stub Tauri 2 (conf + cargo message-only ; pas de bundle signé)
@@ -76,7 +76,7 @@ Comptes seed (mot de passe `atlas-demo`) — **fictifs** :
 
 Actif seed : `example.com` (preuves DNS/HTTP publiques dans le scope ; missions/exports marqués **FICTIF**).
 
-Variables : `.env.example` — `REDIS_URL`, `ATLAS_FORCE_MOCK_NETWORK` (mocks réseau CI).
+Variables : `.env.example` — `REDIS_URL`, `ATLAS_FORCE_MOCK_NETWORK` (mocks réseau CI). `PRAGMA_SIGN_API_KEY` active Pragma Sign (signed-authz).
 
 ## Exécution & rapports
 
@@ -84,7 +84,7 @@ Variables : `.env.example` — `REDIS_URL`, `ATLAS_FORCE_MOCK_NETWORK` (mocks r�
 2. Progression, **cancel**, **kill**, rate limit
 3. Module `web.passive.presence.v1` — DNS/HTTP/TLS passifs, allowlist scope
 4. Bilans décideur / technique + exports JSON/CSV/PDF
-5. SignatureProvider **mock** (pas eIDAS)
+5. SignatureProvider : **Pragma Sign** si `PRAGMA_SIGN_API_KEY`, sinon mock (CI/démo)
 
 Endpoints : `POST …/execute|cancel|kill`, `GET …/jobs/:id`, `GET …/reports/:id/export?format=…`
 
