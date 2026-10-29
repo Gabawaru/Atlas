@@ -439,6 +439,115 @@ export class MissionsService {
     return this.get(missionId, this.requireUserTenantId(user));
   }
 
+  /**
+   * Bind an already-signed Pragma Sign envelope to this mission.
+   * Polls getStatus only — never createEnvelope / documents /request (no outbound email).
+   */
+  async attachExistingOwnerAuth(
+    missionId: string,
+    user: AuthUser,
+    args: { signatureEnvelopeId: string; signerLabel?: string },
+  ) {
+    const envelopeId = args.signatureEnvelopeId?.trim();
+    if (!envelopeId) {
+      throw new BadRequestException("signatureEnvelopeId requis");
+    }
+    const signerLabel =
+      args.signerLabel?.trim() || user.displayName || user.email;
+
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
+    const scope = mission.scopeVersions[0];
+    if (!scope) throw new BadRequestException("Scope manquant");
+    if (scope.revokedAt) {
+      throw new BadRequestException(
+        "Périmètre révoqué — mettez à jour le RoE puis re-signez.",
+      );
+    }
+
+    let status;
+    try {
+      status = await this.signatures.getStatus(envelopeId);
+    } catch {
+      throw new BadRequestException(
+        "Enveloppe Sign introuvable ou inaccessible.",
+      );
+    }
+    if (status !== "signed") {
+      throw new BadRequestException(
+        `Enveloppe Sign non signée (status=${status}) — attach refusé.`,
+      );
+    }
+
+    const artifact = await this.signatures.fetchArtifact(envelopeId);
+    if (artifact.isMock) {
+      throw new BadRequestException(
+        "Impossible d'attacher une signature stub/mock.",
+      );
+    }
+
+    if (mission.status === "PREP_READY") {
+      await this.transition(missionId, "AUTH_PENDING", user);
+    }
+
+    const authRow = await this.prisma.ownerAuthorization.create({
+      data: {
+        missionId,
+        scopeVersionId: scope.id,
+        scopeHash: scope.scopeHash,
+        status: "valid",
+        signerLabel,
+        counterpartyLabel: this.ATLAS_COUNTERPARTY.name,
+        counterpartyEmail: this.ATLAS_COUNTERPARTY.email,
+        ownerSignedAt: new Date(),
+        counterpartySignedAt: new Date(),
+        signatureArtifactRef: artifact.artifactRef,
+        isStubSignature: false,
+        signatureProvider: this.signatures.name,
+        signatureEnvelopeId: envelopeId,
+        signatureStatus: "signed",
+      },
+    });
+
+    await this.audit.append({
+      tenantId: mission.tenantId,
+      actorId: user.userId,
+      action: "signature.owner.attach",
+      objectType: "owner_authorization",
+      objectId: authRow.id,
+      payload: {
+        provider: this.signatures.name,
+        envelopeId,
+        isMock: false,
+        attached: true,
+        scopeHash: scope.scopeHash,
+        scopeVersion: scope.version,
+      },
+    });
+
+    await this.transition(missionId, "AUTH_VALID", user);
+
+    const route = await this.hasApprovalRoute(mission.tenantId);
+    const next = nextAfterAuthValid({
+      isRealMission: mission.isRealMission,
+      isSyntheticDemo: mission.synthetic,
+      approvalRouteConfigured: route,
+    });
+
+    if (next.status === "BLOCKED") {
+      await this.transition(missionId, "BLOCKED", user, {
+        blockedReason: next.blockedReason,
+      });
+    } else if (next.status === "A_APPROVAL_PENDING") {
+      await this.transition(missionId, "A_APPROVAL_PENDING", user);
+      await this.createApprovalRequest(missionId, user, route);
+    } else if (next.status === "A_SKIPPED_DEMO") {
+      await this.transition(missionId, "A_SKIPPED_DEMO", user);
+      await this.issueToken(missionId, user);
+    }
+
+    return this.get(missionId, this.requireUserTenantId(user));
+  }
+
   /** 2e partie du circuit mock (contrepartie A) */
   async completeCounterSignature(
     missionId: string,
