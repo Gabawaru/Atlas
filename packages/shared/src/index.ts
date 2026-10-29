@@ -159,7 +159,7 @@ export interface PolicyEvaluationInput {
    */
   ownerAuthorizationIsStub?: boolean;
   /**
-   * Attestation opérateur hors bande (Sesign / papier) via ATLAS_AUTHZ=signed.
+   * Attestation signed-authz : poll Pragma Sign (status signed) ou ATLAS_AUTHZ=signed en local/dev.
    * Absent → false (fail-closed).
    */
   signedAuthzAttested?: boolean;

@@ -22,7 +22,7 @@ function base(overrides: Partial<PolicyEvaluationInput> = {}): PolicyEvaluationI
     entitlementAllowsModule: true,
     ownerAuthorizationValid: true,
     ownerAuthorizationScopeHash: scopeHash,
-    // Happy-path réel = preuve non-stub (Sesign / provider réel) ; stub testé à part
+    // Happy-path réel = preuve non-stub (Pragma Sign) ; stub testé à part
     ownerAuthorizationIsStub: false,
     signedAuthzAttested: false,
     approvalApproved: true,
@@ -88,7 +88,7 @@ describe("Policy Guard (sans LLM)", () => {
     assert.equal(r.code, "OWNER_AUTH_STUB");
   });
 
-  it("ALLOW mission réelle stub si ATLAS_AUTHZ attesté (Sesign hors bande)", () => {
+  it("ALLOW mission réelle stub si ATLAS_AUTHZ attesté (local/dev)", () => {
     const r = evaluateExecution(
       base({ ownerAuthorizationIsStub: true, signedAuthzAttested: true }),
     );

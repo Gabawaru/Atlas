@@ -646,7 +646,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       WEB_PASSIVE_MODULE_ID,
     );
 
-    const gate = evaluateMissionExecution({
+    const gate = await evaluateMissionExecution({
       mission,
       now,
       subscription: sub,

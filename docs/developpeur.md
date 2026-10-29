@@ -25,7 +25,7 @@ pnpm dev           # api :3001 · admin :3000 · client :3002
 | `apps/api/src/control/web-passive.ts` | Passifs DNS/TLS/headers + OSINT RDAP apex + exclusions RoE |
 | `apps/client` / `src-tauri` | Build web + smoke ; stub desktop (pas `tauri build` CI) |
 | `pnpm client:smoke` | Vérifie `dist/index.html` + bundles JS |
-| `apps/api/src/signatures` | SignatureProvider mock 2 parties (pluggable) |
+| `apps/api/src/signatures` | SignatureProvider pluggable (Pragma Sign ou mock) |
 | Endpoints RoE | `GET/POST /v1/missions/:id/roe`, `POST …/counter-signature` |
 | Admin entitlements | `GET /v1/admin/entitlements` — abonnement ≠ autorisation (sécu ; pas billing) |
 | Hiérarchie | CSV/stub + arbre postes — source unique `docs/import-hierarchie.md` |
@@ -63,7 +63,7 @@ pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts
 1. Tout contrôle actif passe par Policy Guard + jeton — jamais via le LLM.
 2. Cibles hors `allowedHosts` → exception `TARGET_OUT_OF_SCOPE`.
 3. `AuditService` : append-only (pas d’API update/delete).
-4. `SignatureProvider` : interface pluggable ; implémentation runtime = **mock**.
+4. `SignatureProvider` : interface pluggable ; runtime = **Pragma Sign** si `PRAGMA_SIGN_API_KEY`, sinon mock.
 5. Secrets : jamais dans les logs ni le LLM (MVP : pas de coffre Vault réel).
 
 ## Migrations
@@ -83,9 +83,10 @@ pnpm --filter @atlas/api exec prisma migrate deploy
 | `ATLAS_ENV` | `development` \| `ci` \| `test` \| autre (prod-like fail-closed JWT) |
 | `ATLAS_FORCE_MOCK_NETWORK` | `true` = mocks DNS/HTTP (CI offline) |
 | `ATLAS_CHAT_SIGNATURE_STUB` | Gate chat `sign()` : `signed` \| `pending` \| `rejected` (défaut code = pending ; démo/CI = signed) — **≠** signature propriétaire RoE |
-| `ATLAS_AUTHZ` | `signed` = attestation Sesign/papier hors bande pour mission réelle / agressif si owner auth encore stub ; absent = fail-closed (`OWNER_AUTH_STUB`) |
+| `PRAGMA_SIGN_API_KEY` | Active Pragma Sign (`agent-api.pragma-serve.com`) ; gate poll enveloppe `status=signed` |
+| `ATLAS_AUTHZ` | `signed` = attestation **local/dev uniquement** (sans clé Sign) ; avec clé → poll API, pas ce flag |
 
 ## Hors scope code (ne pas « finir » en silence)
 
-OIDC, e-sign réel, workers HA, durcissement RLS **prod**, modules réseau agressifs, Tauri packagé.  
-(Feeds vulns passifs + RLS FORCE sont déjà livrés — voir `docs/limites-et-evolution.md`.)
+OIDC, workers HA, durcissement RLS **prod**, modules réseau agressifs, Tauri packagé.  
+(Pragma Sign = `PRAGMA_SIGN_API_KEY` ; feeds vulns + RLS FORCE déjà livrés — voir `docs/limites-et-evolution.md`.)

@@ -1,11 +1,10 @@
 /**
  * SignatureProvider pluggable — hypothèse workflow-approbation.md §6.
- * Aucun prestataire e-sign réel requis au MVP ; mock fourni.
- * Circuit deux parties : propriétaire + contrepartie A.
+ * Runtime: Pragma Sign when PRAGMA_SIGN_API_KEY is set; else mock (CI / démo).
+ * Circuit deux parties (mock) ou enveloppe Pragma Sign (owner signer).
  * L'IA n'appelle jamais createEnvelope sans action humaine.
  *
  * signed-authorization (chat) : `sign` → signed | pending | rejected.
- * Pas de Pragma Sign réel — stub / mock uniquement.
  */
 
 export type SignatureStatus = "pending" | "signed" | "declined" | "expired";
@@ -28,7 +27,7 @@ export interface CreateEnvelopeResult {
 export interface SignatureArtifact {
   artifactRef: string;
   contentHash: string;
-  /** true = mock / stub — pas une preuve eIDAS */
+  /** true = mock / stub — pas une preuve eIDAS / Pragma Sign */
   isMock: boolean;
   signedBy: string[];
 }
@@ -70,7 +69,8 @@ export interface SignatureProvider {
   fetchArtifact(envelopeId: string): Promise<SignatureArtifact>;
   /**
    * Autorisation signée pour gates (ex. chat LLM).
-   * Stub : pending par défaut ; démo via ATLAS_CHAT_SIGNATURE_STUB ou stubOutcome.
+   * Mock : pending par défaut ; démo via ATLAS_CHAT_SIGNATURE_STUB ou stubOutcome.
+   * Pragma Sign : crée / poll une enveloppe réelle.
    */
   sign(request: SignedAuthorizationRequest): Promise<SignedAuthorizationResult>;
 }

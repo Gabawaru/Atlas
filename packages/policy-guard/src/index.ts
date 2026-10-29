@@ -5,7 +5,7 @@
  * Rappels :
  * - Abonnement ≠ autorisation pentest
  * - Approbation A ≠ autorisation propriétaire
- * - Signature mock/stub ≠ autorisation signée (Sesign) pour mission réelle
+ * - Signature mock/stub ≠ autorisation signée (Pragma Sign) pour mission réelle
  */
 import type {
   PolicyEvaluationInput,
@@ -22,7 +22,10 @@ function reject(
   return { decision: "REJECT", code, reason };
 }
 
-/** ATLAS_AUTHZ=signed — attestation opérateur (Sesign / papier hors bande). */
+/**
+ * ATLAS_AUTHZ=signed — attestation locale/dev uniquement (sans PRAGMA_SIGN_API_KEY).
+ * Prod : préférer poll Pragma Sign (voir resolveSignedAuthzAttested côté API).
+ */
 export function isSignedAuthzAttested(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): boolean {
@@ -104,11 +107,11 @@ export function evaluateExecution(
   const ownerIsStub = input.ownerAuthorizationIsStub !== false;
   const authzAttested = input.signedAuthzAttested === true;
 
-  // Mission réelle / cible réelle : mock ≠ Sesign sauf ATLAS_AUTHZ=signed
+  // Mission réelle : mock ≠ Pragma Sign sauf attestation (poll Sign ou ATLAS_AUTHZ local)
   if (input.isRealMission && ownerIsStub && !authzAttested) {
     return reject(
       "OWNER_AUTH_STUB",
-      "Autorisation stub/mock — mission réelle refusée sans preuve signée (ATLAS_AUTHZ=signed).",
+      "Autorisation stub/mock — mission réelle refusée sans enveloppe Pragma Sign signée (ou ATLAS_AUTHZ=signed en local).",
     );
   }
 
@@ -116,7 +119,7 @@ export function evaluateExecution(
   if (isAggressiveModule(input.moduleId) && ownerIsStub && !authzAttested) {
     return reject(
       "MODULE_OUT_OF_SCOPE",
-      "Module agressif refusé sans autorisation signée (ATLAS_AUTHZ=signed).",
+      "Module agressif refusé sans autorisation signée (Pragma Sign / ATLAS_AUTHZ local).",
     );
   }
 

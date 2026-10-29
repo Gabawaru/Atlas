@@ -607,7 +607,7 @@ export class MissionsService {
       WEB_PASSIVE_MODULE_ID,
     );
 
-    const gate = evaluateMissionExecution({
+    const gate = await evaluateMissionExecution({
       mission,
       now,
       subscription: sub,

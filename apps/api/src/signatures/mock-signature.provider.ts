@@ -31,7 +31,7 @@ function resolveStubOutcome(
 
 /**
  * Mock pluggable — circuit à deux parties (owner + contrepartie).
- * Ne constitue PAS une signature électronique réelle ni eIDAS / Pragma Sign.
+ * Ne constitue PAS une signature électronique réelle — utiliser Pragma Sign (PRAGMA_SIGN_API_KEY).
  */
 export class MockSignatureProvider implements SignatureProvider {
   readonly name = "mock";

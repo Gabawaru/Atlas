@@ -41,7 +41,7 @@ Avant tout appel LLM, l’assistant appelle `SignatureProvider.sign({ purpose: "
 | `signed` | Réponse LLM autorisée (toujours `executed: false`) |
 | `pending` / `rejected` | Pas d’appel LLM ; `intent: signature_required` |
 
-Hook démo / CI : `ATLAS_CHAT_SIGNATURE_STUB=signed|pending|rejected` (défaut code = `pending`). **Pas de Pragma Sign réel** — même `MockSignatureProvider` que les missions (`createEnvelope` inchangé).
+Sans `PRAGMA_SIGN_API_KEY` : hook démo / CI `ATLAS_CHAT_SIGNATURE_STUB=signed|pending|rejected` (défaut = `pending`). Avec clé : `PragmaSignSignatureProvider.sign` poll l’enveloppe réelle.
 
 ## Non-bypass
 
