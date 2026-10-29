@@ -75,6 +75,17 @@ class OwnerAuthDto {
   signerLabel!: string;
 }
 
+/** Bind an already-signed Pragma Sign envelope — no createEnvelope /request / email. */
+class AttachOwnerAuthDto {
+  @IsString()
+  @MinLength(1)
+  signatureEnvelopeId!: string;
+
+  @IsOptional()
+  @IsString()
+  signerLabel?: string;
+}
+
 @Controller()
 @UseGuards(AuthGuard)
 export class MissionsController {
@@ -125,6 +136,20 @@ export class MissionsController {
   ) {
     this.auth.requireTenant(req.user, ["owner", "operator"]);
     return this.missions.submitOwnerAuth(id, req.user, body.signerLabel);
+  }
+
+  /** Attach existing signed envelope id (poll GET only — never /signatures/request). */
+  @Post("missions/:id/owner-authorization/attach")
+  attachOwnerAuth(
+    @Param("id") id: string,
+    @Body() body: AttachOwnerAuthDto,
+    @Req() req: { user: AuthUser },
+  ) {
+    this.auth.requireTenant(req.user, ["owner", "operator"]);
+    return this.missions.attachExistingOwnerAuth(id, req.user, {
+      signatureEnvelopeId: body.signatureEnvelopeId,
+      signerLabel: body.signerLabel,
+    });
   }
 
   @Post("missions/:id/counter-signature")
