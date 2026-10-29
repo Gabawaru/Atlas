@@ -6,6 +6,7 @@ import { HierarchyModule } from "./hierarchy/hierarchy.module";
 import { AssetsModule } from "./assets/assets.module";
 import { QueueModule } from "./queue/queue.module";
 import { SignaturesModule } from "./signatures/signatures.module";
+import { MailModule } from "./mail/mail.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
 import { TicketsModule } from "./tickets/tickets.module";
 import { RemediationModule } from "./remediation/remediation.module";
@@ -22,6 +23,7 @@ import { PrismaService } from "./prisma/prisma.service";
   imports: [
     AuthModule,
     SignaturesModule,
+    MailModule,
     QueueModule,
     ConnectorsModule,
     MissionsModule,
