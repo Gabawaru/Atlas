@@ -62,6 +62,7 @@ function gate(overrides: Partial<Parameters<typeof evaluateExecution>[0]> = {}) 
     tokenModuleIds: [MODULE_WEB_PASSIVE],
     scopeRevoked: false,
     targetInApprovedScope: true,
+    targetHosts: ["console.pragma-serve.com"],
     connectorRequired: true,
     connectorPresent: true,
     connectorActive: true,

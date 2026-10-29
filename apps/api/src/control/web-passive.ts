@@ -5,6 +5,10 @@
  */
 import { createHash } from "node:crypto";
 import { connect as tlsConnect } from "node:tls";
+import {
+  evaluateRoeHost,
+  isRoeScopeOverrideEnabled,
+} from "@atlas/policy-guard";
 
 export const WEB_PASSIVE_MODULE_ID = "web.passive.presence.v1";
 
@@ -138,6 +142,16 @@ export interface WebPassiveOptions {
   allowedHosts: Set<string>;
   /** Hôtes exclus du RoE — refus même si autrement in-scope */
   exclusions?: Set<string>;
+  /**
+   * Enforce platform RoE allowlist (sections 3–5). Default true (fail-closed).
+   * Set false only in isolated unit fixtures that stub mission scope alone.
+   */
+  enforceRoePlatform?: boolean;
+  /**
+   * Operator override for gated / out-of-scope hosts
+   * (also ATLAS_ROE_SCOPE_OVERRIDE=1). Synthetic demos set this true.
+   */
+  roeScopeOverride?: boolean;
   rateLimitPerMinute: number;
   isCancelled: () => boolean;
   onProgress?: (p: WebPassiveProgress) => void | Promise<void>;
@@ -229,14 +243,34 @@ export function isExcluded(
   return excl.some((e) => h === e || h.endsWith(`.${e}`));
 }
 
+export type AssertInScopeOptions = {
+  enforceRoePlatform?: boolean;
+  roeScopeOverride?: boolean;
+};
+
+/**
+ * Platform RoE allowlist (Policy Guard config) — gated / unknown REJECT.
+ */
+export function assertRoePlatformAllowed(
+  host: string,
+  opts?: { override?: boolean },
+): void {
+  const override = isRoeScopeOverrideEnabled(process.env, opts?.override);
+  const roe = evaluateRoeHost(host, { override });
+  if (roe.decision === "REJECT") {
+    throw new Error(`${roe.code}: ${roe.reason}`);
+  }
+}
+
 /**
  * Allowlist stricte : hôte exact ou sous-domaine d'un domaine du scope.
- * Refuse exclusions RoE, IP hors liste et hosts non listés.
+ * Refuse exclusions RoE, allowlist plateforme, IP hors liste et hosts non listés.
  */
 export function assertInScope(
   host: string,
   allowedHosts: Set<string>,
   exclusions?: Set<string>,
+  opts?: AssertInScopeOptions,
 ): void {
   const h = normalizeHost(host);
   if (!h || h.includes(" ") || h.includes("..")) {
@@ -246,6 +280,11 @@ export function assertInScope(
     throw new Error(
       `TARGET_OUT_OF_SCOPE: ${h} exclu par le RoE (exclusions) — refus déterministe.`,
     );
+  }
+  if (opts?.enforceRoePlatform !== false) {
+    assertRoePlatformAllowed(h, {
+      override: opts?.roeScopeOverride === true,
+    });
   }
   const normalizedAllow = new Set(
     [...allowedHosts].map((a) => normalizeHost(a)),
@@ -271,6 +310,7 @@ export function expandPassiveTargets(
   allowedHosts: Set<string>,
   exclusions?: Set<string>,
   expandCommonSubdomains = true,
+  scopeOpts?: AssertInScopeOptions,
 ): WebPassiveTarget[] {
   const seen = new Set<string>();
   const out: WebPassiveTarget[] = [];
@@ -278,7 +318,7 @@ export function expandPassiveTargets(
     const h = normalizeHost(t.host || t.url || "");
     if (!h || seen.has(h)) return;
     try {
-      assertInScope(h, allowedHosts, exclusions);
+      assertInScope(h, allowedHosts, exclusions, scopeOpts);
     } catch {
       return;
     }
@@ -419,6 +459,7 @@ async function realHttpProbe(
   url: string,
   allowedHosts?: Set<string>,
   exclusions?: Set<string>,
+  scopeOpts?: AssertInScopeOptions,
 ): Promise<{
   status: number;
   headers: Record<string, string>;
@@ -470,7 +511,12 @@ async function realHttpProbe(
       }
       if (allowedHosts) {
         try {
-          assertInScope(normalizeHost(next), allowedHosts, exclusions);
+          assertInScope(
+            normalizeHost(next),
+            allowedHosts,
+            exclusions,
+            scopeOpts,
+          );
         } catch {
           // Hors scope : on n'ensuit pas (pas de scan ouvert)
           break;
@@ -674,10 +720,15 @@ export async function runWebPassivePresence(
   const sleep =
     opts.sleepFn ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const networkMocked = Boolean(opts.lookupFn || opts.fetchFn || opts.rdapFn);
+  const scopeOpts: AssertInScopeOptions = {
+    enforceRoePlatform: opts.enforceRoePlatform !== false,
+    roeScopeOverride: opts.roeScopeOverride === true,
+  };
   const lookup = opts.lookupFn ?? realDnsLookup;
   const fetchImpl =
     opts.fetchFn ??
-    ((u: string) => realHttpProbe(u, opts.allowedHosts, opts.exclusions));
+    ((u: string) =>
+      realHttpProbe(u, opts.allowedHosts, opts.exclusions, scopeOpts));
   const tlsImpl = opts.tlsFn ?? realTlsProbe;
   const rdapImpl = opts.rdapFn ?? realRdapProbe;
   const includeOsint = opts.includeOsintRdap !== false;
@@ -685,7 +736,7 @@ export async function runWebPassivePresence(
   // Refus immédiat si une cible fournie est hors périmètre (avant élargissement)
   for (const t of targets) {
     const host = normalizeHost(t.host || t.url || "");
-    assertInScope(host, opts.allowedHosts, opts.exclusions);
+    assertInScope(host, opts.allowedHosts, opts.exclusions, scopeOpts);
   }
 
   const expanded = expandPassiveTargets(
@@ -693,6 +744,7 @@ export async function runWebPassivePresence(
     opts.allowedHosts,
     opts.exclusions,
     opts.expandCommonSubdomains !== false,
+    scopeOpts,
   );
   const total = expanded.length;
   for (let i = 0; i < expanded.length; i++) {
@@ -701,7 +753,7 @@ export async function runWebPassivePresence(
     }
     const target = expanded[i]!;
     const host = normalizeHost(target.host || target.url || "");
-    assertInScope(host, opts.allowedHosts, opts.exclusions);
+    assertInScope(host, opts.allowedHosts, opts.exclusions, scopeOpts);
 
     await opts.onProgress?.({
       current: i + 1,
@@ -752,7 +804,7 @@ export async function runWebPassivePresence(
 
     const url = target.url ?? `https://${host}/`;
     const urlHost = normalizeHost(url);
-    assertInScope(urlHost, opts.allowedHosts, opts.exclusions);
+    assertInScope(urlHost, opts.allowedHosts, opts.exclusions, scopeOpts);
 
     // Pas de connect HTTP/TLS vers loopback / RFC1918 / link-local / ULA / metadata.
     // RDAP reste OK (endpoint public fixe, pas de connect vers l'IP résolue).

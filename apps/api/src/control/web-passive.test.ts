@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   assertInScope,
+  assertRoePlatformAllowed,
   expandPassiveTargets,
   hasDeniedConnectAddress,
   isApexInAllowlist,
@@ -11,34 +12,41 @@ import {
   WEB_PASSIVE_LIMITS,
 } from "./web-passive";
 
+/** Mission-scope fixtures only — platform RoE tested separately */
+const missionOnly = { enforceRoePlatform: false as const };
+
 describe("web.passive.presence.v1", () => {
   it("refuse une cible hors périmètre", () => {
     const allowed = new Set(["example.com"]);
     assert.throws(
-      () => assertInScope("evil.example.net", allowed),
+      () => assertInScope("evil.example.net", allowed, undefined, missionOnly),
       /OUT_OF_SCOPE/,
     );
   });
 
   it("accepte une cible du scope (sous-domaine)", () => {
     const allowed = new Set(["example.com"]);
-    assert.doesNotThrow(() => assertInScope("www.example.com", allowed));
+    assert.doesNotThrow(() =>
+      assertInScope("www.example.com", allowed, undefined, missionOnly),
+    );
   });
 
   it("refuse IP / host non listés même proches", () => {
     const allowed = new Set(["example.com"]);
-    assert.throws(() => assertInScope("example.com.evil.test", allowed));
+    assert.throws(() =>
+      assertInScope("example.com.evil.test", allowed, undefined, missionOnly),
+    );
   });
 
   it("refuse une exclusion RoE même in-scope", () => {
     const allowed = new Set(["example.com"]);
     const exclusions = new Set(["mail.example.com"]);
     assert.throws(
-      () => assertInScope("mail.example.com", allowed, exclusions),
+      () => assertInScope("mail.example.com", allowed, exclusions, missionOnly),
       /exclu/,
     );
     assert.doesNotThrow(() =>
-      assertInScope("example.com", allowed, exclusions),
+      assertInScope("example.com", allowed, exclusions, missionOnly),
     );
   });
 
@@ -50,6 +58,7 @@ describe("web.passive.presence.v1", () => {
       allowed,
       exclusions,
       true,
+      missionOnly,
     );
     const hosts = expanded.map((t) => t.host).sort();
     assert.ok(hosts.includes("example.com"));
@@ -64,6 +73,7 @@ describe("web.passive.presence.v1", () => {
       [{ host: "demo.atlas.local" }, { host: "other.atlas.local" }],
       {
         allowedHosts: new Set(["demo.atlas.local", "other.atlas.local"]),
+        enforceRoePlatform: false,
         rateLimitPerMinute: 120,
         expandCommonSubdomains: false,
         isCancelled: () => cancelled,
@@ -91,6 +101,7 @@ describe("web.passive.presence.v1", () => {
       () =>
         runWebPassivePresence([{ host: "not-allowed.test" }], {
           allowedHosts: new Set(["allowed.test"]),
+          enforceRoePlatform: false,
           rateLimitPerMinute: 60,
           expandCommonSubdomains: false,
           isCancelled: () => false,
@@ -105,6 +116,7 @@ describe("web.passive.presence.v1", () => {
   it("OSINT RDAP apex in-scope uniquement (pas hors périmètre)", async () => {
     const results = await runWebPassivePresence([{ host: "example.com" }], {
       allowedHosts: new Set(["example.com"]),
+      enforceRoePlatform: false,
       rateLimitPerMinute: 1000,
       expandCommonSubdomains: false,
       isCancelled: () => false,
@@ -130,6 +142,7 @@ describe("web.passive.presence.v1", () => {
       [{ host: "a.test" }, { host: "b.test" }],
       {
         allowedHosts: new Set(["a.test", "b.test"]),
+        enforceRoePlatform: false,
         rateLimitPerMinute: 1000,
         expandCommonSubdomains: false,
         isCancelled: () => false,
@@ -185,6 +198,7 @@ describe("web.passive.presence.v1", () => {
     assert.equal(WEB_PASSIVE_LIMITS.noAggressiveScan, true);
     const results = await runWebPassivePresence([{ host: "a.test" }], {
       allowedHosts: new Set(["a.test"]),
+      enforceRoePlatform: false,
       rateLimitPerMinute: 1000,
       expandCommonSubdomains: false,
       isCancelled: () => false,
@@ -225,6 +239,7 @@ describe("web.passive.presence.v1", () => {
     let tlsTried = 0;
     const results = await runWebPassivePresence([{ host: "a.test" }], {
       allowedHosts: new Set(["a.test"]),
+      enforceRoePlatform: false,
       rateLimitPerMinute: 1000,
       expandCommonSubdomains: false,
       includeOsintRdap: false,
@@ -245,5 +260,77 @@ describe("web.passive.presence.v1", () => {
     assert.equal(results[0]!.dns.error, "PRIVATE_IP_DENIED");
     assert.match(results[0]!.http?.error ?? "", /PRIVATE_IP_DENIED/);
     assert.match(results[0]!.tls?.error ?? "", /PRIVATE_IP_DENIED/);
+  });
+});
+
+describe("web.passive × RoE platform allowlist (fail-closed)", () => {
+  it("ALLOW hôte in-scope pragma-cloud", () => {
+    assert.doesNotThrow(() =>
+      assertRoePlatformAllowed("miells.pragma-cloud.com"),
+    );
+    assert.doesNotThrow(() =>
+      assertInScope(
+        "miells.pragma-cloud.com",
+        new Set(["miells.pragma-cloud.com"]),
+      ),
+    );
+  });
+
+  it("REJECT hors périmètre sans override", () => {
+    assert.throws(
+      () => assertRoePlatformAllowed("evil.example.com"),
+      /TARGET_OUT_OF_SCOPE/,
+    );
+    assert.throws(
+      () =>
+        assertInScope("evil.example.com", new Set(["evil.example.com"])),
+      /TARGET_OUT_OF_SCOPE/,
+    );
+  });
+
+  it("REJECT gated section 5 par défaut", () => {
+    assert.throws(
+      () => assertRoePlatformAllowed("cepmonaco.com"),
+      /TARGET_GATED/,
+    );
+    assert.throws(
+      () =>
+        assertInScope("support.lechoeurdusud.com", new Set([
+          "support.lechoeurdusud.com",
+        ])),
+      /TARGET_GATED/,
+    );
+  });
+
+  it("ALLOW gated / hors scope seulement avec override", async () => {
+    assert.doesNotThrow(() =>
+      assertRoePlatformAllowed("cepmonaco.com", { override: true }),
+    );
+    await assert.rejects(
+      () =>
+        runWebPassivePresence([{ host: "cepmonaco.com" }], {
+          allowedHosts: new Set(["cepmonaco.com"]),
+          rateLimitPerMinute: 60,
+          expandCommonSubdomains: false,
+          isCancelled: () => false,
+          lookupFn: async () => ({ a: ["1.2.3.4"], aaaa: [] }),
+          fetchFn: async () => ({ status: 200, headers: {} }),
+          sleepFn: async () => undefined,
+        }),
+      /TARGET_GATED/,
+    );
+    const ok = await runWebPassivePresence(
+      [{ host: "console.pragma-serve.com" }],
+      {
+        allowedHosts: new Set(["console.pragma-serve.com"]),
+        rateLimitPerMinute: 60,
+        expandCommonSubdomains: false,
+        isCancelled: () => false,
+        lookupFn: async () => ({ a: ["1.2.3.4"], aaaa: [] }),
+        fetchFn: async () => ({ status: 200, headers: {} }),
+        sleepFn: async () => undefined,
+      },
+    );
+    assert.equal(ok[0]!.host, "console.pragma-serve.com");
   });
 });

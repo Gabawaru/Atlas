@@ -364,6 +364,8 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       evidence = await runWebPassivePresence(p.targets, {
         allowedHosts: new Set(p.allowedHosts),
         exclusions: new Set(p.exclusions ?? []),
+        // Synthetic demos may use IANA example.com fixtures — override only then
+        roeScopeOverride: p.syntheticMission === true,
         rateLimitPerMinute: p.rateLimitPerMinute,
         isCancelled: () => cancelFlag,
         onProgress: async (prog) => {
@@ -646,12 +648,18 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       WEB_PASSIVE_MODULE_ID,
     );
 
+    const targetHosts =
+      p.allowedHosts.length > 0
+        ? p.allowedHosts
+        : p.targets.map((t) => t.host);
+
     const gate = await evaluateMissionExecution({
       mission,
       now,
       subscription: sub,
       approvalRouteConfigured: routeOk,
       assetsCount,
+      targetHosts,
       connectorGuard,
       killSwitch: await this.ops.isMaintenanceOn(),
     });

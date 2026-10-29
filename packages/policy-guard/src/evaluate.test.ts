@@ -8,6 +8,8 @@ import {
 import type { PolicyEvaluationInput } from "@atlas/shared";
 import { MODULE_WEB_PASSIVE } from "@atlas/shared";
 
+const inScopeHost = "console.pragma-serve.com";
+
 const now = new Date("2026-06-15T12:00:00.000Z");
 const periodStart = new Date("2026-06-01T00:00:00.000Z");
 const periodEnd = new Date("2026-07-01T00:00:00.000Z");
@@ -39,6 +41,8 @@ function base(overrides: Partial<PolicyEvaluationInput> = {}): PolicyEvaluationI
     tokenModuleIds: [MODULE_WEB_PASSIVE],
     scopeRevoked: false,
     targetInApprovedScope: true,
+    targetHosts: [inScopeHost],
+    roeScopeOverride: false,
     connectorRequired: true,
     connectorPresent: true,
     connectorActive: true,
@@ -191,6 +195,38 @@ describe("Policy Guard (sans LLM)", () => {
     );
     assert.equal(r.decision, "REJECT");
     assert.equal(r.code, "CONNECTOR_MISSING");
+  });
+
+  it("REJECT mission réelle si cible hors allowlist RoE", () => {
+    const r = evaluateExecution(
+      base({ targetHosts: ["evil.example.com"] }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "TARGET_OUT_OF_SCOPE");
+  });
+
+  it("REJECT mission réelle si cible gated section 5", () => {
+    const r = evaluateExecution(
+      base({ targetHosts: ["cepmonaco.com"] }),
+    );
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "TARGET_GATED");
+  });
+
+  it("REJECT mission réelle sans targetHosts (fail-closed)", () => {
+    const r = evaluateExecution(base({ targetHosts: [] }));
+    assert.equal(r.decision, "REJECT");
+    assert.equal(r.code, "TARGET_OUT_OF_SCOPE");
+  });
+
+  it("ALLOW hors RoE seulement avec roeScopeOverride", () => {
+    const r = evaluateExecution(
+      base({
+        targetHosts: ["example.com"],
+        roeScopeOverride: true,
+      }),
+    );
+    assert.equal(r.decision, "ALLOW");
   });
 });
 

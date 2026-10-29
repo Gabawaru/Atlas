@@ -2,7 +2,10 @@
  * Policy Guard input assembly for enqueue + worker re-gate.
  * Deterministic; no LLM. Worker must not trust enqueue-time ALLOW alone.
  */
-import { evaluateExecution } from "@atlas/policy-guard";
+import {
+  evaluateExecution,
+  isRoeScopeOverrideEnabled,
+} from "@atlas/policy-guard";
 import {
   isSubscriptionCommerciallyActive,
   type PolicyEvaluationInput,
@@ -64,6 +67,13 @@ export type BuildExecutionGateArgs = {
   } | null;
   approvalRouteConfigured: boolean;
   assetsCount: number;
+  /** FQDN des actifs liés au scope — allowlist RoE plateforme */
+  targetHosts?: string[];
+  /**
+   * Override RoE (gated / hors périmètre). Démo synthétique = override
+   * implicite pour fixtures hors Pragma ; missions réelles = env only.
+   */
+  roeScopeOverride?: boolean;
   connectorGuard: ConnectorGuardState;
   killSwitch: boolean;
   moduleId?: string;
@@ -84,6 +94,10 @@ export async function buildExecutionGateInput(
     .flatMap((r) => r.decisions)
     .find((d) => d.decision === "approved");
   const sub = args.subscription;
+  const roeScopeOverride = isRoeScopeOverrideEnabled(
+    process.env,
+    args.roeScopeOverride === true || mission.synthetic,
+  );
 
   const signedAuthzAttested =
     args.signedAuthzAttested !== undefined
@@ -126,6 +140,8 @@ export async function buildExecutionGateInput(
     tokenModuleIds: token?.moduleIds ?? [],
     scopeRevoked: !!scope?.revokedAt,
     targetInApprovedScope: args.assetsCount > 0,
+    targetHosts: args.targetHosts ?? [],
+    roeScopeOverride,
     connectorRequired: args.connectorGuard.connectorRequired,
     connectorPresent: args.connectorGuard.connectorPresent,
     connectorActive: args.connectorGuard.connectorActive,

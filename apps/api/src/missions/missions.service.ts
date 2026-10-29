@@ -607,12 +607,14 @@ export class MissionsService {
       WEB_PASSIVE_MODULE_ID,
     );
 
+    const targetHosts = assets.map((a) => a.normalized.toLowerCase());
     const gate = await evaluateMissionExecution({
       mission,
       now,
       subscription: sub,
       approvalRouteConfigured: routeOk,
       assetsCount: assets.length,
+      targetHosts,
       connectorGuard,
       killSwitch: await this.ops.isMaintenanceOn(),
     });
