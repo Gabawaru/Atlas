@@ -192,6 +192,8 @@ describe("AC suite — critères d'acceptation MVP", () => {
       const results = await runWebPassivePresence(
         [{ host: "a.example.com" }, { host: "b.example.com" }],
         {
+          // Fixture hosts — mission allowlist only (RoE gate covered elsewhere)
+          enforceRoePlatform: false,
           allowedHosts: new Set(["example.com"]),
           rateLimitPerMinute: 1000,
           expandCommonSubdomains: false,
@@ -210,6 +212,7 @@ describe("AC suite — critères d'acceptation MVP", () => {
     it("rate limit respecte un délai entre cibles", async () => {
       const sleeps: number[] = [];
       await runWebPassivePresence([{ host: "a.test" }, { host: "b.test" }], {
+        enforceRoePlatform: false,
         allowedHosts: new Set(["a.test", "b.test"]),
         rateLimitPerMinute: 60,
         expandCommonSubdomains: false,
