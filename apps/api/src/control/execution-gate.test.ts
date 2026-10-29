@@ -46,6 +46,8 @@ const okConnector = {
   connectorActive: true,
 };
 
+const inScopeHost = "console.pragma-serve.com";
+
 describe("execution-gate (worker re-gate inputs)", () => {
   const prevAuthz = process.env.ATLAS_AUTHZ;
   const prevKey = process.env.PRAGMA_SIGN_API_KEY;
@@ -68,10 +70,75 @@ describe("execution-gate (worker re-gate inputs)", () => {
       },
       approvalRouteConfigured: true,
       assetsCount: 1,
+      targetHosts: ["example.com"],
       connectorGuard: okConnector,
       killSwitch: false,
     });
     assert.equal(gate.decision, "ALLOW");
+  });
+
+  it("REJECT mission réelle si cible hors allowlist RoE", async () => {
+    delete process.env.PRAGMA_SIGN_API_KEY;
+    const gate = await evaluateMissionExecution({
+      mission: mission({
+        synthetic: false,
+        isRealMission: true,
+        ownerAuths: [
+          { status: "valid", scopeHash: "scope-abc", isStubSignature: false },
+        ],
+        approvalReqs: [
+          {
+            decisions: [
+              { decision: "approved", scopeHash: "scope-abc" },
+            ],
+          },
+        ],
+      }),
+      subscription: {
+        status: "active",
+        endsAt: null,
+        plan: { modulesEntitled: [WEB_PASSIVE_MODULE_ID] },
+      },
+      approvalRouteConfigured: true,
+      assetsCount: 1,
+      targetHosts: ["evil.example.com"],
+      connectorGuard: okConnector,
+      killSwitch: false,
+    });
+    assert.equal(gate.decision, "REJECT");
+    assert.equal(gate.code, "TARGET_OUT_OF_SCOPE");
+  });
+
+  it("REJECT mission réelle si cible gated", async () => {
+    delete process.env.PRAGMA_SIGN_API_KEY;
+    const gate = await evaluateMissionExecution({
+      mission: mission({
+        synthetic: false,
+        isRealMission: true,
+        ownerAuths: [
+          { status: "valid", scopeHash: "scope-abc", isStubSignature: false },
+        ],
+        approvalReqs: [
+          {
+            decisions: [
+              { decision: "approved", scopeHash: "scope-abc" },
+            ],
+          },
+        ],
+      }),
+      subscription: {
+        status: "active",
+        endsAt: null,
+        plan: { modulesEntitled: [WEB_PASSIVE_MODULE_ID] },
+      },
+      approvalRouteConfigured: true,
+      assetsCount: 1,
+      targetHosts: ["mikra.fr"],
+      connectorGuard: okConnector,
+      killSwitch: false,
+    });
+    assert.equal(gate.decision, "REJECT");
+    assert.equal(gate.code, "TARGET_GATED");
   });
 
   it("REJECT kill-switch même si enqueue aurait ALLOW", async () => {
@@ -184,6 +251,7 @@ describe("execution-gate (worker re-gate inputs)", () => {
       },
       approvalRouteConfigured: true,
       assetsCount: 1,
+      targetHosts: [inScopeHost],
       connectorGuard: okConnector,
       killSwitch: false,
     });
@@ -220,6 +288,7 @@ describe("execution-gate (worker re-gate inputs)", () => {
       },
       approvalRouteConfigured: true,
       assetsCount: 1,
+      targetHosts: [inScopeHost],
       connectorGuard: okConnector,
       killSwitch: false,
       signedAuthzAttested: true,

@@ -140,6 +140,8 @@ export type PolicyRejectCode =
   | "MODULE_NOT_IN_TOKEN"
   | "MODULE_OUT_OF_SCOPE"
   | "TARGET_OUT_OF_SCOPE"
+  /** Domaine client / marque section 5 RoE — exclu jusqu'à override */
+  | "TARGET_GATED"
   | "CONNECTOR_MISSING"
   | "CONNECTOR_REVOKED"
   | "POLICY_DENY"
@@ -179,6 +181,17 @@ export interface PolicyEvaluationInput {
   tokenModuleIds: string[];
   scopeRevoked: boolean;
   targetInApprovedScope: boolean;
+  /**
+   * Hôtes ciblés (FQDN) — contrôlés contre l'allowlist RoE plateforme.
+   * Mission réelle : obligatoire (fail-closed si absent / vide).
+   * Démo synthétique : optionnel ; si fourni, toujours évalué sauf override.
+   */
+  targetHosts?: string[];
+  /**
+   * Override opérateur (ATLAS_ROE_SCOPE_OVERRIDE ou go écrit) —
+   * seul moyen d'autoriser gated / hors périmètre RoE.
+   */
+  roeScopeOverride?: boolean;
   /** Connecteur requis pour le module (ex. présence web) */
   connectorRequired?: boolean;
   connectorPresent?: boolean;

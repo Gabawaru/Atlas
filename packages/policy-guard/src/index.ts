@@ -12,8 +12,29 @@ import type {
   PolicyEvaluationResult,
 } from "@atlas/shared";
 import { MODULE_WEB_PASSIVE } from "@atlas/shared";
+import {
+  evaluateRoeHosts,
+  isRoeScopeOverrideEnabled,
+} from "./roe-allowlist";
 
 export type { PolicyEvaluationInput, PolicyEvaluationResult };
+
+export {
+  evaluateRoeHost,
+  evaluateRoeHosts,
+  isRoeGatedHost,
+  isRoeInScopeHost,
+  isRoeScopeOverrideEnabled,
+  normalizeRoeHost,
+  ROE_ALLOWED_HOST_PATTERNS,
+  ROE_ALLOWED_HOSTS_EXPLICIT,
+  ROE_GATED_HOSTS,
+} from "./roe-allowlist";
+export type {
+  RoeHostEvaluateOptions,
+  RoeHostEvaluation,
+  RoeHostRejectCode,
+} from "./roe-allowlist";
 
 function reject(
   code: NonNullable<PolicyEvaluationResult["code"]>,
@@ -190,6 +211,23 @@ export function evaluateExecution(
       "TARGET_OUT_OF_SCOPE",
       "Cible hors périmètre approuvé — jamais d'exécution hors scope.",
     );
+  }
+
+  // Allowlist RoE plateforme (sections 3–5) — fail-closed hors override
+  const roeOverride = isRoeScopeOverrideEnabled(
+    process.env,
+    input.roeScopeOverride === true,
+  );
+  const declaredHosts = input.targetHosts;
+  if (input.isRealMission || (declaredHosts && declaredHosts.length > 0)) {
+    const hosts = declaredHosts ?? [];
+    const roe = evaluateRoeHosts(hosts, { override: roeOverride });
+    if (roe.decision === "REJECT") {
+      return reject(
+        roe.code ?? "TARGET_OUT_OF_SCOPE",
+        roe.reason,
+      );
+    }
   }
 
   if (input.connectorRequired) {

@@ -43,6 +43,7 @@ describe("Policy Guard + révocation connecteur", () => {
     tokenModuleIds: [MODULE_WEB_PASSIVE],
     scopeRevoked: false,
     targetInApprovedScope: true,
+    targetHosts: ["console.pragma-serve.com"],
     connectorRequired: true,
     connectorPresent: true,
     connectorActive: true,
