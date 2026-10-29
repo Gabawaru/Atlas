@@ -85,14 +85,26 @@ async function main() {
     env: process.env,
   });
 
+  // Windows: spawn("pnpm") needs pnpm.exe on PATH (pnpm.cmd alone → ENOENT).
+  // Piped stdio must be drained or Nest fills the pipe and never binds.
   const child = spawn("pnpm", ["exec", "tsx", "src/main.ts"], {
     cwd: API_ROOT,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  let apiLog = "";
+  child.stdout?.on("data", (chunk: Buffer | string) => {
+    apiLog += String(chunk);
+  });
+  child.stderr?.on("data", (chunk: Buffer | string) => {
+    apiLog += String(chunk);
+  });
+  child.on("error", (err) => {
+    console.error("API spawn error:", err.message);
+  });
 
   let ready = false;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     await sleep(500);
     try {
       const h = await fetch(`${BASE}/health`);
@@ -107,6 +119,9 @@ async function main() {
   if (!ready) {
     child.kill();
     console.error("API non démarrée");
+    if (apiLog.trim()) {
+      console.error(apiLog.trim().slice(-2000));
+    }
     process.exit(1);
   }
 
@@ -492,7 +507,21 @@ async function main() {
     console.error("❌ Smoke failed", e);
     process.exitCode = 1;
   } finally {
-    child.kill("SIGTERM");
+    // Windows: SIGTERM on the pnpm parent often leaves tsx/Nest alive and keeps
+    // this process open on piped stdio — force-kill the tree then exit.
+    try {
+      if (process.platform === "win32" && child.pid) {
+        spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } else {
+        child.kill("SIGTERM");
+      }
+    } catch {
+      child.kill();
+    }
+    setTimeout(() => process.exit(process.exitCode ?? 1), 500).unref();
   }
 }
 
