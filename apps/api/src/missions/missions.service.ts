@@ -660,7 +660,22 @@ export class MissionsService {
   }
 
   async issueToken(missionId: string, user: AuthUser) {
-    const mission = await this.get(missionId, this.requireUserTenantId(user));
+    // Staff approvers (circuit A) often have no tenantId — scope to the mission,
+    // same as transition() / approval.decide audit. Fail closed if mission missing.
+    let tenantId = user.tenantId;
+    if (!tenantId) {
+      const row = await this.prisma.mission.findUnique({
+        where: { id: missionId },
+        select: { tenantId: true },
+      });
+      if (!row?.tenantId) {
+        throw new BadRequestException(
+          "tenant requis — mission introuvable ou sans tenant pour issueToken",
+        );
+      }
+      tenantId = row.tenantId;
+    }
+    const mission = await this.get(missionId, tenantId);
     const scope = mission.scopeVersions[0];
     if (!scope) throw new BadRequestException("Scope manquant");
     const token = await this.prisma.authorizationToken.create({
