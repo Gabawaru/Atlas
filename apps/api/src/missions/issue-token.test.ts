@@ -80,6 +80,11 @@ function makeIssueTokenService(opts?: { missionExists?: boolean }) {
     },
   };
 
+  const mail = {
+    name: "mock",
+    send: async () => ({ id: "m", provider: "mock", isMock: true }),
+  };
+
   const svc = new MissionsService(
     prisma as never,
     audit as never,
@@ -88,6 +93,7 @@ function makeIssueTokenService(opts?: { missionExists?: boolean }) {
     {} as never,
     {} as never,
     {} as never,
+    mail as never,
   );
 
   return { svc, createdTokens, auditActions };
