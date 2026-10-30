@@ -31,6 +31,8 @@ import {
 import { ConnectorsService } from "../connectors/connectors.service";
 import { DeployService } from "../deploy/deploy.service";
 import { OpsService } from "../ops/ops.service";
+import { MAIL_PROVIDER, type MailProvider } from "../mail/mail-provider";
+import { safeNotify } from "../mail/notify";
 import { readFile } from "node:fs/promises";
 
 @Injectable()
@@ -48,6 +50,7 @@ export class MissionsService {
     private readonly deploy: DeployService,
     @Inject(OpsService)
     private readonly ops: OpsService,
+    @Inject(MAIL_PROVIDER) private readonly mail: MailProvider,
   ) {}
 
   private requireUserTenantId(user: AuthUser): string {
@@ -656,6 +659,33 @@ export class MissionsService {
         ownerAuthorizationId: owner.id,
         status: routeOk ? "pending" : "blocked_no_route",
       },
+    });
+
+    if (!routeOk) return;
+
+    const policies = await this.prisma.approvalRoutingPolicy.findMany({
+      where: {
+        enabled: true,
+        OR: [{ tenantId: mission.tenantId }, { orgWide: true }],
+      },
+      include: { staffGroup: true },
+    });
+    const memberIds = [
+      ...new Set(
+        policies.flatMap((p) => p.staffGroup?.memberIds ?? []).filter(Boolean),
+      ),
+    ];
+    const staff =
+      memberIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: memberIds } },
+            select: { email: true },
+          });
+    await safeNotify(this.mail, {
+      to: staff.map((s) => s.email),
+      subject: `[Atlas] Approbation en attente — ${mission.title}`,
+      text: `Mission ${missionId} nécessite une décision d'approbation (status pending).`,
     });
   }
 

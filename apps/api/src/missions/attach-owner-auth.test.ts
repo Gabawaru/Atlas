@@ -128,6 +128,11 @@ function makeService(opts: {
 
   const audit = { append: async () => undefined };
 
+  const mail = {
+    name: "mock",
+    send: async () => ({ id: "m", provider: "mock", isMock: true }),
+  };
+
   const svc = new MissionsService(
     prisma as never,
     audit as never,
@@ -136,6 +141,7 @@ function makeService(opts: {
     {} as never,
     {} as never,
     {} as never,
+    mail as never,
   );
 
   return { svc, providerCalls, createdAuths, getStatus: () => missionStatus };

@@ -15,6 +15,8 @@ import {
   matchExistingApprovers,
   parseHierarchyFile,
 } from "./hierarchy-import";
+import { MAIL_PROVIDER, type MailProvider } from "../mail/mail-provider";
+import { safeNotify } from "../mail/notify";
 
 @Injectable()
 export class ApprovalsService {
@@ -22,6 +24,7 @@ export class ApprovalsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(MissionsService) private readonly missions: MissionsService,
+    @Inject(MAIL_PROVIDER) private readonly mail: MailProvider,
   ) {}
 
   async listQueue() {
@@ -212,6 +215,16 @@ export class ApprovalsService {
       await this.missions.transition(mission.id, "A_APPROVED", user);
       await this.missions.issueToken(mission.id, user);
     }
+
+    const tenantMembers = await this.prisma.tenantMembership.findMany({
+      where: { tenantId: req.mission.tenantId },
+      include: { user: { select: { email: true } } },
+    });
+    await safeNotify(this.mail, {
+      to: tenantMembers.map((m) => m.user.email),
+      subject: `[Atlas] Décision d'approbation : ${decision}`,
+      text: `Mission ${req.missionId} — demande ${requestId} : ${decision}.`,
+    });
 
     return this.prisma.approvalRequest.findUnique({
       where: { id: requestId },

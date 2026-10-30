@@ -31,6 +31,8 @@ import {
 import { VulnService } from "../vuln/vuln.service";
 import { OpsService } from "../ops/ops.service";
 import { ConnectorsService } from "../connectors/connectors.service";
+import { MAIL_PROVIDER, type MailProvider } from "../mail/mail-provider";
+import { safeNotify } from "../mail/notify";
 
 @Injectable()
 export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
@@ -48,6 +50,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
     @Inject(VulnService) private readonly vuln: VulnService,
     @Inject(OpsService) private readonly ops: OpsService,
     @Inject(ConnectorsService) private readonly connectors: ConnectorsService,
+    @Inject(MAIL_PROVIDER) private readonly mail: MailProvider,
   ) {}
 
   async onModuleInit() {
@@ -570,6 +573,16 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         reportId: report.id,
         hashes: exports.contentHashes,
       },
+    });
+
+    const tenantMembers = await this.prisma.tenantMembership.findMany({
+      where: { tenantId: p.tenantId },
+      include: { user: { select: { email: true } } },
+    });
+    await safeNotify(this.mail, {
+      to: tenantMembers.map((m) => m.user.email),
+      subject: `[Atlas] Rapport disponible — ${mission.title}`,
+      text: `Mission ${p.missionId} terminée. Rapport ${report.id} disponible (evidence=${evidence.length}).`,
     });
 
     return { reportId: report.id, evidenceCount: evidence.length };
