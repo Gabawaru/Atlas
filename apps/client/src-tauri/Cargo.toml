@@ -1,7 +1,7 @@
 [package]
 name = "atlas-client-stub"
 version = "0.1.0"
-description = "Atlas desktop stub — shell Tauri 2 à brancher ; pas de binaire productisé ici"
+description = "Atlas desktop stub — shell Tauri 2 ; Windows remote-work/bin/Atlas.exe"
 edition = "2021"
 publish = false
 
