@@ -23,6 +23,18 @@ import {
   readArchiveFile,
   readGlobalArchive,
 } from "./archive.js";
+import {
+  COOKIE_NAME,
+  isAllowedEmail,
+  normalizeEmail,
+  signSession,
+  verifySession,
+  parseCookies,
+  sessionCookieHeader,
+  clearSessionCookieHeader,
+  allowedDomain,
+  allowedEmails,
+} from "./auth.js";
 
 ensureDirs();
 
@@ -37,12 +49,28 @@ if (!TOKEN) {
 
 const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: false }));
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
 });
+
+function tokenFromRequest(req) {
+  const header = req.get("authorization") || "";
+  const queryToken = typeof req.query.token === "string" ? req.query.token : "";
+  const bearer = header.toLowerCase().startsWith("bearer ")
+    ? header.slice(7).trim()
+    : "";
+  return bearer || queryToken || req.get("x-capture-token") || "";
+}
+
+function sessionFromRequest(req) {
+  const cookies = parseCookies(req.get("cookie"));
+  return verifySession(cookies[COOKIE_NAME]);
+}
 
 function requireAuth(req, res, next) {
   if (!TOKEN) {
@@ -50,23 +78,103 @@ function requireAuth(req, res, next) {
       error: "Server misconfigured: CAPTURE_CHAT_TOKEN not set",
     });
   }
-  const header = req.get("authorization") || "";
-  const queryToken = typeof req.query.token === "string" ? req.query.token : "";
-  const bearer = header.toLowerCase().startsWith("bearer ")
-    ? header.slice(7).trim()
-    : "";
-  const got = bearer || queryToken || req.get("x-capture-token") || "";
-  if (got !== TOKEN) {
-    return res.status(401).json({ error: "Unauthorized" });
+  const got = tokenFromRequest(req);
+  if (got && got === TOKEN) {
+    req.auth = { via: "token" };
+    return next();
   }
-  return next();
+  const session = sessionFromRequest(req);
+  if (session) {
+    req.auth = { via: "email", email: session.email };
+    return next();
+  }
+  return res.status(401).json({ error: "Unauthorized" });
+}
+
+function requirePageSession(req, res, next) {
+  if (tokenFromRequest(req) === TOKEN && TOKEN) {
+    req.auth = { via: "token" };
+    return next();
+  }
+  const session = sessionFromRequest(req);
+  if (session) {
+    req.auth = { via: "email", email: session.email };
+    return next();
+  }
+  const accept = req.get("accept") || "";
+  if (accept.includes("text/html") || req.path === "/" || req.path === "/index.html") {
+    return res.redirect("/login");
+  }
+  return res.status(401).json({ error: "Unauthorized" });
 }
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "capture-chat" });
 });
 
-app.use(express.static(PUBLIC_DIR));
+app.get("/login", (req, res) => {
+  if (sessionFromRequest(req)) return res.redirect("/");
+  res.sendFile(path.join(PUBLIC_DIR, "login.html"));
+});
+
+app.get("/api/session", (req, res) => {
+  const session = sessionFromRequest(req);
+  if (!session) return res.status(401).json({ ok: false });
+  return res.json({
+    ok: true,
+    email: session.email,
+    allowedDomain: allowedDomain(),
+  });
+});
+
+app.post("/api/login", (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!isAllowedEmail(email)) {
+    return res.status(403).json({
+      error: `Email non autorisé. Utilisez une adresse @${allowedDomain()} (ou une adresse Atlas connue).`,
+    });
+  }
+  try {
+    const token = signSession(email);
+    res.setHeader("Set-Cookie", sessionCookieHeader(token));
+    return res.json({ ok: true, email });
+  } catch {
+    return res.status(503).json({
+      error: "Server misconfigured: session secret missing",
+    });
+  }
+});
+
+app.post("/api/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", clearSessionCookieHeader());
+  res.json({ ok: true });
+});
+
+// Login assets are public; app shell requires email session (or shared token).
+app.get("/login.html", (_req, res) => {
+  res.redirect("/login");
+});
+app.get(["/styles.css", "/login.js"], (req, res, next) => {
+  return express.static(PUBLIC_DIR)(req, res, next);
+});
+
+app.get(["/", "/index.html"], requirePageSession, (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+app.get("/app.js", requirePageSession, (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "app.js"));
+});
+
+app.use(
+  express.static(PUBLIC_DIR, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("index.html") || filePath.endsWith("app.js")) {
+        // gated above; leftover static should not bypass
+      }
+    },
+  }),
+);
 
 // --- Captures ---
 app.post("/api/captures", requireAuth, upload.single("file"), (req, res) => {
@@ -199,4 +307,7 @@ app.get("/archive", requireAuth, (_req, res) => {
 app.listen(PORT, () => {
   console.log(`[capture-chat] listening on http://127.0.0.1:${PORT}`);
   console.log(`[capture-chat] data dir: ${path.resolve(process.env.DATA_DIR || "data")}`);
+  console.log(
+    `[capture-chat] email gate: @${allowedDomain()} + ${[...allowedEmails()].join(",")}`,
+  );
 });

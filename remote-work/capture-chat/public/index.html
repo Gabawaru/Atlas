@@ -12,13 +12,10 @@
       <p class="brand">Atlas Capture Chat</p>
       <p class="sub">Captures · chat · archive textuelle</p>
     </div>
-    <form id="auth-form" class="auth">
-      <label>
-        Token
-        <input id="token" type="password" autocomplete="off" placeholder="CAPTURE_CHAT_TOKEN" />
-      </label>
-      <button type="submit">Connecter</button>
-    </form>
+    <div class="session">
+      <span id="session-email" class="session-email">—</span>
+      <button type="button" id="logout" class="ghost">Déconnexion</button>
+    </div>
   </header>
 
   <main>

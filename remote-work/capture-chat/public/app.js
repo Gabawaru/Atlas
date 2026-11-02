@@ -1,20 +1,17 @@
 const $ = (id) => document.getElementById(id);
 
-const state = {
-  token: localStorage.getItem("captureChatToken") || "",
-};
-
-if (state.token) $("token").value = state.token;
-
-function authHeaders(extra = {}) {
-  return { Authorization: `Bearer ${state.token}`, ...extra };
-}
-
 async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (opts.json) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     ...opts,
-    headers: { ...(opts.headers || {}), ...authHeaders(opts.json ? { "Content-Type": "application/json" } : {}) },
+    credentials: "same-origin",
+    headers,
   });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${body}`);
@@ -24,11 +21,21 @@ async function api(path, opts = {}) {
   return res.text();
 }
 
-$("auth-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  state.token = $("token").value.trim();
-  localStorage.setItem("captureChatToken", state.token);
-  refreshAll();
+async function ensureSession() {
+  try {
+    const data = await api("/api/session");
+    $("session-email").textContent = data.email || "—";
+  } catch {
+    window.location.href = "/login";
+  }
+}
+
+$("logout").addEventListener("click", async () => {
+  try {
+    await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+  } finally {
+    window.location.href = "/login";
+  }
 });
 
 $("chat-form").addEventListener("submit", async (e) => {
@@ -42,14 +49,21 @@ $("chat-form").addEventListener("submit", async (e) => {
       fd.append("author", author);
       fd.append("text", text);
       fd.append("image", file);
-      await fetch("/api/chat", { method: "POST", headers: authHeaders(), body: fd }).then(async (r) => {
+      await fetch("/api/chat", {
+        method: "POST",
+        credentials: "same-origin",
+        body: fd,
+      }).then(async (r) => {
+        if (r.status === 401) {
+          window.location.href = "/login";
+          throw new Error("Unauthorized");
+        }
         if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
       });
     } else {
       await api("/api/chat", {
         method: "POST",
         json: true,
-        headers: {},
         body: JSON.stringify({ author, text }),
       });
     }
@@ -85,13 +99,12 @@ $("refresh-archive").addEventListener("click", () => refreshArchive());
 
 $("dl-global").addEventListener("click", (e) => {
   e.preventDefault();
-  if (!state.token) {
-    alert("Connecte d’abord avec le token.");
-    return;
-  }
-  // Fetch with auth then trigger download (anchor alone cannot send Bearer).
-  fetch("/api/archive.txt", { headers: authHeaders() })
+  fetch("/api/archive.txt", { credentials: "same-origin" })
     .then(async (r) => {
+      if (r.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Unauthorized");
+      }
       if (!r.ok) throw new Error(String(r.status));
       return r.blob();
     })
@@ -118,8 +131,7 @@ async function refreshChat() {
     if (m.imageUrl) {
       const img = document.createElement("img");
       img.alt = "chat image";
-      // authenticated image: blob fetch
-      fetch(m.imageUrl, { headers: authHeaders() })
+      fetch(m.imageUrl, { credentials: "same-origin" })
         .then((r) => r.blob())
         .then((b) => {
           img.src = URL.createObjectURL(b);
@@ -153,7 +165,7 @@ async function refreshCaptures() {
       a.textContent = `${c.name} (${c.size} B)`;
       a.addEventListener("click", (ev) => {
         ev.preventDefault();
-        fetch(c.url, { headers: authHeaders() })
+        fetch(c.url, { credentials: "same-origin" })
           .then((r) => r.blob())
           .then((b) => {
             const url = URL.createObjectURL(b);
@@ -184,7 +196,6 @@ async function refreshArchive() {
     li.appendChild(btn);
     list.appendChild(li);
   }
-  // default view: global concat
   const global = await api("/api/archive.txt");
   $("archive-view").textContent = global || "(empty)";
 }
@@ -197,7 +208,6 @@ function escapeHtml(s) {
 }
 
 async function refreshAll() {
-  if (!state.token) return;
   try {
     await Promise.all([refreshChat(), refreshCaptures(), refreshArchive()]);
   } catch (err) {
@@ -205,7 +215,7 @@ async function refreshAll() {
   }
 }
 
-if (state.token) refreshAll();
+ensureSession().then(refreshAll);
 setInterval(() => {
-  if (state.token) refreshAll().catch(() => {});
+  refreshAll().catch(() => {});
 }, 8000);
