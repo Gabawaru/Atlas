@@ -14,7 +14,7 @@
   Does NOT start any Cursor / agent worker.
 
 .PARAMETER RepoRoot
-  Atlas repo root. Default: two levels above this script (…/scripts/windows → repo).
+  Atlas repo root. Default: two levels above this script (.../scripts/windows -> repo).
 
 .PARAMETER SkipInstall
   Only run checklist (+ optional launch). Do not attempt installs.
@@ -90,10 +90,10 @@ function Get-Winget {
 function Invoke-WingetInstall([string]$Id, [string]$DisplayName) {
   $winget = Get-Winget
   if (-not $winget) {
-    Write-Info "winget not found — cannot auto-install $DisplayName."
+    Write-Info "winget not found - cannot auto-install $DisplayName."
     return $false
   }
-  Write-Info "Installing $DisplayName via winget ($Id)…"
+  Write-Info "Installing $DisplayName via winget ($Id)..."
   # --accept-* keeps this non-interactive when elevation already allows it.
   & $winget install --id $Id -e --accept-package-agreements --accept-source-agreements --disable-interactivity
   $code = $LASTEXITCODE
@@ -117,7 +117,7 @@ function Ensure-Node20 {
         Write-Info "Found $ver"
         return $true
       }
-      Write-Info "Found $ver (need >= $NodeMajorRequired) — upgrading…"
+      Write-Info "Found $ver (need >= $NodeMajorRequired) - upgrading..."
     }
   }
   if ($SkipInstall) { return $false }
@@ -130,7 +130,7 @@ function Ensure-Pnpm {
   Write-Step "pnpm $PnpmExact"
   Refresh-PathFromMachine
   if (-not (Test-Command "node")) {
-    Write-Info "Node missing — skip pnpm."
+    Write-Info "Node missing - skip pnpm."
     return $false
   }
   if ($SkipInstall) {
@@ -247,7 +247,7 @@ $results = [ordered]@{}
 
 function Set-Check([string]$Key, [bool]$Ok, [string]$Detail) {
   $results[$Key] = @{ Ok = $Ok; Detail = $Detail }
-  if ($Ok) { Write-Ok "$Key — $Detail" } else { Write-Fail "$Key — $Detail" }
+  if ($Ok) { Write-Ok "$Key - $Detail" } else { Write-Fail "$Key - $Detail" }
 }
 
 Write-Host ""
@@ -263,7 +263,7 @@ if (-not $SkipInstall) {
   [void](Ensure-ComposeStack)
   [void](Ensure-EnvAndDeps)
 } else {
-  Write-Step "SkipInstall set — checklist only"
+  Write-Step "SkipInstall set - checklist only"
 }
 
 Write-Step "Post-install checklist"
@@ -348,7 +348,7 @@ Set-Check "Redis 7 (compose)" $redisOk $redisDetail
 
 # .env + node_modules
 $envOk = Test-Path (Join-Path $RepoRoot ".env")
-Set-Check ".env present" $envOk $(if ($envOk) { ".env" } else { "missing — copy .env.example" })
+Set-Check ".env present" $envOk $(if ($envOk) { ".env" } else { "missing - copy .env.example" })
 
 $modsOk = Test-Path (Join-Path $RepoRoot "node_modules")
 Set-Check "pnpm install (node_modules)" $modsOk $(if ($modsOk) { "node_modules present" } else { "missing" })
@@ -362,12 +362,12 @@ Write-Host ""
 if ($allOk) {
   Write-Host "Checklist: ALL PASS" -ForegroundColor Green
 } else {
-  Write-Host "Checklist: SOME FAILURES — fix items above and re-run." -ForegroundColor Yellow
+  Write-Host "Checklist: SOME FAILURES - fix items above and re-run." -ForegroundColor Yellow
   Write-Host "Common Windows blocker: Docker Desktop must be installed AND running on a real Windows host (WSL2 backend)." -ForegroundColor Yellow
 }
 
 if ($allOk -and -not $SkipLaunch) {
-  Write-Step "Launch Atlas UI (pnpm $LaunchScript) — not an agent worker"
+  Write-Step "Launch Atlas UI (pnpm $LaunchScript) - not an agent worker"
   Write-Info "API http://localhost:3001/v1/health | admin :3000 | client :3002"
   Write-Info "Press Ctrl+C in this window to stop the dev servers."
   Push-Location $RepoRoot
@@ -378,7 +378,7 @@ if ($allOk -and -not $SkipLaunch) {
     Pop-Location
   }
 } elseif ($allOk -and $SkipLaunch) {
-  Write-Info "SkipLaunch set — start UIs later with: pnpm dev"
+  Write-Info "SkipLaunch set - start UIs later with: pnpm dev"
 }
 
 if (-not $allOk) { exit 1 }
