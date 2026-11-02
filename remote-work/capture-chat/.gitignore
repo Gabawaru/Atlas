@@ -1,0 +1,10 @@
+node_modules/
+data/captures/
+data/chat/
+data/archive/
+!data/**/.gitkeep
+.env
+*.log
+client-windows/capture-chat.exe
+client-windows/capture-chat-linux
+# Prebuilt Windows binary lives in bin/ (committed for Gab).
