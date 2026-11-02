@@ -43,6 +43,16 @@ docs/             Guides FR + exemples de rapports FICTIFS
 - [pnpm](https://pnpm.io) 9 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
 - Docker (Postgres + Redis) — Redis **requis** pour la file d’exécution
 
+### Windows (one-shot)
+
+From repo root (real Windows host — Docker Desktop required):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\Install-AtlasPrereqs.ps1
+```
+
+Installs/verifies Node 20 + pnpm 9.15.0 + Docker compose (Postgres 16 / Redis 7), prints a pass/fail checklist, then launches `pnpm dev`. Does **not** start any Cursor/agent worker. Details: [`scripts/windows/README.md`](scripts/windows/README.md).
+
 ## Checklist install (courte)
 
 ```bash
