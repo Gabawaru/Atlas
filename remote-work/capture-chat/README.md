@@ -18,8 +18,21 @@ remote-work/capture-chat/
 
 ## Auth
 
-Shared bearer token via env `CAPTURE_CHAT_TOKEN` (never commit real values).  
-Send `Authorization: Bearer <token>` (or `X-Capture-Token`).
+**Web UI:** email-only login (no password). Allowed: `*@atlas-secu.com` plus configured extras (`gabriel@` / `ops@` atlas-secu.com by default). Session = HttpOnly cookie.
+
+**Windows exe / API clients:** shared bearer `CAPTURE_CHAT_TOKEN` (never commit real values).  
+Send `Authorization: Bearer <token>` (or `X-Capture-Token`). Exe does **not** use the email login.
+
+Env names: `CAPTURE_CHAT_TOKEN`, `CAPTURE_CHAT_SESSION_SECRET`, `CAPTURE_CHAT_ALLOWED_DOMAIN`, `CAPTURE_CHAT_ALLOWED_EMAILS`, `COOKIE_SECURE`.
+
+## Public URLs (intended)
+
+| Role | URL |
+|------|-----|
+| Atlas principal | https://cultivationparadise.com/atlas-principal |
+| Atlas secondaire test | https://cultivationparadise.com/atlas-secondaire-test |
+
+Hosting/reorg onto those paths is owned separately (top-level principal/test folders). This package remains the capture-chat app source under `remote-work/capture-chat/` until that land.
 
 ## API (MVP)
 
