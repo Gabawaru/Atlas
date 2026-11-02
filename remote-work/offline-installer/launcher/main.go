@@ -1,16 +1,20 @@
 // AtlasLocal — Windows launcher for Gab workflow WITHOUT Cursor / agent worker.
 //
 // Cross-compile:
-//   CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/AtlasLocal.exe .
+//
+//	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/AtlasLocal.exe .
 //
 // Commands:
-//   AtlasLocal.exe install   — clone Atlas (if missing), ensure .env from example
-//   AtlasLocal.exe update    — git fetch + pull (preserves .env)
-//   AtlasLocal.exe start     — docker compose up -d + pnpm install + demo smoke hint
-//   AtlasLocal.exe stop      — docker compose stop
-//   AtlasLocal.exe status    — show install dir, git HEAD, docker/node presence
-//   AtlasLocal.exe watch     — loop: update then start; poll every ATLAS_WATCH_SECONDS (default 300)
-//   AtlasLocal.exe           — same as status, then print help
+//
+//	AtlasLocal.exe install          — clone Atlas (if missing), ensure .env from example
+//	AtlasLocal.exe update           — git fetch + pull (preserves .env)
+//	AtlasLocal.exe start            — docker compose up -d + pnpm install + start api/client
+//	AtlasLocal.exe stop             — stop api/client + docker compose stop
+//	AtlasLocal.exe status           — show install dir, git HEAD, upstream, services
+//	AtlasLocal.exe watch [seconds]  — loop: fetch/compare → pull if ahead → rebuild → restart
+//	AtlasLocal.exe                  — same as status, then print help
+//
+// Watch auto-update (Musk-minimal): fetch → compare HEAD vs origin/<branch> → pull → pnpm → restart.
 package main
 
 import (
@@ -28,13 +32,29 @@ const (
 	defaultRepoURL = "https://github.com/Gabawaru/Atlas.git"
 	defaultBranch  = "main"
 	dirName        = "Atlas"
+	stateDirName   = ".atlaslocal"
 )
+
+// Managed local services restarted after a successful pull.
+var defaultServices = []serviceSpec{
+	{name: "api", args: []string{"pnpm", "dev:api"}},
+	{name: "client", args: []string{"pnpm", "dev:client"}},
+}
+
+type serviceSpec struct {
+	name string
+	args []string
+}
 
 func main() {
 	args := os.Args[1:]
 	cmd := "status"
 	if len(args) > 0 {
 		cmd = strings.ToLower(args[0])
+	}
+	rest := []string{}
+	if len(args) > 1 {
+		rest = args[1:]
 	}
 
 	root, err := installRoot()
@@ -48,13 +68,13 @@ func main() {
 	case "update":
 		must(doUpdate(root))
 	case "start":
-		must(doStart(root))
+		must(doStart(root, true))
 	case "stop":
 		must(doStop(root))
 	case "status":
 		must(doStatus(root))
 	case "watch":
-		must(doWatch(root))
+		must(doWatch(root, rest))
 	case "help", "-h", "--help":
 		printHelp()
 	default:
@@ -68,16 +88,26 @@ func printHelp() {
 	fmt.Println(`AtlasLocal — run Atlas on Windows without Cursor / "agent worker start"
 
 Usage:
-  AtlasLocal.exe install | update | start | stop | status | watch
+  AtlasLocal.exe install | update | start | stop | status | watch [seconds]
 
 Install dir (override with ATLAS_HOME):
   %USERPROFILE%\Atlas
 
-Update path (phone → git push → PC):
-  AtlasLocal.exe watch
-  or Task Scheduler: AtlasLocal.exe update && AtlasLocal.exe start
+Auto-update (phone → git push → PC):
+  AtlasLocal.exe watch          # poll every ATLAS_WATCH_SECONDS (default 300)
+  AtlasLocal.exe watch 60       # poll every 60s (min 30)
+  or Task Scheduler: Register-AtlasWatchTask.ps1
 
-Prereqs on the PC (not bundled — too large for offline zip):
+Watch loop: fetch → compare → pull only if origin advanced → pnpm install → restart api+client.
+
+Env:
+  ATLAS_HOME            install root (default %USERPROFILE%\Atlas)
+  ATLAS_REPO_URL        clone URL (default https://github.com/Gabawaru/Atlas.git)
+  ATLAS_BRANCH          branch to track (default main)
+  ATLAS_WATCH_SECONDS   watch poll interval when no [seconds] arg (default 300, min 30)
+  ATLAS_SERVICES        comma list: api,client (default both). Empty = docker/pnpm only
+
+Prereqs on the PC (not bundled):
   Git, Node.js ≥ 20, pnpm 9, Docker Desktop (Postgres 16 + Redis 7)
 
 Secrets: paste PRAGMA_SIGN_API_KEY / RESEND_API_KEY only into %USERPROFILE%\Atlas\.env`)
@@ -92,6 +122,10 @@ func installRoot() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, dirName), nil
+}
+
+func stateDir(root string) string {
+	return filepath.Join(root, stateDirName)
 }
 
 func doInstall(root string) error {
@@ -120,18 +154,37 @@ func doUpdate(root string) error {
 		return fmt.Errorf("no clone at %s — run install first", root)
 	}
 	branch := envOr("ATLAS_BRANCH", defaultBranch)
-	fmt.Printf("Updating %s…\n", root)
+	fmt.Printf("Updating %s (origin/%s)…\n", root, branch)
 	if err := run(root, "git", "fetch", "origin", branch); err != nil {
 		return err
 	}
-	// Preserve local .env; discard other dirty tracked files only if clean strategy requested.
+	// Preserve local .env; ff-only refuses divergent local commits.
 	if err := run(root, "git", "pull", "--ff-only", "origin", branch); err != nil {
 		return fmt.Errorf("git pull failed (local commits/conflicts?): %w", err)
 	}
 	return ensureEnv(root)
 }
 
-func doStart(root string) error {
+// upstreamChanged fetches origin/<branch> and reports whether remote SHA ≠ local HEAD.
+func upstreamChanged(root string) (changed bool, local, remote string, err error) {
+	branch := envOr("ATLAS_BRANCH", defaultBranch)
+	if err = runQuiet(root, "git", "fetch", "origin", branch); err != nil {
+		return false, "", "", err
+	}
+	local, err = output(root, "git", "rev-parse", "HEAD")
+	if err != nil {
+		return false, "", "", err
+	}
+	remote, err = output(root, "git", "rev-parse", "origin/"+branch)
+	if err != nil {
+		return false, strings.TrimSpace(local), "", err
+	}
+	local = strings.TrimSpace(local)
+	remote = strings.TrimSpace(remote)
+	return local != remote, local, remote, nil
+}
+
+func doStart(root string, startSvcs bool) error {
 	if _, err := os.Stat(filepath.Join(root, "package.json")); err != nil {
 		return fmt.Errorf("Atlas not installed at %s — run install", root)
 	}
@@ -147,26 +200,27 @@ func doStart(root string) error {
 	}
 	fmt.Println("pnpm install…")
 	if err := run(root, "pnpm", "install"); err != nil {
-		// Fallback: corepack then retry once
 		_ = run(root, "corepack", "enable")
 		_ = run(root, "corepack", "prepare", "pnpm@9.15.0", "--activate")
 		if err2 := run(root, "pnpm", "install"); err2 != nil {
 			return err2
 		}
 	}
-	fmt.Println()
-	fmt.Println("Stack ready. In separate terminals (or leave these running):")
-	fmt.Printf("  cd %s\n", root)
-	fmt.Println("  pnpm demo:smoke")
-	fmt.Println("  pnpm dev:api      # :3001")
-	fmt.Println("  pnpm dev:client   # :3002")
-	fmt.Println("  pnpm dev:admin    # :3000")
-	fmt.Println()
+	if startSvcs {
+		if err := restartServices(root); err != nil {
+			return err
+		}
+	} else {
+		fmt.Println()
+		fmt.Println("Stack deps ready. Start services with: AtlasLocal.exe start")
+		fmt.Printf("  or manually: cd %s && pnpm dev:api / pnpm dev:client\n", root)
+	}
 	fmt.Println("No Cursor. No \"agent worker start\". Keys stay in .env only.")
 	return nil
 }
 
 func doStop(root string) error {
+	stopServices(root)
 	if _, err := os.Stat(filepath.Join(root, "docker-compose.yml")); err != nil {
 		return fmt.Errorf("no docker-compose at %s", root)
 	}
@@ -177,6 +231,7 @@ func doStop(root string) error {
 func doStatus(root string) error {
 	fmt.Printf("OS: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	fmt.Printf("ATLAS_HOME: %s\n", root)
+	fmt.Printf("ATLAS_BRANCH: %s\n", envOr("ATLAS_BRANCH", defaultBranch))
 	printTool("git", "git", "version")
 	printTool("node", "node", "-v")
 	printTool("pnpm", "pnpm", "-v")
@@ -190,6 +245,11 @@ func doStatus(root string) error {
 		if err == nil {
 			fmt.Printf("git branch: %s\n", strings.TrimSpace(br))
 		}
+		branch := envOr("ATLAS_BRANCH", defaultBranch)
+		rem, err := output(root, "git", "rev-parse", "--short", "origin/"+branch)
+		if err == nil {
+			fmt.Printf("origin/%s: %s\n", branch, strings.TrimSpace(rem))
+		}
 	} else {
 		fmt.Println("git: not cloned yet (run install)")
 	}
@@ -199,32 +259,225 @@ func doStatus(root string) error {
 	} else {
 		fmt.Println(".env: missing — copy from .env.example and paste keys locally")
 	}
+	for _, svc := range configuredServices() {
+		pid, alive := serviceStatus(root, svc.name)
+		if pid == 0 {
+			fmt.Printf("service %s: not started\n", svc.name)
+		} else if alive {
+			fmt.Printf("service %s: running (pid %d)\n", svc.name, pid)
+		} else {
+			fmt.Printf("service %s: stale pid %d (not running)\n", svc.name, pid)
+		}
+	}
 	return nil
 }
 
-func doWatch(root string) error {
+func doWatch(root string, rest []string) error {
+	sec := watchInterval(rest)
+	branch := envOr("ATLAS_BRANCH", defaultBranch)
+	fmt.Printf("Watch mode every %ds on origin/%s — Ctrl+C to stop.\n", sec, branch)
+	fmt.Println("Loop: fetch → compare → pull if ahead → rebuild → restart api+client.")
+
+	booted := false
+	for {
+		if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
+			fmt.Println("No clone — install…")
+			if err := doInstall(root); err != nil {
+				fmt.Fprintf(os.Stderr, "install: %v\n", err)
+				time.Sleep(time.Duration(sec) * time.Second)
+				continue
+			}
+			if err := doStart(root, true); err != nil {
+				fmt.Fprintf(os.Stderr, "start: %v\n", err)
+			} else {
+				booted = true
+			}
+			time.Sleep(time.Duration(sec) * time.Second)
+			continue
+		}
+
+		changed, local, remote, err := upstreamChanged(root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fetch/compare: %v\n", err)
+			time.Sleep(time.Duration(sec) * time.Second)
+			continue
+		}
+
+		shortLocal := shortSHA(local)
+		shortRemote := shortSHA(remote)
+
+		if !booted {
+			fmt.Printf("First boot at %s — ensuring stack + services…\n", shortLocal)
+			if err := doStart(root, true); err != nil {
+				fmt.Fprintf(os.Stderr, "start: %v\n", err)
+			} else {
+				booted = true
+			}
+		} else if changed {
+			fmt.Printf("Upstream advanced %s → %s — pulling…\n", shortLocal, shortRemote)
+			if err := doUpdate(root); err != nil {
+				fmt.Fprintf(os.Stderr, "update: %v\n", err)
+			} else if err := doStart(root, true); err != nil {
+				fmt.Fprintf(os.Stderr, "restart: %v\n", err)
+			} else {
+				fmt.Println("Updated and restarted.")
+			}
+		} else {
+			fmt.Printf("Up to date (%s). Checking services…\n", shortLocal)
+			ensureServices(root)
+		}
+
+		time.Sleep(time.Duration(sec) * time.Second)
+	}
+}
+
+func watchInterval(rest []string) int {
 	sec := 300
 	if v := strings.TrimSpace(os.Getenv("ATLAS_WATCH_SECONDS")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 30 {
 			sec = n
 		}
 	}
-	fmt.Printf("Watch mode every %ds — Ctrl+C to stop. Phone push → this PC pulls.\n", sec)
-	for {
-		if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
-			if err := doInstall(root); err != nil {
-				fmt.Fprintf(os.Stderr, "install: %v\n", err)
-			}
-		} else {
-			if err := doUpdate(root); err != nil {
-				fmt.Fprintf(os.Stderr, "update: %v\n", err)
-			}
+	if len(rest) > 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(rest[0])); err == nil && n >= 30 {
+			sec = n
 		}
-		if err := doStart(root); err != nil {
-			fmt.Fprintf(os.Stderr, "start: %v\n", err)
-		}
-		time.Sleep(time.Duration(sec) * time.Second)
 	}
+	return sec
+}
+
+func configuredServices() []serviceSpec {
+	raw := strings.TrimSpace(os.Getenv("ATLAS_SERVICES"))
+	if raw == "" {
+		// Unset → default both. Explicit empty via ATLAS_SERVICES=- means none.
+		if _, set := os.LookupEnv("ATLAS_SERVICES"); set {
+			return nil
+		}
+		return defaultServices
+	}
+	if raw == "-" || raw == "none" {
+		return nil
+	}
+	want := map[string]bool{}
+	for _, p := range strings.Split(raw, ",") {
+		want[strings.ToLower(strings.TrimSpace(p))] = true
+	}
+	var out []serviceSpec
+	for _, svc := range defaultServices {
+		if want[svc.name] {
+			out = append(out, svc)
+		}
+	}
+	return out
+}
+
+func restartServices(root string) error {
+	svcs := configuredServices()
+	if len(svcs) == 0 {
+		fmt.Println("ATLAS_SERVICES empty — skipping api/client process manage.")
+		return nil
+	}
+	stopServices(root)
+	for _, svc := range svcs {
+		if err := startService(root, svc); err != nil {
+			return fmt.Errorf("start %s: %w", svc.name, err)
+		}
+	}
+	return nil
+}
+
+func ensureServices(root string) {
+	for _, svc := range configuredServices() {
+		pid, alive := serviceStatus(root, svc.name)
+		if alive {
+			continue
+		}
+		if pid != 0 {
+			fmt.Printf("service %s dead — restarting…\n", svc.name)
+		} else {
+			fmt.Printf("service %s missing — starting…\n", svc.name)
+		}
+		if err := startService(root, svc); err != nil {
+			fmt.Fprintf(os.Stderr, "service %s: %v\n", svc.name, err)
+		}
+	}
+}
+
+func stopServices(root string) {
+	// Always clear known pid files so orphans do not survive ATLAS_SERVICES changes.
+	for _, svc := range defaultServices {
+		stopService(root, svc.name)
+	}
+}
+
+func pidFile(root, name string) string {
+	return filepath.Join(stateDir(root), name+".pid")
+}
+
+func logFile(root, name string) string {
+	return filepath.Join(stateDir(root), name+".log")
+}
+
+func serviceStatus(root, name string) (pid int, alive bool) {
+	b, err := os.ReadFile(pidFile(root, name))
+	if err != nil {
+		return 0, false
+	}
+	pid, err = strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 {
+		return 0, false
+	}
+	return pid, processAlive(pid)
+}
+
+func stopService(root, name string) {
+	pid, alive := serviceStatus(root, name)
+	_ = os.Remove(pidFile(root, name))
+	if pid == 0 {
+		return
+	}
+	if !alive {
+		return
+	}
+	fmt.Printf("Stopping %s (pid %d)…\n", name, pid)
+	killProcessTree(pid)
+}
+
+func startService(root string, svc serviceSpec) error {
+	if err := os.MkdirAll(stateDir(root), 0o755); err != nil {
+		return err
+	}
+	stopService(root, svc.name)
+
+	lf, err := os.OpenFile(logFile(root, svc.name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(svc.args[0], svc.args[1:]...)
+	cmd.Dir = root
+	cmd.Stdout = lf
+	cmd.Stderr = lf
+	cmd.Stdin = nil
+	setDetached(cmd)
+
+	if err := cmd.Start(); err != nil {
+		_ = lf.Close()
+		return err
+	}
+	pid := cmd.Process.Pid
+	if err := os.WriteFile(pidFile(root, svc.name), []byte(strconv.Itoa(pid)+"\n"), 0o644); err != nil {
+		_ = cmd.Process.Kill()
+		_ = lf.Close()
+		return err
+	}
+	// Reap so we don't leave zombies; log file stays open via inherited fd.
+	go func() {
+		_ = cmd.Wait()
+		_ = lf.Close()
+	}()
+	fmt.Printf("Started %s (pid %d) — log %s\n", svc.name, pid, logFile(root, svc.name))
+	return nil
 }
 
 func ensureEnv(root string) error {
@@ -296,6 +549,14 @@ func run(dir string, name string, args ...string) error {
 	return c.Run()
 }
 
+func runQuiet(dir string, name string, args ...string) error {
+	c := exec.Command(name, args...)
+	c.Dir = dir
+	c.Stdout = nil
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
 func output(dir string, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = dir
@@ -308,6 +569,14 @@ func envOr(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func shortSHA(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
 }
 
 func must(err error) {

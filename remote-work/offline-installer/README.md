@@ -30,8 +30,10 @@ Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git
 ### Updates (phone → git push → PC)
 
 - Manual: **Update Atlas** shortcut / `AtlasLocal.exe update`
-- Loop: **Watch updates** / `AtlasLocal.exe watch` (default every 300s; override `ATLAS_WATCH_SECONDS`)
-- Optional Task Scheduler: `scripts\Register-AtlasWatchTask.ps1`
+- Auto-update loop: **Watch updates** / `AtlasLocal.exe watch` (or `watch 60`)
+  - Each tick: `git fetch` → compare `HEAD` vs `origin/<branch>` → **pull only if ahead** → `pnpm install` → **restart api + client**
+  - Interval: `ATLAS_WATCH_SECONDS` (default `300`, min `30`) or positional `watch [seconds]`
+- Optional Task Scheduler: `scripts\Register-AtlasWatchTask.ps1` (runs `watch`)
 
 ### Stop
 
@@ -64,9 +66,23 @@ Requires: Go ≥ 1.22, `makensis` (NSIS), `zip`.
 
 ## Env overrides
 
-| Var | Default |
-|-----|---------|
-| `ATLAS_HOME` | `%USERPROFILE%\Atlas` |
-| `ATLAS_REPO_URL` | `https://github.com/Gabawaru/Atlas.git` |
-| `ATLAS_BRANCH` | `main` |
-| `ATLAS_WATCH_SECONDS` | `300` |
+| Var | Default | Notes |
+|-----|---------|-------|
+| `ATLAS_HOME` | `%USERPROFILE%\Atlas` | Clone + `.env` root |
+| `ATLAS_REPO_URL` | `https://github.com/Gabawaru/Atlas.git` | Used by `install` |
+| `ATLAS_BRANCH` | `main` | Branch `watch`/`update` track |
+| `ATLAS_WATCH_SECONDS` | `300` | Poll interval (min 30); override with `watch 60` |
+| `ATLAS_SERVICES` | `api,client` | Managed processes. Set to `-` or `none` to skip |
+
+## Commands
+
+| Command | What it does |
+|---------|----------------|
+| `install` | Clone (or update if present), seed `.env` from example |
+| `update` | `git fetch` + `pull --ff-only` (preserves `.env`) |
+| `start` | `docker compose up -d` + `pnpm install` + start api/client |
+| `stop` | Stop managed api/client + `docker compose stop` |
+| `status` | Tools, HEAD, `origin/<branch>`, service PIDs |
+| `watch [seconds]` | Auto-update loop (fetch → compare → pull → rebuild → restart) |
+
+Managed service logs/PIDs live under `%ATLAS_HOME%\.atlaslocal\` (`api.pid` / `api.log`, etc.).
