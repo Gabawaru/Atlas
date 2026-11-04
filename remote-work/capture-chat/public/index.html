@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Atlas Capture Chat</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="brand">Atlas Capture Chat</p>
+      <p class="sub">Captures · chat · archive textuelle</p>
+    </div>
+    <div class="session">
+      <span id="session-email" class="session-email">—</span>
+      <button type="button" id="logout" class="ghost">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="chat-section" aria-labelledby="chat-title">
+      <h1 id="chat-title">Chat</h1>
+      <p class="hint">Colle du terminal / notes. L’agent répond (ex. « OK, j’ai vérifié »). Image optionnelle.</p>
+      <div id="messages" class="messages"></div>
+      <form id="chat-form" class="chat-form">
+        <label>
+          Auteur
+          <input id="author" value="gab" />
+        </label>
+        <label class="grow">
+          Message
+          <textarea id="text" rows="3" placeholder="colle ici…"></textarea>
+        </label>
+        <label>
+          Image
+          <input id="image" type="file" accept="image/*" />
+        </label>
+        <button type="submit">Envoyer</button>
+      </form>
+    </section>
+
+    <section id="captures-section" aria-labelledby="cap-title">
+      <h1 id="cap-title">Captures</h1>
+      <p class="hint">Fichiers reçus du client Windows, groupés par task name. « Done » recycle (supprime) les fichiers.</p>
+      <div id="tasks" class="tasks"></div>
+      <form id="done-form" class="row">
+        <label class="grow">
+          Marquer done
+          <input id="done-task" placeholder="task name" />
+        </label>
+        <button type="submit">Done → delete captures</button>
+      </form>
+    </section>
+
+    <section id="archive" aria-labelledby="arch-title">
+      <h1 id="arch-title">Archive (traçabilité)</h1>
+      <p class="hint">Journal append-only : captures, chat, create/done/delete. Pas de secrets.</p>
+      <div class="row">
+        <a id="dl-global" href="#">Télécharger archive.txt</a>
+        <button type="button" id="refresh-archive">Rafraîchir</button>
+      </div>
+      <ul id="archive-files" class="file-list"></ul>
+      <pre id="archive-view" class="archive-view">—</pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
