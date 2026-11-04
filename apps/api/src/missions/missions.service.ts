@@ -443,18 +443,21 @@ export class MissionsService {
   }
 
   /**
-   * Bind an already-signed Pragma Sign envelope to this mission.
-   * Polls getStatus only — never createEnvelope / documents /request (no outbound email).
+   * Bind an already-signed envelope to this mission.
+   * - Paradise: verify `paradiseAttestation` HMAC (drawn signature) — no Pragma key.
+   * - Pragma / other: poll getStatus only — never createEnvelope / documents /request.
    */
   async attachExistingOwnerAuth(
     missionId: string,
     user: AuthUser,
-    args: { signatureEnvelopeId: string; signerLabel?: string },
+    args: {
+      signatureEnvelopeId?: string;
+      paradiseAttestation?: string;
+      signerLabel?: string;
+    },
   ) {
-    const envelopeId = args.signatureEnvelopeId?.trim();
-    if (!envelopeId) {
-      throw new BadRequestException("signatureEnvelopeId requis");
-    }
+    const paradiseToken = args.paradiseAttestation?.trim();
+    let envelopeId = args.signatureEnvelopeId?.trim() ?? "";
     const signerLabel =
       args.signerLabel?.trim() || user.displayName || user.email;
 
@@ -464,6 +467,112 @@ export class MissionsService {
     if (scope.revokedAt) {
       throw new BadRequestException(
         "Périmètre révoqué — mettez à jour le RoE puis re-signez.",
+      );
+    }
+
+    // Paradise drawn-signature attestation path
+    if (paradiseToken) {
+      const paradise = this.signatures as SignatureProvider & {
+        ingestAttestation?: (token: string) => {
+          envelopeId: string;
+          status: string;
+          payload: { signerName: string; person: string };
+        };
+      };
+      if (typeof paradise.ingestAttestation !== "function") {
+        throw new BadRequestException(
+          "Provider Signature actuel n'accepte pas les attestations Paradise — définir ATLAS_PARADISE_AUTHZ_SECRET.",
+        );
+      }
+      let ingested;
+      try {
+        ingested = paradise.ingestAttestation(paradiseToken);
+      } catch (e) {
+        throw new BadRequestException(
+          e instanceof Error ? e.message : "Attestation Paradise invalide",
+        );
+      }
+      envelopeId = ingested.envelopeId;
+      const artifact = await this.signatures.fetchArtifact(envelopeId);
+      if (artifact.isMock) {
+        throw new BadRequestException(
+          "Impossible d'attacher une signature stub/mock.",
+        );
+      }
+
+      if (mission.status === "PREP_READY") {
+        await this.transition(missionId, "AUTH_PENDING", user);
+      }
+
+      const label =
+        args.signerLabel?.trim() ||
+        ingested.payload.signerName ||
+        signerLabel;
+
+      const authRow = await this.prisma.ownerAuthorization.create({
+        data: {
+          missionId,
+          scopeVersionId: scope.id,
+          scopeHash: scope.scopeHash,
+          status: "valid",
+          signerLabel: label,
+          counterpartyLabel: this.ATLAS_COUNTERPARTY.name,
+          counterpartyEmail: this.ATLAS_COUNTERPARTY.email,
+          ownerSignedAt: new Date(),
+          counterpartySignedAt: new Date(),
+          signatureArtifactRef: artifact.artifactRef,
+          isStubSignature: false,
+          signatureProvider: this.signatures.name,
+          signatureEnvelopeId: envelopeId,
+          signatureStatus: "signed",
+        },
+      });
+
+      await this.audit.append({
+        tenantId: mission.tenantId,
+        actorId: user.userId,
+        action: "signature.owner.attach",
+        objectType: "owner_authorization",
+        objectId: authRow.id,
+        payload: {
+          provider: this.signatures.name,
+          envelopeId,
+          paradisePerson: ingested.payload.person,
+          isMock: false,
+          attached: true,
+          via: "paradise-attestation",
+          scopeHash: scope.scopeHash,
+          scopeVersion: scope.version,
+        },
+      });
+
+      await this.transition(missionId, "AUTH_VALID", user);
+
+      const routeParadise = await this.hasApprovalRoute(mission.tenantId);
+      const nextParadise = nextAfterAuthValid({
+        isRealMission: mission.isRealMission,
+        isSyntheticDemo: mission.synthetic,
+        approvalRouteConfigured: routeParadise,
+      });
+
+      if (nextParadise.status === "BLOCKED") {
+        await this.transition(missionId, "BLOCKED", user, {
+          blockedReason: nextParadise.blockedReason,
+        });
+      } else if (nextParadise.status === "A_APPROVAL_PENDING") {
+        await this.transition(missionId, "A_APPROVAL_PENDING", user);
+        await this.createApprovalRequest(missionId, user, routeParadise);
+      } else if (nextParadise.status === "A_SKIPPED_DEMO") {
+        await this.transition(missionId, "A_SKIPPED_DEMO", user);
+        await this.issueToken(missionId, user);
+      }
+
+      return this.get(missionId, this.requireUserTenantId(user));
+    }
+
+    if (!envelopeId) {
+      throw new BadRequestException(
+        "signatureEnvelopeId ou paradiseAttestation requis",
       );
     }
 

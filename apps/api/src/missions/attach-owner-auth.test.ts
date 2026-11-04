@@ -49,10 +49,25 @@ function makeService(opts: {
   fetchArtifact?: SignatureProvider["fetchArtifact"];
   onCreateEnvelope?: () => void;
   onCreateAuth?: (data: Record<string, unknown>) => void;
+  /** Paradise provider with ingestAttestation */
+  paradise?: {
+    ingestAttestation: (token: string) => {
+      envelopeId: string;
+      status: string;
+      payload: { signerName: string; person: string };
+    };
+    fetchArtifact?: SignatureProvider["fetchArtifact"];
+  };
 }) {
   const providerCalls: string[] = [];
-  const signatures: SignatureProvider = {
-    name: "pragma-sign",
+  const signatures: SignatureProvider & {
+    ingestAttestation?: (token: string) => {
+      envelopeId: string;
+      status: string;
+      payload: { signerName: string; person: string };
+    };
+  } = {
+    name: opts.paradise ? "paradise-gate" : "pragma-sign",
     async createEnvelope() {
       providerCalls.push("createEnvelope");
       opts.onCreateEnvelope?.();
@@ -68,9 +83,12 @@ function makeService(opts: {
     },
     fetchArtifact: async (id) => {
       providerCalls.push(`fetchArtifact:${id}`);
+      if (opts.paradise?.fetchArtifact) return opts.paradise.fetchArtifact(id);
       if (opts.fetchArtifact) return opts.fetchArtifact(id);
       return {
-        artifactRef: `pragma-sign://signature/${id}/pdf`,
+        artifactRef: opts.paradise
+          ? `paradise-attestation://v1/tok`
+          : `pragma-sign://signature/${id}/pdf`,
         contentHash: "c0ffee",
         isMock: false,
         signedBy: ["owner@t.local"],
@@ -81,6 +99,12 @@ function makeService(opts: {
       throw new Error("sign must not be called");
     },
   };
+  if (opts.paradise) {
+    signatures.ingestAttestation = (token: string) => {
+      providerCalls.push("ingestAttestation");
+      return opts.paradise!.ingestAttestation(token);
+    };
+  }
 
   let missionStatus = "PREP_READY";
   const createdAuths: Record<string, unknown>[] = [];
@@ -221,5 +245,35 @@ describe("attachExistingOwnerAuth", () => {
       signatureEnvelopeId: "244",
     });
     assert.equal(createCalled, false);
+  });
+
+  it("paradiseAttestation → OwnerAuthorization valid via ingestAttestation", async () => {
+    const { svc, providerCalls, createdAuths } = makeService({
+      getStatus: async () => "pending",
+      paradise: {
+        ingestAttestation: () => ({
+          envelopeId: "paradise-abc",
+          status: "signed",
+          payload: {
+            signerName: "Benjamin Mathias Louange",
+            person: "benjamin",
+          },
+        }),
+      },
+    });
+
+    await svc.attachExistingOwnerAuth("m1", user, {
+      paradiseAttestation: "body.sig",
+    });
+
+    assert.equal(createdAuths.length, 1);
+    const auth = createdAuths[0]!;
+    assert.equal(auth.signatureEnvelopeId, "paradise-abc");
+    assert.equal(auth.status, "valid");
+    assert.equal(auth.isStubSignature, false);
+    assert.equal(auth.signatureProvider, "paradise-gate");
+    assert.equal(auth.signerLabel, "Benjamin Mathias Louange");
+    assert.ok(providerCalls.includes("ingestAttestation"));
+    assert.ok(!providerCalls.includes("createEnvelope"));
   });
 });
