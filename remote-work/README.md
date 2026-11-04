@@ -1,55 +1,76 @@
-# Atlas — pack remote-work (PC Windows perso)
+# remote-work
 
-Pack pour continuer Atlas **sans compte entreprise**, depuis un autre PC Windows.
+Windows / personal-PC continuation for Atlas.
 
-**Repo :** https://github.com/Gabawaru/Atlas  
-**Site :** https://atlas-secu.com  
-**Releases :** https://github.com/Gabawaru/Atlas/releases/latest
+**Repo:** https://github.com/Gabawaru/Atlas  
+**Site:** https://atlas-secu.com  
+**Releases:** https://github.com/Gabawaru/Atlas/releases/latest
 
-## Contenu
+## Fresh Windows setup
 
-| Chemin | Rôle |
-|--------|------|
-| `README.md` | Ce guide |
-| `.env.example` | Template variables (placeholders vides pour les secrets) |
-| `docs/atlas-gab-tuto-etapes.md` | Étapes Gab (clés / worker / CF / notify) |
-| `docs/atlas-cf-routing-ben-checklist.md` | Checklist CF Email Routing (zone Ben) |
-| `docs/atlas-product-loop.md` | Boucle produit Mail + clés (sans secrets) |
-| `docs/resend-full-access-gab-roadmap.md` | Roadmap Resend full_access |
-| `docs/atlas-secu-handoff.md` | Handoff founders (Pages, mail, Sign, RoE) |
-| `docs/atlas-roe-perimeter.md` | Périmètre / Rules of Engagement |
-| `bin/Atlas.exe` | Stub desktop Windows (message-only) |
-| `bin/BUILD.md` | Comment le binaire a été produit |
+1. Install [Git for Windows](https://git-scm.com/download/win) (Download for Windows, default options).
+2. Open **cmd** and clone:
 
-## Télécharger l’exécutable
+   ```bat
+   git clone https://github.com/Gabawaru/Atlas.git
+   ```
 
-- **Dans le repo :** [`bin/Atlas.exe`](bin/Atlas.exe)
-- **URL Release permanente :**  
-  https://github.com/Gabawaru/Atlas/releases/latest/download/Atlas.exe
+3. Enter the repo:
 
-Double-clic → message d’accueil + liens. **Aucun scan** n’est lancé dans ce process.
+   ```bat
+   cd Atlas
+   ```
 
-## Continuer sur un autre Windows (checklist)
+4. Run the one-shot prereq installer (Node 20, pnpm 9.15, Docker Postgres 16 + Redis 7). It prints a pass/fail checklist, then launches the Atlas UI (`pnpm dev`). Does **not** start Cursor/agent workers:
 
-1. Clone ou zip du repo (ou au minimum ce dossier `remote-work/` + le monorepo si tu veux développer).
-2. Copie `.env.example` → `.env` à la racine Atlas (ex. `C:\Users\gabri\Desktop\Dev\Atlas\.env`).
-3. Colle les clés **uniquement** dans `.env` (jamais chat / Slack / commit) :
-   - `PRAGMA_SIGN_API_KEY=`
-   - `RESEND_API_KEY=`
-4. Prérequis : Node ≥ 20, pnpm 9, Docker (Postgres + Redis).
-5. `docker compose up -d` → `pnpm install` → `pnpm demo:smoke` (infra locale).
-6. UIs : `pnpm dev:api` / `pnpm dev:client` / `pnpm dev:admin`.
-7. Suivre `docs/atlas-gab-tuto-etapes.md` (worker Cursor, CF Ben, notify).
+   ```bat
+   scripts\windows\Install-AtlasPrereqs.cmd
+   ```
 
-## Règles dures
+   Details: [`scripts/windows/README.md`](../scripts/windows/README.md).
 
-- **Zéro secret dans git.** `.env` est gitignored.
-- RoE : uniquement le périmètre documenté (`docs/atlas-roe-perimeter.md`) — hors scope = demander Ben/Romain.
-- Stub `Atlas.exe` ≠ produit Tauri signé ; UI supportée = client web Vite.
+5. Optional offline stack launcher — `AtlasLocal-Setup.exe` is on `main` under [`offline-installer/bin/`](offline-installer/bin/) (see [`offline-installer/README.md`](offline-installer/README.md)):
 
-## Liens utiles
+   ```bat
+   AtlasLocal.exe install
+   AtlasLocal.exe update
+   AtlasLocal.exe start
+   AtlasLocal.exe stop
+   AtlasLocal.exe watch
+   ```
 
-- https://atlas-secu.com
-- https://github.com/Gabawaru/Atlas
-- https://github.com/Gabawaru/Atlas/releases/latest
-- https://resend.com/api-keys (full_access quand tu voudras Done (a))
+   Or use Start Menu shortcuts after running the Setup exe. Paste secrets only into local `.env`.
+
+## Pack contents
+
+| Path | Role |
+|------|------|
+| `README.md` | This guide |
+| `.env.example` | Variable template (empty placeholders for secrets) |
+| `docs/atlas-gab-tuto-etapes.md` | Gab steps (keys / worker / CF / notify) |
+| `docs/atlas-cf-routing-ben-checklist.md` | CF Email Routing checklist (Ben zone) |
+| `docs/atlas-product-loop.md` | Product loop Mail + keys (no secrets) |
+| `docs/resend-full-access-gab-roadmap.md` | Resend full_access roadmap |
+| `docs/atlas-secu-handoff.md` | Founders handoff (Pages, mail, Sign, RoE) |
+| `docs/atlas-roe-perimeter.md` | Scope / Rules of Engagement |
+| `bin/Atlas.exe` | Desktop stub Windows (message-only) |
+| `bin/BUILD.md` | How the binary was built |
+| [`offline-installer/`](offline-installer/) | Zero-Cursor Windows installer + `AtlasLocal.exe` |
+
+## Download the stub executable
+
+- **In repo:** [`bin/Atlas.exe`](bin/Atlas.exe)
+- **Release URL:** https://github.com/Gabawaru/Atlas/releases/latest/download/Atlas.exe  
+  (tag `v0.1.0-windows-stub`; private repo → needs GitHub login)
+
+Double-click → welcome message + links. **No scan** runs in this process. Stub ≠ signed Tauri product; supported UI = Vite web client.
+
+## Hard rules
+
+- **Zero secrets in git.** `.env` is gitignored — copy `.env.example` → `.env` at the Atlas repo root and paste keys locally only.
+- RoE: only the documented perimeter (`docs/atlas-roe-perimeter.md`) — out of scope = ask Ben/Romain.
+- `Atlas.exe` stub ≠ stack launcher; use `offline-installer/` / `scripts/windows/` for the real local stack.
+
+## Related
+
+- Capture-chat + `capture-chat.exe` — [#39](https://github.com/Gabawaru/Atlas/pull/39)

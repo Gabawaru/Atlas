@@ -1,7 +1,7 @@
 # Atlas — Authorized Pentest Scope & Rules of Engagement
 
 **Owner:** Pragma / Romain Girardi (Monaco)
-**For:** Gabriel Carbunaru, cybersecurity intern — Atlas authorized-pentest tool
+**For:** Gab (authorized Atlas operator) — Atlas authorized-pentest tool
 **Compiled:** 2026-10-28 (read-only sweep of the fleet `app.yaml` files + canonical docs)
 **Status:** Authoritative. This is the complete list of assets Gab is cleared to test. Anything not listed here is OUT of scope.
 
@@ -9,7 +9,7 @@
 
 ## 1. Authorization
 
-Pragma authorizes Gabriel Carbunaru to run security testing (reconnaissance, scanning, vulnerability assessment, OSINT) **only** against the Pragma-owned assets listed in sections 3 and 4 of this document. This authorization covers our own infrastructure. It does **not** extend to any third party.
+Pragma authorizes Gab (the named Atlas operator) to run security testing (reconnaissance, scanning, vulnerability assessment, OSINT) **only** against the Pragma-owned assets listed in sections 3 and 4 of this document. This authorization covers our own infrastructure. It does **not** extend to any third party.
 
 Any aggressive or mass scan (web or local network), and any OSINT that reaches beyond the listed assets, requires a written go from Ben or Romain for the specific target first.
 

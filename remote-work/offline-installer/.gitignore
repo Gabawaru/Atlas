@@ -1,0 +1,5 @@
+# Built Windows artifacts live in bin/ (committed, like remote-work/bin/Atlas.exe).
+# Root .gitignore ignores dist/ — do not put binaries there.
+launcher/atlas-local
+launcher/AtlasLocal.exe
+*.test
