@@ -2,6 +2,10 @@
 
 Windows / personal-PC continuation for Atlas.
 
+**Repo:** https://github.com/Gabawaru/Atlas  
+**Site:** https://atlas-secu.com  
+**Releases:** https://github.com/Gabawaru/Atlas/releases/latest
+
 ## Fresh Windows setup
 
 1. Install [Git for Windows](https://git-scm.com/download/win) (Download for Windows, default options).
@@ -37,11 +41,36 @@ Windows / personal-PC continuation for Atlas.
 
    Or use Start Menu shortcuts after running the Setup exe. Paste secrets only into local `.env`.
 
+## Pack contents
+
 | Path | Role |
 |------|------|
-| [`offline-installer/`](offline-installer/) | Zero-Cursor Windows installer + `AtlasLocal.exe` (git pull updates) |
+| `README.md` | This guide |
+| `.env.example` | Variable template (empty placeholders for secrets) |
+| `docs/atlas-gab-tuto-etapes.md` | Gab steps (keys / worker / CF / notify) |
+| `docs/atlas-cf-routing-ben-checklist.md` | CF Email Routing checklist (Ben zone) |
+| `docs/atlas-product-loop.md` | Product loop Mail + keys (no secrets) |
+| `docs/resend-full-access-gab-roadmap.md` | Resend full_access roadmap |
+| `docs/atlas-secu-handoff.md` | Founders handoff (Pages, mail, Sign, RoE) |
+| `docs/atlas-roe-perimeter.md` | Scope / Rules of Engagement |
+| `bin/Atlas.exe` | Desktop stub Windows (message-only) |
+| `bin/BUILD.md` | How the binary was built |
+| [`offline-installer/`](offline-installer/) | Zero-Cursor Windows installer + `AtlasLocal.exe` |
 
-Related open PRs (not necessarily on `main` yet):
+## Download the stub executable
 
-- Pack + stub `bin/Atlas.exe` — [#38](https://github.com/Gabawaru/Atlas/pull/38)
+- **In repo:** [`bin/Atlas.exe`](bin/Atlas.exe)
+- **Release URL:** https://github.com/Gabawaru/Atlas/releases/latest/download/Atlas.exe  
+  (tag `v0.1.0-windows-stub`; private repo → needs GitHub login)
+
+Double-click → welcome message + links. **No scan** runs in this process. Stub ≠ signed Tauri product; supported UI = Vite web client.
+
+## Hard rules
+
+- **Zero secrets in git.** `.env` is gitignored — copy `.env.example` → `.env` at the Atlas repo root and paste keys locally only.
+- RoE: only the documented perimeter (`docs/atlas-roe-perimeter.md`) — out of scope = ask Ben/Romain.
+- `Atlas.exe` stub ≠ stack launcher; use `offline-installer/` / `scripts/windows/` for the real local stack.
+
+## Related
+
 - Capture-chat + `capture-chat.exe` — [#39](https://github.com/Gabawaru/Atlas/pull/39)
