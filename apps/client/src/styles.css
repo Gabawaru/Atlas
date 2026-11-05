@@ -181,6 +181,49 @@ pre {
   max-width: 36rem;
 }
 
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.mode-toggle input {
+  width: auto;
+  margin: 0;
+}
+
+.real-mission-fields {
+  max-width: 36rem;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.real-mission-note {
+  margin: 0.45rem 0 0;
+}
+
+.circuit-a-queue {
+  list-style: none;
+  padding: 0;
+  margin: 0.85rem 0 0;
+  max-width: 40rem;
+}
+
+.circuit-a-queue li {
+  padding: 0.45rem 0;
+  border-top: 1px solid #c9d2c6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
+.circuit-a-queue code {
+  font-size: 0.85em;
+}
+
 .results-list {
   list-style: none;
   padding: 0;
