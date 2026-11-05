@@ -25,3 +25,10 @@ cd remote-work/atlas-v1 && ./build.sh
 Sources: `remote-work/atlas-v1/` (Go shell + embedded platform HTML + NSIS).  
 Shortlist modules: `docs/shortlist-modules.md`.  
 RoE: `*.pragma-cloud.com`, `*.pragma-serve.com`, `*.pragma.mc` only.
+
+## Out of v1 acceptance
+
+| Dropped | Why |
+|---------|-----|
+| **Tauri stub** (`apps/client/src-tauri`) | Not the Paradise download PE; webkit/signing absent; NSIS Scan shell is the desktop ship. Do not block v1 Done on `tauri build`. |
+| Docker images inside Setup | Host runs AtlasLocal once; images stay on machine. |

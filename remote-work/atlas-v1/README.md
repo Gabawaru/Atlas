@@ -2,6 +2,9 @@
 
 Ship path for Paradise `GET /api/atlas/download` → `Atlas-Setup.exe`.
 
+**v1 acceptance (Musk):** NSIS `Atlas-Setup.exe` + Scan shell only.  
+**Tauri stub (`apps/client/src-tauri`) is out of v1 acceptance** — not a ship blocker, not a Download asset, not required for Scan / Paradise / Policy Guard.
+
 ## What the exe contains
 
 | Path after install | Role |

@@ -1,7 +1,9 @@
 # Client desktop Atlas — stub Tauri 2
 
-Le **client web** (`apps/client`, Vite) est le parcours MVP supporté.  
-Ce dossier ancre le shell **Tauri 2** sans présenter un binaire packagé comme terminé.
+**Out of Atlas v1 acceptance.** v1 ship = `remote-work/atlas-v1` NSIS `Atlas-Setup.exe` (Scan shell), not this stub. Do not treat `tauri build` / signed bundle as a v1 Done gate.
+
+Le **client web** (`apps/client`, Vite) reste le parcours MVP web.  
+Ce dossier ancre un shell **Tauri 2** futur — message-only stub, pas un livrable Paradise.
 
 ## État
 
