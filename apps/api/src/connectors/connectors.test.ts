@@ -5,17 +5,19 @@ import { MODULE_WEB_PASSIVE } from "@atlas/shared";
 import { CONNECTOR_CATALOG, getCatalogEntry } from "./connector.types";
 
 describe("connector catalog", () => {
-  it("présence web est productionReady ; GitHub est stub", () => {
+  it("présence web + GitHub shortlist sont productionReady", () => {
     const web = getCatalogEntry("web.passive.presence");
     const gh = getCatalogEntry("github.read_only");
     assert.equal(web?.productionReady, true);
     assert.equal(web?.isStub, false);
-    assert.equal(gh?.productionReady, false);
-    assert.equal(gh?.isStub, true);
+    assert.equal(gh?.productionReady, true);
+    assert.equal(gh?.isStub, false);
     assert.ok(CONNECTOR_CATALOG.length >= 2);
     assert.ok(getCatalogEntry("asm.passive.enrichment"));
     assert.ok(getCatalogEntry("sca.local.analyzers"));
     assert.ok(getCatalogEntry("ti.passive.enrichment"));
+    assert.ok(getCatalogEntry("saas.auth.enrichment"));
+    assert.equal(getCatalogEntry("cloud.posture.auth")?.isStub, false);
   });
 });
 
