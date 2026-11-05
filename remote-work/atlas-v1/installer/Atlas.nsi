@@ -3,7 +3,7 @@
 ; for Atlas.exe, finish-page launch.
 
 !define PRODUCT_NAME "Atlas"
-!define PRODUCT_VERSION "1.1.0"
+!define PRODUCT_VERSION "1.2.0"
 !define PRODUCT_PUBLISHER "Pragma / Gabawaru"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\Atlas.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -38,6 +38,7 @@ Section "Atlas" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
   File "..\payload\Atlas.exe"
+  File "..\payload\AtlasLocal.exe"
   File "..\payload\README.txt"
   SetOutPath "$INSTDIR\tools"
   File "..\payload\tools\Install-AtlasPrereqs.cmd"
@@ -50,6 +51,8 @@ Section "Atlas" SecMain
 
   CreateDirectory "$SMPROGRAMS\Atlas"
   CreateShortCut "$SMPROGRAMS\Atlas\Atlas.lnk" "$INSTDIR\Atlas.exe"
+  CreateShortCut "$SMPROGRAMS\Atlas\Demarrer l'API.lnk" "$INSTDIR\AtlasLocal.exe" "start"
+  CreateShortCut "$SMPROGRAMS\Atlas\Installer le stack.lnk" "$INSTDIR\AtlasLocal.exe" "install"
   CreateShortCut "$SMPROGRAMS\Atlas\Desinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
   CreateShortCut "$DESKTOP\Atlas.lnk" "$INSTDIR\Atlas.exe"
 
@@ -72,6 +75,7 @@ SectionEnd
 
 Section "Uninstall"
   Delete "$INSTDIR\Atlas.exe"
+  Delete "$INSTDIR\AtlasLocal.exe"
   Delete "$INSTDIR\README.txt"
   Delete "$INSTDIR\tools\Install-AtlasPrereqs.cmd"
   Delete "$INSTDIR\tools\Install-AtlasPrereqs.ps1"
@@ -81,6 +85,8 @@ Section "Uninstall"
   Delete "$DESKTOP\Atlas.lnk"
   Delete "$DESKTOP\Desinstaller Atlas.lnk"
   Delete "$SMPROGRAMS\Atlas\Atlas.lnk"
+  Delete "$SMPROGRAMS\Atlas\Demarrer l'API.lnk"
+  Delete "$SMPROGRAMS\Atlas\Installer le stack.lnk"
   Delete "$SMPROGRAMS\Atlas\Desinstaller Atlas.lnk"
   RMDir "$SMPROGRAMS\Atlas"
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"

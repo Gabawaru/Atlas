@@ -9,12 +9,19 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
   -ldflags="-s -w -H windowsgui" \
   -o "$ROOT/payload/Atlas.exe" .
 
+# Bundle existing AtlasLocal launcher (no Docker images — start only).
+SHIP="$ROOT/../offline-installer/bin"
+if [[ ! -f "$SHIP/AtlasLocal.exe" ]]; then
+  echo "ERROR: missing $SHIP/AtlasLocal.exe — build offline-installer first" >&2
+  exit 1
+fi
+cp -f "$SHIP/AtlasLocal.exe" "$ROOT/payload/AtlasLocal.exe"
+
 echo "==> NSIS Atlas-Setup.exe"
 mkdir -p "$ROOT/dist"
 makensis "$ROOT/installer/Atlas.nsi"
 
 # Paradise / GitHub Release ship name lives under offline-installer/bin
-SHIP="$ROOT/../offline-installer/bin"
 mkdir -p "$SHIP"
 cp -f "$ROOT/dist/Atlas-Setup.exe" "$SHIP/Atlas-Setup.exe"
 

@@ -115,9 +115,14 @@
       <div class="row">
         <span class="muted">API</span>
         <code id="apiBase">http://127.0.0.1:3001</code>
+        <button type="button" class="ghost" id="startApiBtn">Démarrer l’API</button>
         <button type="button" class="ghost" id="pingBtn">Tester</button>
         <span id="apiHealth" class="muted"></span>
       </div>
+      <p class="muted" style="margin:8px 0 0">
+        Un clic lance <code>AtlasLocal start</code> (stack locale). Première fois :
+        menu Démarrer → Atlas → <em>Installer le stack</em>, puis .env.
+      </p>
       <label for="apiUrl">URL API (si différente)</label>
       <input id="apiUrl" value="http://127.0.0.1:3001" autocomplete="off" />
     </div>
@@ -215,9 +220,50 @@
         $("apiHealth").className = res.ok ? "ok" : "err";
         return res.ok;
       } catch (e) {
-        $("apiHealth").textContent = "hors ligne — démarrez api (AtlasLocal start / pnpm dev:api)";
+        $("apiHealth").textContent = "hors ligne — cliquez Démarrer l’API";
         $("apiHealth").className = "err";
         return false;
+      }
+    }
+
+    async function startApi() {
+      $("startApiBtn").disabled = true;
+      setStatus("Lancement AtlasLocal start…");
+      try {
+        const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setStatus(
+            (data && (data.error || data.message)) || ("HTTP " + res.status) +
+              "\n" + ((data && data.hint) || "Vérifiez AtlasLocal.exe à côté de Atlas.exe."),
+            "err",
+          );
+          return;
+        }
+        setStatus(
+          (data.message || "AtlasLocal start lancé.") +
+            "\nPoll health :3001 (jusqu’à ~2 min si docker/pnpm)…",
+        );
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          if (await ping()) {
+            setStatus("API OK — vous pouvez Scan.", "ok");
+            return;
+          }
+          setStatus("AtlasLocal start en cours… health " + (i + 1) + "/30");
+        }
+        setStatus(
+          "API toujours hors ligne après ~2 min. Menu Démarrer → Atlas → Installer le stack (une fois), .env, puis Démarrer l’API.",
+          "err",
+        );
+      } catch (e) {
+        setStatus(
+          (e instanceof Error ? e.message : String(e)) +
+            "\nRelancez Atlas.exe (shell local :17865) puis Démarrer l’API.",
+          "err",
+        );
+      } finally {
+        $("startApiBtn").disabled = false;
       }
     }
 
@@ -341,7 +387,7 @@
       try {
         if (!(await ping())) {
           setStatus(
-            "API hors ligne — démarrez AtlasLocal start (ou pnpm dev:api) sur :3001, puis Reprendre.",
+            "API hors ligne — cliquez Démarrer l’API, attendez OK, puis Reprendre.",
             "err",
           );
           return;
@@ -388,7 +434,7 @@
       try {
         if (!(await ping())) {
           setStatus(
-            "API hors ligne — démarrez AtlasLocal start (ou pnpm dev:api) sur :3001 avant Scan.\nSetup n’embarque pas Docker/Redis/Postgres.",
+            "API hors ligne — cliquez Démarrer l’API (AtlasLocal) et attendez OK avant Scan.\nSetup n’embarque pas Docker/images — seulement le lanceur.",
             "err",
           );
           return;
@@ -463,6 +509,7 @@
     }
 
     $("pingBtn").onclick = () => void ping();
+    $("startApiBtn").onclick = () => void startApi();
     $("apiUrl").onchange = () => { $("apiBase").textContent = api(); };
     $("scanBtn").onclick = () => void runScan();
     $("resumeBtn").onclick = () => void resumeAfterCircuitA();

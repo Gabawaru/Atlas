@@ -1,10 +1,11 @@
 // Atlas v1 desktop shell — opens local platform UI with Scan button.
 // Scan drives real mission flow via Atlas API (Paradise attach → Circuit A →
 // Policy Guard → web.passive.presence.v1 + shortlist suite → report export).
-// No secrets, no scanners embedded; API must be reachable (AtlasLocal / pnpm).
+// No secrets, no scanners embedded; API via bundled AtlasLocal.exe start.
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,7 +37,8 @@ func main() {
 		_ = os.WriteFile(marker, []byte("Atlas v1\n"), 0o644)
 	}
 	exe, _ := os.Executable()
-	_ = os.WriteFile(filepath.Join(appData, "install-path.txt"), []byte(filepath.Dir(exe)+"\n"), 0o644)
+	installDir := filepath.Dir(exe)
+	_ = os.WriteFile(filepath.Join(appData, "install-path.txt"), []byte(installDir+"\n"), 0o644)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +50,7 @@ func main() {
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(platformHTML)
 	})
+	mux.HandleFunc("/start-api", handleStartAPI(installDir))
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
@@ -63,12 +66,77 @@ func main() {
 	_ = openBrowser(url)
 
 	msg := fmt.Sprintf(
-		"Atlas v1 — plateforme Scan ouverte dans le navigateur.\n\nURL: %s\nInstall: %s\nAppData: %s\n\nLe bouton Scan enchaîne Paradise → Circuit A → Policy Guard → suite passive.\nFermer cette boîte ne coupe pas le serveur local — utilisez le gestionnaire de tâches pour quitter Atlas.exe.\n\nRoE: *.pragma-cloud.com, *.pragma-serve.com, *.pragma.mc",
-		url, filepath.Dir(exe), appData,
+		"Atlas v1 — plateforme Scan ouverte dans le navigateur.\n\nURL: %s\nInstall: %s\nAppData: %s\n\nDémarrer l’API lance AtlasLocal start (stack locale).\nScan : Paradise → Circuit A → Policy Guard → suite passive.\nFermer cette boîte ne coupe pas le serveur local.\n\nRoE: *.pragma-cloud.com, *.pragma-serve.com, *.pragma.mc",
+		url, installDir, appData,
 	)
-	// Inform once, then keep serving the Scan UI until process kill.
 	go messageBox("Atlas", msg)
 	select {}
+}
+
+func handleStartAPI(installDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+
+		local := findAtlasLocal(installDir)
+		if local == "" {
+			writeJSON(w, http.StatusNotFound, map[string]any{
+				"ok":      false,
+				"error":   "AtlasLocal.exe introuvable à côté de Atlas.exe",
+				"hint":    "Réinstallez via Atlas-Setup.exe (embarque AtlasLocal).",
+				"lookedIn": installDir,
+			})
+			return
+		}
+
+		cmd := exec.Command(local, "start")
+		cmd.Dir = filepath.Dir(local)
+		if runtime.GOOS == "windows" {
+			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		}
+		if err := cmd.Start(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+				"path":  local,
+			})
+			return
+		}
+		// Detach — start can take minutes (docker + pnpm). UI polls /v1/health.
+		go func() { _ = cmd.Wait() }()
+
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"ok":      true,
+			"path":    local,
+			"message": "AtlasLocal start lancé — attendez que l’API réponde sur :3001 (Tester), puis Scan.",
+			"hint":    "Si échec : une fois AtlasLocal.exe install (clone %USERPROFILE%\\Atlas + .env), puis Démarrer l’API.",
+		})
+	}
+}
+
+func findAtlasLocal(installDir string) string {
+	candidates := []string{
+		filepath.Join(installDir, "AtlasLocal.exe"),
+		filepath.Join(installDir, "tools", "AtlasLocal.exe"),
+	}
+	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
+		candidates = append(candidates, filepath.Join(localApp, "AtlasLocal", "AtlasLocal.exe"))
+	}
+	for _, p := range candidates {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func openBrowser(url string) error {
