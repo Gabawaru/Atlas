@@ -261,6 +261,80 @@ export const runOpenScap: ModuleAdapter = (ctx) =>
     ctx,
   });
 
+/**
+ * Falco — offline rules-as-code lint only (`falco --validate`).
+ * Never attaches to kernel/eBPF or live capture on hosted workers.
+ */
+export const runFalcoRulesLint: ModuleAdapter = (ctx) =>
+  runScanner({
+    moduleId: "cloud.falco.auth.v1",
+    bin: "falco",
+    argsFor: (p) => ["--validate", p],
+    ctx,
+  });
+
+/**
+ * CHIPSEC — privileged firmware inventory on owned hardware only.
+ * Requires ATLAS_CHIPSEC_LAB_APPROVED + localPath; hosted workers stay needs_config.
+ */
+export const runChipsec: ModuleAdapter = async (ctx) => {
+  const def = mustDef("firmware.chipsec.local.v1");
+  const lab = ctx.env?.ATLAS_CHIPSEC_LAB_APPROVED?.trim() || process.env.ATLAS_CHIPSEC_LAB_APPROVED?.trim();
+  if (!lab && !ctx.forceMock && !ctx.syntheticMission) {
+    return stubNeedsConfig(def, [
+      "ATLAS_CHIPSEC_LAB_APPROVED",
+      "localPath (owned-hardware artefact / self-hosted worker)",
+    ]);
+  }
+  const path = requireLocalPath(ctx);
+  if (!path) {
+    return stubNeedsConfig(def, ["localPath (owned-hardware artefact / self-hosted worker)"]);
+  }
+  if (path === "__mock__") {
+    return baseResult(def, {
+      status: "ok",
+      evidence: {
+        source: "chipsec",
+        mocked: true,
+        path,
+        note: "Mock CHIPSEC — privileged modules not invoked",
+      },
+    });
+  }
+  if (ctx.isCancelled()) {
+    return baseResult(def, { status: "skipped", evidence: { cancelled: true } });
+  }
+  const result = await runLocalCli({
+    bin: "chipsec_main",
+    args: ["-m", "common.chipset", "-a", path],
+    timeoutMs: 120_000,
+    cwd: path,
+  });
+  if (result.binaryMissing) {
+    return baseResult(def, {
+      status: "binary_missing",
+      evidence: {
+        bin: "chipsec_main",
+        path,
+        note: "Install CHIPSEC on a privileged self-hosted worker against owned hardware only.",
+      },
+      error: result.stderr,
+    });
+  }
+  return baseResult(def, {
+    status: result.ok || result.code === 0 ? "ok" : "error",
+    evidence: {
+      source: "chipsec",
+      path,
+      code: result.code,
+      stdoutTail: result.stdout.slice(-4000),
+      stderrTail: result.stderr.slice(-2000),
+      note: "Lab-gated CHIPSEC inventory — Atlas never probes third-party firmware remotely.",
+    },
+    error: result.ok ? undefined : result.stderr.slice(0, 500),
+  });
+};
+
 /** NeMo Guardrails — config-dir check; library embed not a remote scanner. */
 export const runNemoGuardrails: ModuleAdapter = async (ctx) => {
   const def = mustDef("ai.nemo-guardrails.local.v1");
@@ -308,10 +382,12 @@ export const LOCAL_ANALYZER_ADAPTERS: Record<string, ModuleAdapter> = {
   "sca.grype.local.v1": runGrype,
   "firmware.syft.local.v1": runSyft,
   "firmware.fwupd.local.v1": runFwupd,
+  "firmware.chipsec.local.v1": runChipsec,
   "cloud.checkov.local.v1": runCheckov,
   "cloud.prowler.auth.v1": runProwler,
   "cloud.kube-bench.auth.v1": runKubeBench,
   "cloud.kubescape.auth.v1": runKubescape,
+  "cloud.falco.auth.v1": runFalcoRulesLint,
   "sast.semgrep.local.v1": runSemgrep,
   "sast.bandit.local.v1": runBandit,
   "sast.codeql.local.v1": runCodeql,

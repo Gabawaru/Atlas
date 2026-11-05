@@ -17,9 +17,10 @@ describe("shortlist module registry", () => {
   it("couvre ~94 outils shortlist", () => {
     const s = registrySummary();
     assert.equal(s.total, 94);
-    assert.ok(s.wired >= 70, `wired=${s.wired}`);
-    assert.ok(s.blocked >= 10 && s.blocked <= 20, `blocked=${s.blocked}`);
+    assert.ok(s.wired >= 90, `wired=${s.wired}`);
+    assert.ok(s.blocked >= 1 && s.blocked <= 5, `blocked=${s.blocked}`);
     assert.equal(s.wired + s.stub + s.blocked, 94);
+    assert.equal(s.stub, 0);
   });
 
   it("ids uniques", () => {
@@ -35,6 +36,7 @@ describe("shortlist module registry", () => {
 
   it("modules wired non-chaos ne sont pas aggressifs Policy Guard", () => {
     for (const id of listWiredModuleIds()) {
+      if (id.startsWith("chaos.")) continue;
       assert.equal(isAggressiveModule(id), false, id);
     }
     assert.equal(isAggressiveModule("chaos.chaos-mesh.auth.v1"), true);
@@ -77,6 +79,39 @@ describe("cooperating suite", () => {
   });
 
   it("blocked module → skipped", async () => {
+    const results = await runCooperatingSuite(
+      ["breach.google-password-checkup.auth.v1"],
+      {
+        targets: [{ host: "console.pragma-serve.com" }],
+        allowedHosts: new Set(["console.pragma-serve.com"]),
+        exclusions: new Set(),
+        rateLimitPerMinute: 60,
+        syntheticMission: true,
+        forceMock: true,
+        isCancelled: () => false,
+        priorEvidence: {},
+      },
+    );
+    assert.equal(results[0]!.status, "skipped");
+  });
+
+  it("chaos lab sans ATLAS_CHAOS_LAB_APPROVED → needs_config", async () => {
+    const results = await runCooperatingSuite(["chaos.chaos-mesh.auth.v1"], {
+      targets: [{ host: "console.pragma-serve.com" }],
+      allowedHosts: new Set(["console.pragma-serve.com"]),
+      exclusions: new Set(),
+      rateLimitPerMinute: 60,
+      syntheticMission: false,
+      forceMock: false,
+      isCancelled: () => false,
+      priorEvidence: {},
+      env: { CHAOS_MESH_URL: "https://chaos.example" },
+      sleepFn: async () => undefined,
+    });
+    assert.equal(results[0]!.status, "needs_config");
+  });
+
+  it("chaos lab forceMock → ok catalog readiness (pas d'inject)", async () => {
     const results = await runCooperatingSuite(["chaos.chaos-mesh.auth.v1"], {
       targets: [{ host: "console.pragma-serve.com" }],
       allowedHosts: new Set(["console.pragma-serve.com"]),
@@ -86,8 +121,38 @@ describe("cooperating suite", () => {
       forceMock: true,
       isCancelled: () => false,
       priorEvidence: {},
+      sleepFn: async () => undefined,
     });
-    assert.equal(results[0]!.status, "skipped");
+    assert.equal(results[0]!.status, "ok");
+    const ev = results[0]!.evidence as { injectDisabled?: boolean };
+    assert.equal(ev.injectDisabled, true);
+  });
+
+  it("quad9 / mozilla-monitor / falco mock → ok", async () => {
+    const results = await runCooperatingSuite(
+      [
+        "dns.quad9.passive.v1",
+        "breach.mozilla-monitor.passive.v1",
+        "cloud.falco.auth.v1",
+        "firmware.chipsec.local.v1",
+      ],
+      {
+        targets: [{ host: "console.pragma-serve.com" }],
+        allowedHosts: new Set(["console.pragma-serve.com"]),
+        exclusions: new Set(),
+        rateLimitPerMinute: 60,
+        syntheticMission: true,
+        forceMock: true,
+        localPath: "/tmp/rules.yaml",
+        isCancelled: () => false,
+        priorEvidence: {},
+        sleepFn: async () => undefined,
+      },
+    );
+    assert.equal(results.length, 4);
+    for (const r of results) {
+      assert.equal(r.status, "ok", `${r.moduleId} → ${r.status} ${r.error}`);
+    }
   });
 
   it("keyed adapter sans clés (hors mock) → needs_config + requiredEnv", async () => {

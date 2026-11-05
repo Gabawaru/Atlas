@@ -376,9 +376,14 @@ export const runVirusTotal: ModuleAdapter = async (ctx) => {
   });
 };
 
-/** HIBP domain breach search (requires API key) */
-export const runHibp: ModuleAdapter = async (ctx) => {
-  const def = mustDef("breach.hibp.passive.v1");
+/** Shared HIBP domain breach search (requires API key). */
+async function hibpDomainSearch(
+  defId: string,
+  source: string,
+  title: string,
+  ctx: ModuleRunContext,
+) {
+  const def = mustDef(defId);
   assertAllTargetsInScope(ctx);
   const key = envHasAny(ctx.env, ["HIBP_API_KEY"]);
   if (!key && !ctx.forceMock && !ctx.syntheticMission) {
@@ -405,12 +410,97 @@ export const runHibp: ModuleAdapter = async (ctx) => {
   }
   return baseResult(def, {
     status: "ok",
-    evidence: { source: "hibp", rows, evidenceHash: hashJson(rows) },
+    evidence: { source, rows, evidenceHash: hashJson(rows) },
     findings: [
       {
         severity: "info",
-        title: "Have I Been Pwned (domaine)",
+        title,
         summary: `Recherche breaches pour ${hosts.length} domaine(s) in-scope.`,
+      },
+    ],
+  });
+}
+
+/** HIBP domain breach search (requires API key) */
+export const runHibp: ModuleAdapter = (ctx) =>
+  hibpDomainSearch(
+    "breach.hibp.passive.v1",
+    "hibp",
+    "Have I Been Pwned (domaine)",
+    ctx,
+  );
+
+/**
+ * Mozilla Monitor — no enterprise API; redirect to HIBP-class domain search.
+ * Never scrapes monitor.mozilla.org.
+ */
+export const runMozillaMonitor: ModuleAdapter = (ctx) =>
+  hibpDomainSearch(
+    "breach.mozilla-monitor.passive.v1",
+    "mozilla-monitor-via-hibp",
+    "Mozilla Monitor → HIBP (domaine)",
+    ctx,
+  );
+
+/**
+ * Quad9 passive DNS posture — DoH against dns.quad9.net for in-scope hosts.
+ * Evidence: resolve vs NXDOMAIN (blocklist posture), not an active scanner.
+ */
+export const runQuad9: ModuleAdapter = async (ctx) => {
+  const def = mustDef("dns.quad9.passive.v1");
+  assertAllTargetsInScope(ctx);
+  const hosts = apexTargets(ctx);
+  const rows: unknown[] = [];
+  for (const host of hosts) {
+    if (ctx.isCancelled()) break;
+    if (ctx.forceMock || ctx.syntheticMission) {
+      rows.push({
+        host,
+        mocked: true,
+        resolver: "dns.quad9.net",
+        status: 0,
+        note: "Mock Quad9 DoH posture",
+      });
+    } else {
+      const url = `https://dns.quad9.net/dns-query?name=${encodeURIComponent(host)}&type=A`;
+      const res = await ctxFetch(ctx)(url, {
+        headers: { Accept: "application/dns-json" },
+        signal: AbortSignal.timeout(12_000),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        Status?: number;
+        Answer?: unknown[];
+        Authority?: unknown[];
+      } | null;
+      const status = json?.Status;
+      const authorityCount = Array.isArray(json?.Authority) ? json!.Authority!.length : 0;
+      rows.push({
+        host,
+        ok: res.ok,
+        httpStatus: res.status,
+        dnsStatus: status,
+        answerCount: Array.isArray(json?.Answer) ? json!.Answer!.length : 0,
+        authorityCount,
+        // Quad9 block ≈ NXDOMAIN (3) with empty Authority; genuine NXDOMAIN often has Authority.
+        likelyBlocked: status === 3 && authorityCount === 0,
+        resolver: "dns.quad9.net",
+      });
+    }
+    await sleepRate(ctx, 20);
+  }
+  return baseResult(def, {
+    status: "ok",
+    evidence: {
+      source: "quad9-doh",
+      rows,
+      evidenceHash: hashJson(rows),
+      note: "Passive resolver posture — Atlas does not reconfigure customer DNS.",
+    },
+    findings: [
+      {
+        severity: "info",
+        title: "Quad9 DNS posture",
+        summary: `DoH posture pour ${hosts.length} hôte(s) in-scope via dns.quad9.net.`,
       },
     ],
   });
@@ -478,8 +568,10 @@ export const PASSIVE_API_ADAPTERS: Record<string, ModuleAdapter> = {
   "web.securityheaders.passive.v1": runSecurityHeaders,
   "web.ssllabs.passive.v1": runSslLabs,
   "email.mail-auth.dns.passive.v1": runMailAuthDns,
+  "dns.quad9.passive.v1": runQuad9,
   "ti.otx.passive.v1": runOtx,
   "ti.virustotal.passive.v1": runVirusTotal,
   "breach.hibp.passive.v1": runHibp,
+  "breach.mozilla-monitor.passive.v1": runMozillaMonitor,
   "sca.osv.local.v1": runOsvApi,
 };

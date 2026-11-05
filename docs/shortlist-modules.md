@@ -24,9 +24,9 @@ Mission (Circuit A + Paradise owner authz + RoE)
 | --- | --- |
 | `wired` | Adapter exécutable (live si clés/binaire ; sinon `needs_config` / `binary_missing`) |
 | `stub` | Réservé (aucun après pass d’adapters) |
-| `blocked` | Contrainte policy/architecture — non exécutable (chaos, UI-only, kernel agents, …) |
+| `blocked` | Contrainte policy/architecture — non exécutable |
 
-**Compte courant :** 79 wired · 0 stub · 15 blocked.
+**Compte courant :** 93 wired · 0 stub · **1 blocked** (`breach.google-password-checkup.auth.v1` — pas d’API entreprise / export).
 
 Code : `apps/api/src/control/modules/` (`passive-api.ts`, `local-analyzers.ts`, `auth-api.ts`).
 
@@ -44,16 +44,26 @@ Exécutée après la présence web (sauf `skipSuite`) :
 - `ti.virustotal.passive.v1`
 - `breach.hibp.passive.v1`
 
-Autres modules wired (SaaS/auth/enrolled) : opt-in via `suiteModuleIds` sur le job — **pas** dans la suite passive par défaut.
+Autres modules wired (SaaS/auth/enrolled/lab) : opt-in via `suiteModuleIds` sur le job — **pas** dans la suite passive par défaut.
 
 ## Suite locale
 
 Si `localPath` est fourni sur le job BullMQ : Trivy, Gitleaks, TruffleHog, OSV, Grype, Syft, Checkov, Semgrep, Bandit, Conftest.  
-CLI additionnels (wired, opt-in) : fwupd, Prowler, kube-bench, Kubescape, CodeQL, OpenSCAP, NeMo Guardrails.
+CLI additionnels (wired, opt-in) : fwupd, Prowler, kube-bench, Kubescape, CodeQL, OpenSCAP, NeMo Guardrails, **Falco rules lint** (`falco --validate`), **CHIPSEC** (lab flag + privileged worker).
 
-## Phishing lab
+## Labs gated
 
-`phish.gophish` / `phish.knowbe4` / `phish.proofpoint` : **lecture métriques uniquement** ; exigent `ATLAS_PHISH_LAB_APPROVED` + clés API. Aucun envoi de campagne depuis Atlas.
+| Flag | Modules | Comportement |
+| --- | --- | --- |
+| `ATLAS_PHISH_LAB_APPROVED` | gophish / knowbe4 / proofpoint | Lecture métriques uniquement — jamais d’envoi |
+| `ATLAS_CHIPSEC_LAB_APPROVED` | chipsec | Privileged owned hardware / self-hosted only |
+| `ATLAS_CHAOS_LAB_APPROVED` | chaos-mesh / litmus / aws-fis / gremlin | Catalog/readiness only — **jamais** d’injection ; Policy Guard marque encore `chaos.*` agressif sans authz Circuit A signée |
+
+## Policy block restant
+
+| Module | Pourquoi | Déblocage minimal |
+| --- | --- | --- |
+| `breach.google-password-checkup.auth.v1` | UI Google Password Manager — pas d’API/export entreprise | Export Workspace admin + ingest URL, ou rester sur HIBP / Pwned Passwords. **Jamais** scraper accounts.google.com |
 
 ## Connecteurs
 
@@ -62,7 +72,7 @@ CLI additionnels (wired, opt-in) : fwupd, Prowler, kube-bench, Kubescape, CodeQL
 - `ti.passive.enrichment`
 - `sca.local.analyzers`
 - `cloud.posture.auth`
-- `github.read_only`
+- `github.read_only` (`productionReady: true` — Dependabot + secret-scanning)
 - `saas.auth.enrichment`
 
 Voir le rapport d’intégration projet `docs/atlas-shortlist-modules-integration.md` (Agent Store).

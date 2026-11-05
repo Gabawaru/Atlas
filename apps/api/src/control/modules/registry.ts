@@ -137,11 +137,15 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     id: "breach.mozilla-monitor.passive.v1",
     shortlistTool: "Mozilla Monitor",
     category: "breach",
-    kind: "saas_portal",
+    kind: "passive_api",
     label: "Mozilla Monitor",
-    description: "Consumer breach notifications (HIBP-backed).",
-    wireStatus: "blocked",
-    wireNote: "Consumer UI only — no enterprise API; use breach.hibp.passive.v1.",
+    description: "Consumer breach notifications (HIBP-backed) — Atlas uses HIBP API, never scrapes Monitor UI.",
+    wireStatus: "wired",
+    wireNote:
+      "No Monitor enterprise API — adapter redirects to HIBP domain search (HIBP_API_KEY). Does not scrape monitor.mozilla.org.",
+    envKeys: ["HIBP_API_KEY"],
+    cooperatesWith: ["breach.hibp.passive.v1"],
+    connectorId: "breach.hibp",
   }),
   def({
     id: "breach.spycloud.auth.v1",
@@ -173,7 +177,8 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     label: "Google Password Checkup",
     description: "Password Manager breach check.",
     wireStatus: "blocked",
-    wireNote: "End-user Google Password Manager UI — no Atlas-callable API.",
+    wireNote:
+      "End-user Google Password Manager UI — no enterprise/export API. Unblock requires Google Workspace Password Manager admin export URL + ingest connector (or keep using breach.hibp.passive.v1 / Pwned Passwords). Never scrape accounts.google.com.",
   }),
 
   // ── 3. Dependency / SCA / secrets ───────────────────────────────────────
@@ -294,11 +299,13 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     id: "firmware.chipsec.local.v1",
     shortlistTool: "CHIPSEC",
     category: "firmware",
-    kind: "auth_agent",
+    kind: "local_analyzer",
     label: "CHIPSEC",
     description: "Platform firmware/config inventory on owned systems.",
-    wireStatus: "blocked",
-    wireNote: "Privileged hardware/firmware access on owned hosts — incompatible with hosted Atlas worker (no cloud API substitute).",
+    wireStatus: "wired",
+    wireNote:
+      "Lab-only: requires ATLAS_CHIPSEC_LAB_APPROVED + localPath on a self-hosted/privileged worker with chipsec binary against owned hardware. Hosted Atlas workers return needs_config — never runs privileged firmware probes without the lab flag.",
+    envKeys: ["ATLAS_CHIPSEC_LAB_APPROVED"],
   }),
 
   // ── 5. Authenticated host vuln ──────────────────────────────────────────
@@ -512,9 +519,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "dns",
     kind: "passive_api",
     label: "Quad9 resolver baseline",
-    description: "Public recursive resolver — not a scan API.",
-    wireStatus: "blocked",
-    wireNote: "Public recursive resolver — does not produce Atlas module evidence; configure DNS elsewhere.",
+    description: "Passive DNS posture via Quad9 DoH for in-scope hosts (block vs resolve).",
+    wireStatus: "wired",
+    wireNote:
+      "DoH query to dns.quad9.net for in-scope hosts only — resolver health / blocklist posture evidence, not an active scanner. No TI partner websocket.",
+    cooperatesWith: ["email.mail-auth.dns.passive.v1", "web.passive.presence.v1"],
   }),
   def({
     id: "dns.dnsfilter.auth.v1",
@@ -555,11 +564,12 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     id: "cloud.falco.auth.v1",
     shortlistTool: "Falco",
     category: "cloud_posture",
-    kind: "auth_agent",
+    kind: "local_analyzer",
     label: "Falco",
-    description: "Runtime syscall threat detection.",
-    wireStatus: "blocked",
-    wireNote: "Kernel/eBPF runtime sensors on owned nodes — not BullMQ-callable; no passive cloud substitute.",
+    description: "Runtime syscall threat detection — Atlas runs offline rules-as-code lint only.",
+    wireStatus: "wired",
+    wireNote:
+      "Offline falco --validate on tenant localPath rules YAML — no kernel/eBPF, no live capture. Runtime sensors stay out of hosted BullMQ workers.",
   }),
   def({
     id: "cloud.checkov.local.v1",
@@ -618,11 +628,13 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     id: "physical.knowbe4-usb.auth.v1",
     shortlistTool: "KnowBe4 USB Drive Test",
     category: "physical",
-    kind: "saas_portal",
+    kind: "enrolled_program",
     label: "KnowBe4 USB Drive Test",
-    description: "Awareness metric for found USB media.",
-    wireStatus: "blocked",
-    wireNote: "Physical USB drop awareness exercise — HR/legal, not Policy Guard network module.",
+    description: "Awareness metric for found USB media — report ingest only.",
+    wireStatus: "wired",
+    wireNote:
+      "Report-ingest only (KNOWBE4_USB_REPORT_URL + optional KNOWBE4_API_KEY). Never auto-runs physical USB drops; HR/legal exercise stays human-led.",
+    envKeys: ["KNOWBE4_USB_REPORT_URL", "KNOWBE4_API_KEY"],
   }),
   def({
     id: "physical.cisa-safe.enrolled.v1",
@@ -630,9 +642,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "physical",
     kind: "enrolled_program",
     label: "CISA SAFE",
-    description: "Facility physical security assessment.",
-    wireStatus: "blocked",
-    wireNote: "Government facility PSA enrollment — no API; human-led assessment.",
+    description: "Facility physical security assessment — enrolled export ingest only.",
+    wireStatus: "wired",
+    wireNote:
+      "Enrolled-report ingest (CISA_SAFE_REPORT_URL + optional CISA_SAFE_FEED_TOKEN). Atlas never enrolls CISA SAFE / PSA; human-led assessment only.",
+    envKeys: ["CISA_SAFE_REPORT_URL", "CISA_SAFE_FEED_TOKEN"],
   }),
   def({
     id: "physical.cisa-ist.enrolled.v1",
@@ -640,9 +654,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "physical",
     kind: "enrolled_program",
     label: "CISA IST",
-    description: "Voluntary facility resilience survey.",
-    wireStatus: "blocked",
-    wireNote: "Government IST survey enrollment — no BullMQ API.",
+    description: "Voluntary facility resilience survey — enrolled export ingest only.",
+    wireStatus: "wired",
+    wireNote:
+      "Enrolled-report ingest (CISA_IST_REPORT_URL + optional CISA_IST_FEED_TOKEN). Atlas never submits IST surveys.",
+    envKeys: ["CISA_IST_REPORT_URL", "CISA_IST_FEED_TOKEN"],
   }),
   def({
     id: "physical.brivo.auth.v1",
@@ -663,9 +679,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "backup",
     kind: "auth_api",
     label: "Veeam SureBackup",
-    description: "Isolated backup boot/integrity checks.",
-    wireStatus: "blocked",
-    wireNote: "On-prem SureBackup orchestration — outside hosted worker; no safe cloud-only substitute.",
+    description: "Isolated backup boot/integrity checks — Atlas does readiness API read only.",
+    wireStatus: "wired",
+    wireNote:
+      "Authenticated Veeam REST readiness (VEEAM_URL + VEEAM_USERNAME/PASSWORD or VEEAM_API_TOKEN) — session/server info only; never starts SureBackup jobs.",
+    envKeys: ["VEEAM_URL", "VEEAM_USERNAME", "VEEAM_PASSWORD", "VEEAM_API_TOKEN"],
   }),
   def({
     id: "backup.aws-restore.auth.v1",
@@ -742,9 +760,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "phishing",
     kind: "enrolled_program",
     label: "CISA PCA",
-    description: "Free multi-week workforce click-rate assessment.",
-    wireStatus: "blocked",
-    wireNote: "CISA PCA government enrollment — multi-week human program, not an API.",
+    description: "Free multi-week workforce click-rate assessment — enrolled export ingest only.",
+    wireStatus: "wired",
+    wireNote:
+      "Enrolled-report ingest (CISA_PCA_REPORT_URL + optional CISA_PCA_FEED_TOKEN). Atlas never enrolls or runs CISA PCA campaigns.",
+    envKeys: ["CISA_PCA_REPORT_URL", "CISA_PCA_FEED_TOKEN"],
   }),
 
   // ── 15. ZTA ─────────────────────────────────────────────────────────────
@@ -900,11 +920,13 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     id: "dlp.forcepoint.auth.v1",
     shortlistTool: "Forcepoint DLP",
     category: "dlp",
-    kind: "auth_agent",
+    kind: "auth_api",
     label: "Forcepoint DLP",
-    description: "Multi-channel DLP estate.",
-    wireStatus: "blocked",
-    wireNote: "Paid DLP appliances/agents — no tenant cloud API wired; keep blocked.",
+    description: "Multi-channel DLP estate — policy readiness read via DLP Manager REST.",
+    wireStatus: "wired",
+    wireNote:
+      "Authenticated Forcepoint DLP Manager REST (FORCEPOINT_DLP_URL + FORCEPOINT_DLP_USERNAME/PASSWORD) — enabled policy names only; no agent deploy, no incident remediation writes.",
+    envKeys: ["FORCEPOINT_DLP_URL", "FORCEPOINT_DLP_USERNAME", "FORCEPOINT_DLP_PASSWORD"],
   }),
   def({
     id: "dlp.nightfall.auth.v1",
@@ -982,9 +1004,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "chaos",
     kind: "auth_api",
     label: "Chaos Mesh",
-    description: "K8s CRD chaos experiments.",
-    wireStatus: "blocked",
-    wireNote: "Destructive K8s chaos — conflicts Policy Guard passive defaults; needs separate Circuit A + blast-radius RoE (not auto-wired).",
+    description: "K8s CRD chaos experiments — lab catalog/readiness only.",
+    wireStatus: "wired",
+    wireNote:
+      "Lab-only catalog read (CHAOS_MESH_URL + ATLAS_CHAOS_LAB_APPROVED). Never creates/runs experiments; not in default suite; Policy Guard still flags chaos.* as aggressive without signed Circuit A authz — prefer syntheticMission/lab RoE.",
+    envKeys: ["CHAOS_MESH_URL", "ATLAS_CHAOS_LAB_APPROVED"],
   }),
   def({
     id: "chaos.litmus.auth.v1",
@@ -992,9 +1016,11 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "chaos",
     kind: "auth_api",
     label: "LitmusChaos",
-    description: "Declarative chaos platform.",
-    wireStatus: "blocked",
-    wireNote: "Non-passive chaos platform — same Circuit A / blast-radius constraint as Chaos Mesh.",
+    description: "Declarative chaos platform — lab catalog/readiness only.",
+    wireStatus: "wired",
+    wireNote:
+      "Lab-only catalog read (LITMUS_URL + ATLAS_CHAOS_LAB_APPROVED). Never injects faults; not in default suite; prefer syntheticMission/lab RoE.",
+    envKeys: ["LITMUS_URL", "ATLAS_CHAOS_LAB_APPROVED"],
   }),
   def({
     id: "chaos.aws-fis.auth.v1",
@@ -1002,19 +1028,28 @@ export const SHORTLIST_MODULE_REGISTRY: ModuleDefinition[] = [
     category: "chaos",
     kind: "auth_api",
     label: "AWS FIS",
-    description: "Managed fault injection in AWS.",
-    wireStatus: "blocked",
-    wireNote: "AWS fault injection — non-passive; dedicated resilience entitlement required (not default suite).",
+    description: "Managed fault injection in AWS — lab template list only.",
+    wireStatus: "wired",
+    wireNote:
+      "Lab-only FIS experiment-template list (AWS keys + ATLAS_CHAOS_LAB_APPROVED). Never starts FIS experiments; not in default suite; prefer syntheticMission/lab RoE.",
+    envKeys: [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_REGION",
+      "ATLAS_CHAOS_LAB_APPROVED",
+    ],
   }),
   def({
     id: "chaos.gremlin.auth.v1",
     shortlistTool: "Gremlin",
     category: "chaos",
-    kind: "auth_agent",
+    kind: "auth_api",
     label: "Gremlin",
-    description: "Governed reliability experiments.",
-    wireStatus: "blocked",
-    wireNote: "Paid Gremlin agents + fault injection — non-passive; keep blocked from default execute path.",
+    description: "Governed reliability experiments — lab org readiness only.",
+    wireStatus: "wired",
+    wireNote:
+      "Lab-only Gremlin org/status read (GREMLIN_API_KEY + GREMLIN_TEAM_ID + ATLAS_CHAOS_LAB_APPROVED). Never creates attacks; not in default suite; prefer syntheticMission/lab RoE.",
+    envKeys: ["GREMLIN_API_KEY", "GREMLIN_TEAM_ID", "ATLAS_CHAOS_LAB_APPROVED"],
   }),
 
   // ── 21. TPRM ────────────────────────────────────────────────────────────

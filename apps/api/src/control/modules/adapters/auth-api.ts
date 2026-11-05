@@ -13,6 +13,7 @@ import {
   envHasAny,
   hashJson,
   runKeyedAdapter,
+  runLocalCli,
   sleepRate,
   stubNeedsConfig,
 } from "../helpers";
@@ -684,6 +685,308 @@ export const runRubrik: ModuleAdapter = tenantKeyedGet({
   }),
 });
 
+/**
+ * Veeam — authenticated readiness read only (server/session info).
+ * Never starts SureBackup / restore jobs.
+ */
+export const runVeeam: ModuleAdapter = async (ctx) => {
+  const def = mustDef("backup.veeam.auth.v1");
+  return runKeyedAdapter({
+    def,
+    ctx,
+    requiredKeys: ["VEEAM_URL"],
+    anyOfKeys: [["VEEAM_API_TOKEN", "VEEAM_USERNAME"]],
+    source: "veeam-readiness",
+    assertScope: false,
+    mockEvidence: { readiness: true, sureBackupDisabled: true },
+    fetchLive: async ({ values, fetch: fetchFn, ctx: c }) => {
+      const base = values.VEEAM_URL.replace(/\/$/, "");
+      const token =
+        values.VEEAM_API_TOKEN ||
+        envHasAny(c.env, ["VEEAM_API_TOKEN"]);
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "x-api-version": "1.1-rev1",
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      } else {
+        const user = values.VEEAM_USERNAME || envHasAny(c.env, ["VEEAM_USERNAME"]);
+        const pass = envHasAny(c.env, ["VEEAM_PASSWORD"]);
+        if (!user || !pass) {
+          throw new Error("VEEAM_API_TOKEN or VEEAM_USERNAME+VEEAM_PASSWORD required");
+        }
+        const tokRes = await fetchFn(`${base}/api/oauth2/token`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "password",
+            username: user,
+            password: pass,
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+        const tokJson = (await tokRes.json().catch(() => null)) as {
+          access_token?: string;
+        } | null;
+        if (!tokRes.ok || !tokJson?.access_token) {
+          throw new Error(`Veeam OAuth failed: ${tokRes.status}`);
+        }
+        headers.Authorization = `Bearer ${tokJson.access_token}`;
+      }
+      const res = await fetchFn(`${base}/api/v1/serverInfo`, {
+        headers,
+        signal: AbortSignal.timeout(20_000),
+      });
+      return {
+        ok: res.ok,
+        status: res.status,
+        result: await res.json().catch(() => null),
+        sureBackupDisabled: true,
+        note: "Readiness only — Atlas never starts SureBackup or restore jobs.",
+      };
+    },
+  });
+};
+
+/**
+ * Forcepoint DLP Manager — enabled policy names read only.
+ * Auth via access-token endpoint; no remediations / agent deploy.
+ */
+export const runForcepoint: ModuleAdapter = async (ctx) => {
+  const def = mustDef("dlp.forcepoint.auth.v1");
+  return runKeyedAdapter({
+    def,
+    ctx,
+    requiredKeys: [
+      "FORCEPOINT_DLP_URL",
+      "FORCEPOINT_DLP_USERNAME",
+      "FORCEPOINT_DLP_PASSWORD",
+    ],
+    source: "forcepoint-dlp-read",
+    assertScope: false,
+    mockEvidence: { policies: [], writeDisabled: true },
+    fetchLive: async ({ values, fetch: fetchFn }) => {
+      const base = values.FORCEPOINT_DLP_URL.replace(/\/$/, "");
+      const tokRes = await fetchFn(`${base}/dlp/rest/v1/auth/access-token`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          username: values.FORCEPOINT_DLP_USERNAME,
+          password: values.FORCEPOINT_DLP_PASSWORD,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const tokJson = (await tokRes.json().catch(() => null)) as {
+        access_token?: string;
+        accessToken?: string;
+      } | null;
+      const access =
+        tokJson?.access_token ?? tokJson?.accessToken;
+      if (!tokRes.ok || !access) {
+        throw new Error(`Forcepoint auth failed: ${tokRes.status}`);
+      }
+      const res = await fetchFn(
+        `${base}/dlp/rest/v1/policy/enabled-names?type=DLP`,
+        {
+          headers: {
+            Authorization: `Bearer ${access}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+      return {
+        ok: res.ok,
+        status: res.status,
+        result: await res.json().catch(() => null),
+        writeDisabled: true,
+        note: "Policy name inventory only — no incident remediation from Atlas.",
+      };
+    },
+  });
+};
+
+export const runKnowBe4Usb = enrolledIngestAdapter(
+  "physical.knowbe4-usb.auth.v1",
+  "knowbe4-usb-ingest",
+  "KNOWBE4_USB_REPORT_URL",
+  "KNOWBE4_API_KEY",
+);
+
+export const runCisaSafe = enrolledIngestAdapter(
+  "physical.cisa-safe.enrolled.v1",
+  "cisa-safe-ingest",
+  "CISA_SAFE_REPORT_URL",
+  "CISA_SAFE_FEED_TOKEN",
+);
+
+export const runCisaIst = enrolledIngestAdapter(
+  "physical.cisa-ist.enrolled.v1",
+  "cisa-ist-ingest",
+  "CISA_IST_REPORT_URL",
+  "CISA_IST_FEED_TOKEN",
+);
+
+export const runCisaPca = enrolledIngestAdapter(
+  "phish.cisa-pca.enrolled.v1",
+  "cisa-pca-ingest",
+  "CISA_PCA_REPORT_URL",
+  "CISA_PCA_FEED_TOKEN",
+);
+
+/**
+ * Chaos lab gate — catalog/readiness only; never injects faults.
+ * Requires ATLAS_CHAOS_LAB_APPROVED (like phish lab). Not in default suite.
+ * Prefer syntheticMission / Circuit A for production RoE isolation.
+ */
+function chaosLabReadiness(opts: {
+  moduleId: string;
+  source: string;
+  requiredKeys: string[];
+  buildRequest: (values: Record<string, string>) => {
+    url: string;
+    headers?: Record<string, string>;
+    method?: string;
+    body?: string;
+  };
+}): ModuleAdapter {
+  return async (ctx) => {
+    const def = mustDef(opts.moduleId);
+    const lab = envHasAny(ctx.env, ["ATLAS_CHAOS_LAB_APPROVED"]);
+    if (!lab && !ctx.forceMock && !ctx.syntheticMission) {
+      return stubNeedsConfig(def, [
+        ...opts.requiredKeys,
+        "ATLAS_CHAOS_LAB_APPROVED",
+      ]);
+    }
+    return runKeyedAdapter({
+      def,
+      ctx,
+      requiredKeys: opts.requiredKeys,
+      source: opts.source,
+      assertScope: false,
+      mockEvidence: { catalog: true, injectDisabled: true },
+      fetchLive: async ({ values, fetch: fetchFn }) => {
+        const req = opts.buildRequest(values);
+        const res = await fetchFn(req.url, {
+          method: req.method ?? "GET",
+          headers: {
+            Accept: "application/json",
+            ...(req.headers ?? {}),
+          },
+          body: req.body,
+          signal: AbortSignal.timeout(20_000),
+        });
+        return {
+          ok: res.ok,
+          status: res.status,
+          result: await res.json().catch(() => null),
+          injectDisabled: true,
+          note: "Catalog/readiness only — Atlas never starts chaos experiments.",
+        };
+      },
+    });
+  };
+}
+
+export const runChaosMesh = chaosLabReadiness({
+  moduleId: "chaos.chaos-mesh.auth.v1",
+  source: "chaos-mesh-catalog",
+  requiredKeys: ["CHAOS_MESH_URL"],
+  buildRequest: (v) => ({
+    url: `${v.CHAOS_MESH_URL.replace(/\/$/, "")}/api/common/experiments`,
+  }),
+});
+
+export const runLitmus = chaosLabReadiness({
+  moduleId: "chaos.litmus.auth.v1",
+  source: "litmus-catalog",
+  requiredKeys: ["LITMUS_URL"],
+  buildRequest: (v) => ({
+    url: `${v.LITMUS_URL.replace(/\/$/, "")}/api/list/workflow`,
+  }),
+});
+
+/** AWS FIS — list experiment templates (read-only CLI); never start experiments. */
+export const runAwsFis: ModuleAdapter = async (ctx) => {
+  const def = mustDef("chaos.aws-fis.auth.v1");
+  const lab = envHasAny(ctx.env, ["ATLAS_CHAOS_LAB_APPROVED"]);
+  if (!lab && !ctx.forceMock && !ctx.syntheticMission) {
+    return stubNeedsConfig(def, [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "ATLAS_CHAOS_LAB_APPROVED",
+    ]);
+  }
+  if (ctx.forceMock || ctx.syntheticMission) {
+    return baseResult(def, {
+      status: "ok",
+      evidence: {
+        source: "aws-fis-catalog",
+        mocked: true,
+        templates: [],
+        injectDisabled: true,
+      },
+    });
+  }
+  const awsKey = envHasAny(ctx.env, ["AWS_ACCESS_KEY_ID"]);
+  const awsSecret = envHasAny(ctx.env, ["AWS_SECRET_ACCESS_KEY"]);
+  if (!awsKey || !awsSecret) {
+    return stubNeedsConfig(def, ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]);
+  }
+  const region = envHasAny(ctx.env, ["AWS_REGION"]) ?? "us-east-1";
+  const result = await runLocalCli({
+    bin: "aws",
+    args: [
+      "fis",
+      "list-experiment-templates",
+      "--region",
+      region,
+      "--output",
+      "json",
+    ],
+    timeoutMs: 60_000,
+  });
+  if (result.binaryMissing) {
+    return baseResult(def, {
+      status: "binary_missing",
+      evidence: { bin: "aws", injectDisabled: true },
+      error: result.stderr,
+    });
+  }
+  let parsed: unknown = result.stdout;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    /* text */
+  }
+  return baseResult(def, {
+    status: result.ok ? "ok" : "error",
+    evidence: {
+      source: "aws-fis-catalog",
+      result: parsed,
+      injectDisabled: true,
+      note: "Template list only — Atlas never calls start-experiment.",
+    },
+    error: result.ok ? undefined : result.stderr.slice(0, 500),
+  });
+};
+
+export const runGremlin = chaosLabReadiness({
+  moduleId: "chaos.gremlin.auth.v1",
+  source: "gremlin-catalog",
+  requiredKeys: ["GREMLIN_API_KEY", "GREMLIN_TEAM_ID"],
+  buildRequest: (v) => ({
+    url: `https://api.gremlin.com/v1/teams/${encodeURIComponent(v.GREMLIN_TEAM_ID)}`,
+    headers: {
+      Authorization: `Key ${v.GREMLIN_API_KEY}`,
+      "X-Gremlin-Agent": "atlas-lab-readiness/1",
+    },
+  }),
+});
+
 /** Gophish — READ campaign list only; never create/send (abuse guard). */
 export const runGophish: ModuleAdapter = async (ctx) => {
   const def = mustDef("phish.gophish.auth.v1");
@@ -1183,12 +1486,17 @@ export const AUTH_API_ADAPTERS: Record<string, ModuleAdapter> = {
   "dns.cloudflare-gateway.auth.v1": runCloudflareGateway,
   "dns.dnsfilter.auth.v1": runDnsFilter,
   "physical.brivo.auth.v1": runBrivo,
+  "physical.knowbe4-usb.auth.v1": runKnowBe4Usb,
+  "physical.cisa-safe.enrolled.v1": runCisaSafe,
+  "physical.cisa-ist.enrolled.v1": runCisaIst,
   "backup.aws-restore.auth.v1": runAwsBackupRestore,
   "backup.asr-test.auth.v1": runAsrTest,
   "backup.rubrik.auth.v1": runRubrik,
+  "backup.veeam.auth.v1": runVeeam,
   "phish.gophish.auth.v1": runGophish,
   "phish.knowbe4.auth.v1": runKnowBe4,
   "phish.proofpoint.auth.v1": runProofpointPhish,
+  "phish.cisa-pca.enrolled.v1": runCisaPca,
   "zta.cloudflare-access.auth.v1": runCloudflareAccess,
   "zta.zpa.auth.v1": runZpa,
   "zta.tailscale.auth.v1": runTailscale,
@@ -1203,7 +1511,12 @@ export const AUTH_API_ADAPTERS: Record<string, ModuleAdapter> = {
   "dlp.purview.auth.v1": runPurview,
   "dlp.nightfall.auth.v1": runNightfall,
   "dlp.google-sdp.auth.v1": runGoogleSdp,
+  "dlp.forcepoint.auth.v1": runForcepoint,
   "sast.sonarqube.auth.v1": runSonarQube,
+  "chaos.chaos-mesh.auth.v1": runChaosMesh,
+  "chaos.litmus.auth.v1": runLitmus,
+  "chaos.aws-fis.auth.v1": runAwsFis,
+  "chaos.gremlin.auth.v1": runGremlin,
   "tprm.securityscorecard.passive.v1": runSecurityScorecard,
   "tprm.bitsight.passive.v1": runBitSight,
   "tprm.upguard.passive.v1": runUpGuard,
