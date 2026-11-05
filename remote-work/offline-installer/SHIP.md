@@ -19,16 +19,27 @@
 
 `paradise-gate` = Paradise is **not** re-streaming GitHub Release (bundled `server-assets` fallback and/or missing token). Updating Atlas Release alone does not change live bytes until Paradise refreshes.
 
-## Paradise refresh (Gab / Vercel — no secrets in git)
+## Paradise refresh (closes live `paradise-gate` 688793 drift)
 
-1. Confirm Release asset matches table above (`gh release download v1.2.0 -p Atlas-Setup.exe`).
-2. Vercel project **cultivation-paradise** → set (values only in dashboard):
-   - `ATLAS_V1_DOWNLOAD_URL` = `https://github.com/Gabawaru/Atlas/releases/download/v1.2.0/Atlas-Setup.exe`  
-     (or `…/releases/latest/download/Atlas-Setup.exe`)
-   - `ATLAS_GITHUB_TOKEN` = Contents:Read PAT on **Gabawaru/Atlas** (never commit)
+Live `x-atlas-source: paradise-gate` means Paradise is serving **bundled** `src/server-assets/atlas-v1/Atlas-Setup.exe`, not GitHub Release. Atlas Releases are already current — pick **A and/or B**:
+
+### A — Replace bundled PE (works without Vercel token)
+
+From this repo (after clone of Cultivation-Paradise):
+
+```bash
+./remote-work/offline-installer/scripts/refresh-paradise-server-asset.sh /path/to/Cultivation-Paradise
+# then in Paradise: commit server-assets + deploy
+```
+
+### B — Stream Release (Vercel — no secrets in git)
+
+1. Confirm Release: `gh release download v1.2.0 -p Atlas-Setup.exe`
+2. Vercel **cultivation-paradise** → Production:
+   - `ATLAS_V1_DOWNLOAD_URL` = `https://github.com/Gabawaru/Atlas/releases/download/v1.2.0/Atlas-Setup.exe`
+   - `ATLAS_GITHUB_TOKEN` = Contents:Read PAT on **Gabawaru/Atlas** (dashboard only)
 3. **Redeploy** Production.
-4. Smoke: `curl -sI https://cultivationparadise.com/api/atlas/download` → attachment; body size **2088299**; prefer `x-atlas-source: github-release` (not `paradise-gate`).
-5. Optional: replace bundled `src/server-assets/atlas-v1/Atlas-Setup.exe` in Paradise with this PE so fallback matches.
+4. Smoke body size **2088299**; prefer `x-atlas-source: github-release`.
 
 ## atlas-secu.com CTA
 
