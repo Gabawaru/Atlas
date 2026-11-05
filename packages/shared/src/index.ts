@@ -6,6 +6,35 @@ export type DeployMode = (typeof DEPLOY_MODES)[number];
 
 export const MODULE_WEB_PASSIVE = "web.passive.presence.v1" as const;
 
+/**
+ * Shortlist cooperating module ids (subset wired in API control/modules).
+ * Policy Guard parent remains MODULE_WEB_PASSIVE for mission execute.
+ */
+export const MODULE_SHORTLIST_PASSIVE_SUITE = [
+  "asm.crtsh.passive.v1",
+  "asm.urlscan.passive.v1",
+  "web.observatory.passive.v1",
+  "web.securityheaders.passive.v1",
+  "web.ssllabs.passive.v1",
+  "email.mail-auth.dns.passive.v1",
+  "ti.otx.passive.v1",
+  "ti.virustotal.passive.v1",
+  "breach.hibp.passive.v1",
+] as const;
+
+export const MODULE_SHORTLIST_LOCAL_SUITE = [
+  "sca.trivy.local.v1",
+  "secrets.gitleaks.local.v1",
+  "secrets.trufflehog.local.v1",
+  "sca.osv.local.v1",
+  "sca.grype.local.v1",
+  "firmware.syft.local.v1",
+  "cloud.checkov.local.v1",
+  "sast.semgrep.local.v1",
+  "sast.bandit.local.v1",
+  "compliance.conftest.local.v1",
+] as const;
+
 export type ModuleId = typeof MODULE_WEB_PASSIVE | string;
 
 /** Méthodes passives autorisables dans un RoE (pas de scan agressif) */

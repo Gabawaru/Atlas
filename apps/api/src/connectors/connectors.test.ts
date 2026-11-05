@@ -13,6 +13,9 @@ describe("connector catalog", () => {
     assert.equal(gh?.productionReady, false);
     assert.equal(gh?.isStub, true);
     assert.ok(CONNECTOR_CATALOG.length >= 2);
+    assert.ok(getCatalogEntry("asm.passive.enrichment"));
+    assert.ok(getCatalogEntry("sca.local.analyzers"));
+    assert.ok(getCatalogEntry("ti.passive.enrichment"));
   });
 });
 

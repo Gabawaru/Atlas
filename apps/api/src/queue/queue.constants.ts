@@ -21,4 +21,13 @@ export type WebPassiveJobPayload = {
   targets: Array<{ host: string; url?: string }>;
   allowedHosts: string[];
   exclusions?: string[];
+  /**
+   * Shortlist cooperating modules (passive suite).
+   * Default applied by worker when omitted/empty.
+   */
+  suiteModuleIds?: string[];
+  /** Optional tenant artefact path for local SCA/SAST analyzers */
+  localPath?: string;
+  /** Skip cooperating suite (presence only) */
+  skipSuite?: boolean;
 };
