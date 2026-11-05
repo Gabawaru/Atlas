@@ -5,8 +5,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SHIP="$ROOT/bin/Atlas-Setup.exe"
-EXPECT_SHA="${EXPECT_SHA:-36102410eedf62ccd4d086b688550966d2483292a46f8388b8b22876c231e6a8}"
-EXPECT_SIZE="${EXPECT_SIZE:-2088299}"
+EXPECT_SHA="${EXPECT_SHA:-f3178e782b2096c03d930421d523a812e5c2043311a4cddcc36eaf597c82dd26}"
+EXPECT_SIZE="${EXPECT_SIZE:-2089611}"
 
 PARADISE="${1:-}"
 if [[ -z "$PARADISE" || ! -d "$PARADISE" ]]; then

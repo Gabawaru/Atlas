@@ -137,7 +137,18 @@
       <input id="target" value="pragma-serve.com" autocomplete="off" />
 
       <label for="attestation">Attestation Paradise (jeton compact)</label>
-      <textarea id="attestation" placeholder="coller paradiseAttestation ici" spellcheck="false"></textarea>
+      <textarea id="attestation" placeholder="coller paradiseAttestation ici (signing reste sur Paradise)" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button type="button" class="ghost" id="pasteAttestBtn" title="Lit le presse-papiers">Coller</button>
+        <button type="button" class="ghost" id="clearAttestBtn">Effacer</button>
+        <span id="attestMeta" class="muted"></span>
+      </div>
+      <p class="muted" style="margin:8px 0 0">
+        Obtenir le jeton sur
+        <a href="https://cultivationparadise.com/atlas" target="_blank" rel="noreferrer">Paradise /atlas</a>
+        (PIN), puis Coller ici — pas de draw-sign dans Atlas.exe.
+        Session seule (<code>sessionStorage</code>), pas de secret disque.
+      </p>
 
       <p class="muted">
         Scan réel : create mission → attach Paradise → Circuit A (admin) → Policy Guard →
@@ -164,12 +175,16 @@
       RoE : <code>*.pragma-cloud.com</code>, <code>*.pragma-serve.com</code>, <code>*.pragma.mc</code>.
       Aucun secret dans ce binaire. Client complet :
       <a href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">localhost:3002</a>.
+      Download public :
+      <a href="https://cultivationparadise.com/api/atlas/download" target="_blank" rel="noreferrer">Paradise Setup</a>
+      — si <code>atlas-secu.com</code> pointe encore vers Releases privés, copier monorepo <code>index.html</code> → Pages.
     </p>
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
     const statusEl = $("status");
     const exportsEl = $("exports");
+    const ATTEST_KEY = "atlas.v1.paradiseAttestation";
     let token = null;
     let lastMissionId = null;
 
@@ -180,6 +195,44 @@
     function setStatus(text, cls) {
       statusEl.className = "status " + (cls || "muted");
       statusEl.textContent = text;
+    }
+
+    function refreshAttestMeta() {
+      const v = $("attestation").value.trim();
+      const meta = $("attestMeta");
+      if (!v) {
+        meta.textContent = "";
+        return;
+      }
+      meta.textContent = v.length + " car." + (v.length >= 8 ? " — OK pour Scan" : " — trop court");
+      meta.className = v.length >= 8 ? "ok" : "err";
+    }
+
+    function persistAttestation() {
+      const v = $("attestation").value.trim();
+      try {
+        if (v) sessionStorage.setItem(ATTEST_KEY, v);
+        else sessionStorage.removeItem(ATTEST_KEY);
+      } catch (_) { /* private mode */ }
+      refreshAttestMeta();
+    }
+
+    async function pasteAttestation() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || !text.trim()) {
+          setStatus("Presse-papiers vide — copiez le jeton depuis Paradise /atlas.", "err");
+          return;
+        }
+        $("attestation").value = text.trim();
+        persistAttestation();
+        setStatus("Attestation collée (" + text.trim().length + " car.).", "ok");
+      } catch (e) {
+        setStatus(
+          "Collage bloqué par le navigateur — Ctrl+V dans le champ (permission presse-papiers).",
+          "err",
+        );
+      }
     }
 
     function showCircuitResume(missionId) {
@@ -513,6 +566,18 @@
     $("apiUrl").onchange = () => { $("apiBase").textContent = api(); };
     $("scanBtn").onclick = () => void runScan();
     $("resumeBtn").onclick = () => void resumeAfterCircuitA();
+    $("pasteAttestBtn").onclick = () => void pasteAttestation();
+    $("clearAttestBtn").onclick = () => {
+      $("attestation").value = "";
+      persistAttestation();
+      setStatus("Attestation effacée.", "muted");
+    };
+    $("attestation").addEventListener("input", persistAttestation);
+    try {
+      const saved = sessionStorage.getItem(ATTEST_KEY);
+      if (saved) $("attestation").value = saved;
+    } catch (_) { /* ignore */ }
+    refreshAttestMeta();
     void ping();
   </script>
 </body>

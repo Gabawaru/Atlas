@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|--------|
 | Asset name | `Atlas-Setup.exe` |
-| Size (bytes) | `2088299` |
-| SHA256 | `36102410eedf62ccd4d086b688550966d2483292a46f8388b8b22876c231e6a8` |
+| Size (bytes) | `2089611` |
+| SHA256 | `f3178e782b2096c03d930421d523a812e5c2043311a4cddcc36eaf597c82dd26` |
 | GitHub Releases | `v1.0.0` (clobber) · `v1.2.0` |
 | Build | `cd remote-work/atlas-v1 && ./build.sh` → `bin/Atlas-Setup.exe` |
 

@@ -56,8 +56,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          EXPECT_SIZE=2088299
-          EXPECT_SHA=36102410eedf62ccd4d086b688550966d2483292a46f8388b8b22876c231e6a8
+          EXPECT_SIZE=2089611
+          EXPECT_SHA=f3178e782b2096c03d930421d523a812e5c2043311a4cddcc36eaf597c82dd26
           if [[ -f remote-work/offline-installer/SHIP.md ]]; then
             EXPECT_SIZE=$(rg -oN 'Size \(bytes\) \| `([0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
             EXPECT_SHA=$(rg -oN 'SHA256 \| `([a-f0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
