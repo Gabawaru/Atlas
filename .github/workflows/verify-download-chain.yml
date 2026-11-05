@@ -11,10 +11,38 @@ on:
     paths:
       - "remote-work/offline-installer/**"
       - "remote-work/atlas-v1/**"
+      - "index.html"
       - ".github/workflows/verify-download-chain.yml"
       - ".github/workflows/release-setup.yml"
 
 jobs:
+  pages-cta:
+    name: atlas-secu.com CTA
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Monorepo seed + live Pages CTA must hit Paradise
+        run: |
+          set -euo pipefail
+          EXPECT='https://cultivationparadise.com/api/atlas/download'
+          # Seed in this repo (Gab copies to Gabawaru/atlas-secu-pages)
+          rg -F "$EXPECT" index.html
+          if rg -F 'github.com/Gabawaru/Atlas/releases' index.html; then
+            echo "::error::monorepo index.html must not CTA private Releases"
+            exit 1
+          fi
+          curl -fsSL -o /tmp/atlas-secu.html https://atlas-secu.com/
+          if ! rg -F "$EXPECT" /tmp/atlas-secu.html; then
+            echo "::error::Live atlas-secu.com CTA drift — still not Paradise download."
+            echo "Copy monorepo index.html → Gabawaru/atlas-secu-pages (agent push 403)."
+            rg -o 'href="[^"]+"' /tmp/atlas-secu.html || true
+            exit 1
+          fi
+          echo "ok — live Pages CTA → Paradise"
+
   drift:
     name: Paradise vs Release
     runs-on: ubuntu-latest
@@ -54,7 +82,7 @@ jobs:
 
           if [[ "$P_SIZE" != "$EXPECT_SIZE" || "$P_SHA" != "$EXPECT_SHA" ]]; then
             echo "::error::Paradise download DRIFT — still serving stale PE (often x-atlas-source: paradise-gate bundled fallback)."
-            echo "Refresh Paradise: set ATLAS_V1_DOWNLOAD_URL + ATLAS_GITHUB_TOKEN, redeploy (see remote-work/offline-installer/SHIP.md)."
+            echo "Refresh: remote-work/offline-installer/scripts/refresh-paradise-server-asset.sh  OR  Vercel ATLAS_V1_DOWNLOAD_URL+token (SHIP.md)."
             exit 1
           fi
           echo "ok — Paradise matches Release ship identity"

@@ -43,4 +43,10 @@ From this repo (after clone of Cultivation-Paradise):
 
 ## atlas-secu.com CTA
 
-Monorepo `index.html` already points at Paradise stream. Live Pages may still link private Releases — copy monorepo `index.html` to `Gabawaru/atlas-secu-pages`.
+Monorepo `index.html` already points at Paradise stream. Live Pages may still link private Releases — copy monorepo `index.html` to `Gabawaru/atlas-secu-pages` (agent push **403**).
+
+```bash
+./scripts/check-pages-cta.sh   # fails while live CTA ≠ Paradise
+```
+
+CI job **atlas-secu.com CTA** in `Verify download chain` does the same.
