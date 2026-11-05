@@ -10,7 +10,8 @@ Workflow Scan:
   1. Demarrer l'API Atlas (AtlasLocal start ou pnpm dev:api) sur :3001
   2. Lancer Atlas.exe → UI Scan sur http://127.0.0.1:17865/
   3. Coller attestation Paradise + cible RoE → Scan
-  4. Circuit A (admin) → Policy Guard → suite passive → export JSON/CSV/PDF
+  4. Circuit A (admin) → bouton « Reprendre après Circuit A » (même mission, pas de re-collage)
+  5. Policy Guard → suite passive → export JSON/CSV/PDF
 
 RoE: only *.pragma-cloud.com, *.pragma-serve.com, *.pragma.mc (+ listed apexes).
 cultivationparadise.com is OUT of scope for scans. No Sign keys in this install.

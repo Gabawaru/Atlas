@@ -140,7 +140,17 @@
         Pas d’auto-execute avant approbation A.
       </p>
 
-      <button type="button" class="cta" id="scanBtn">Scan</button>
+      <div class="row" style="margin-top:18px;gap:10px;align-items:stretch">
+        <button type="button" class="cta" id="scanBtn" style="margin-top:0">Scan</button>
+        <button type="button" class="ghost" id="resumeBtn" hidden title="Reprend la mission déjà attachée (pas de re-collage Paradise)">
+          Reprendre après Circuit A
+        </button>
+      </div>
+      <p id="circuitHint" class="muted" hidden style="margin-top:10px">
+        Admin Circuit A :
+        <a id="adminLink" href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">ouvrir le client / admin</a>
+        — puis <strong>Reprendre</strong> ici (même mission, attestation déjà attachée).
+      </p>
       <div id="status" class="status muted" role="status"></div>
       <div id="exports" class="exports" hidden></div>
     </div>
@@ -167,6 +177,19 @@
       statusEl.textContent = text;
     }
 
+    function showCircuitResume(missionId) {
+      lastMissionId = missionId;
+      $("resumeBtn").hidden = false;
+      $("circuitHint").hidden = false;
+      const clientBase = api().replace(/:3001$/, ":3002");
+      $("adminLink").href = clientBase;
+    }
+
+    function hideCircuitResume() {
+      $("resumeBtn").hidden = true;
+      $("circuitHint").hidden = true;
+    }
+
     async function apiJson(path, opts = {}) {
       const headers = Object.assign(
         { "Content-Type": "application/json" },
@@ -190,10 +213,26 @@
         const res = await fetch(api() + "/v1/health");
         $("apiHealth").textContent = res.ok ? "OK" : "HTTP " + res.status;
         $("apiHealth").className = res.ok ? "ok" : "err";
+        return res.ok;
       } catch (e) {
         $("apiHealth").textContent = "hors ligne — démarrez api (AtlasLocal start / pnpm dev:api)";
         $("apiHealth").className = "err";
+        return false;
       }
+    }
+
+    async function ensureLogin() {
+      if (token) return token;
+      const login = await apiJson("/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: $("email").value.trim(),
+          password: $("password").value,
+        }),
+      });
+      token = login.accessToken;
+      if (!token) throw new Error("Pas de jeton — vérifiez les identifiants");
+      return token;
     }
 
     async function ensureConnector() {
@@ -269,6 +308,67 @@
       }
     }
 
+    async function executeAndExport(missionId) {
+      setStatus("Exécution (Policy Guard → BullMQ web.passive.presence.v1 + suite)…");
+      const run = await apiJson("/v1/missions/" + missionId + "/execute", { method: "POST" });
+      if (run.gate && run.gate.decision === "REJECT") {
+        setStatus(run.gate.code + ": " + run.gate.reason, "err");
+        showCircuitResume(missionId);
+        return;
+      }
+
+      const done = await pollMission(missionId, 30);
+      if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
+        hideCircuitResume();
+        setStatus("Scan terminé — " + done.status + ". Téléchargez l’export ci-dessous.", "ok");
+        await showExports(missionId);
+      } else {
+        setStatus(
+          "Exécution lancée — statut " + done.status + ". Rafraîchissez ou ouvrez le client pour le bilan.",
+          "ok",
+        );
+      }
+    }
+
+    async function resumeAfterCircuitA() {
+      if (!lastMissionId) {
+        setStatus("Aucune mission en attente — lancez Scan d’abord.", "err");
+        return;
+      }
+      $("scanBtn").disabled = true;
+      $("resumeBtn").disabled = true;
+      exportsEl.hidden = true;
+      try {
+        if (!(await ping())) {
+          setStatus(
+            "API hors ligne — démarrez AtlasLocal start (ou pnpm dev:api) sur :3001, puis Reprendre.",
+            "err",
+          );
+          return;
+        }
+        setStatus("Connexion…");
+        await ensureLogin();
+        setStatus("Mission " + lastMissionId + " — vérif Circuit A…");
+        const m = await pollMission(lastMissionId, 15);
+        if (!canExecute(m.status)) {
+          showCircuitResume(lastMissionId);
+          setStatus(
+            "Toujours " + m.status +
+              " — staff doit décider dans l’admin, puis Reprendre (attestation déjà attachée).",
+            "err",
+          );
+          return;
+        }
+        await executeAndExport(lastMissionId);
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e), "err");
+        showCircuitResume(lastMissionId);
+      } finally {
+        $("scanBtn").disabled = false;
+        $("resumeBtn").disabled = false;
+      }
+    }
+
     async function runScan() {
       const attestation = $("attestation").value.trim();
       const target = $("target").value.trim().toLowerCase().replace(/\.$/, "");
@@ -282,18 +382,20 @@
       }
 
       $("scanBtn").disabled = true;
+      $("resumeBtn").disabled = true;
+      hideCircuitResume();
       exportsEl.hidden = true;
       try {
+        if (!(await ping())) {
+          setStatus(
+            "API hors ligne — démarrez AtlasLocal start (ou pnpm dev:api) sur :3001 avant Scan.\nSetup n’embarque pas Docker/Redis/Postgres.",
+            "err",
+          );
+          return;
+        }
+
         setStatus("Connexion…");
-        const login = await apiJson("/v1/auth/login", {
-          method: "POST",
-          body: JSON.stringify({
-            email: $("email").value.trim(),
-            password: $("password").value,
-          }),
-        });
-        token = login.accessToken;
-        if (!token) throw new Error("Pas de jeton — vérifiez les identifiants");
+        await ensureLogin();
 
         setStatus("Connecteur web.passive.presence…");
         await ensureConnector();
@@ -331,46 +433,39 @@
         setStatus("Mission " + mission.id + " → " + status);
 
         if (!canExecute(status)) {
+          showCircuitResume(mission.id);
           setStatus(
             "Mission " + mission.id + " → " + status +
-              ".\nAttestation Paradise attachée. Circuit A requis : un approbateur staff doit décider dans l’admin.\nScan attend l’approbation (poll 3 min)…",
+              ".\nAttestation Paradise attachée. Circuit A requis : un approbateur staff décide dans l’admin.\nScan attend l’approbation (poll ~3 min) — ou Reprendre après décision…",
           );
           const polled = await pollMission(mission.id, 45);
           status = polled.status;
         }
 
         if (!canExecute(status)) {
+          showCircuitResume(mission.id);
           setStatus(
-            "Toujours " + status + " — ouvrez l’admin pour décider, puis relancez Scan ou Exécuter côté client.",
+            "Toujours " + status +
+              " — ouvrez l’admin, décidez, puis cliquez Reprendre après Circuit A (pas besoin de re-coller l’attestation).",
             "err",
           );
           return;
         }
 
-        setStatus("Exécution (Policy Guard → BullMQ web.passive.presence.v1 + suite)…");
-        const run = await apiJson("/v1/missions/" + mission.id + "/execute", { method: "POST" });
-        if (run.gate && run.gate.decision === "REJECT") {
-          setStatus(run.gate.code + ": " + run.gate.reason, "err");
-          return;
-        }
-
-        const done = await pollMission(mission.id, 30);
-        if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
-          setStatus("Scan terminé — " + done.status + ". Téléchargez l’export ci-dessous.", "ok");
-          await showExports(mission.id);
-        } else {
-          setStatus("Exécution lancée — statut " + done.status + ". Rafraîchissez ou ouvrez le client pour le bilan.", "ok");
-        }
+        await executeAndExport(mission.id);
       } catch (e) {
         setStatus(e instanceof Error ? e.message : String(e), "err");
+        if (lastMissionId) showCircuitResume(lastMissionId);
       } finally {
         $("scanBtn").disabled = false;
+        $("resumeBtn").disabled = false;
       }
     }
 
     $("pingBtn").onclick = () => void ping();
     $("apiUrl").onchange = () => { $("apiBase").textContent = api(); };
     $("scanBtn").onclick = () => void runScan();
+    $("resumeBtn").onclick = () => void resumeAfterCircuitA();
     void ping();
   </script>
 </body>
