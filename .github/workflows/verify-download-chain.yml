@@ -1,0 +1,60 @@
+# Prove Atlas Release PE vs live Paradise stream (download-chain drift).
+# Musk: accelerate visibility — fail soft on schedule so Gab sees paradise-gate staleness.
+name: Verify download chain
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+  push:
+    branches: [main, "cursor/atlas-v1-e2e-workflow-ee02"]
+    paths:
+      - "remote-work/offline-installer/**"
+      - "remote-work/atlas-v1/**"
+      - ".github/workflows/verify-download-chain.yml"
+      - ".github/workflows/release-setup.yml"
+
+jobs:
+  drift:
+    name: Paradise vs Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare Paradise stream to SHIP / Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          EXPECT_SIZE=2088299
+          EXPECT_SHA=36102410eedf62ccd4d086b688550966d2483292a46f8388b8b22876c231e6a8
+          if [[ -f remote-work/offline-installer/SHIP.md ]]; then
+            EXPECT_SIZE=$(rg -oN 'Size \(bytes\) \| `([0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
+            EXPECT_SHA=$(rg -oN 'SHA256 \| `([a-f0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
+          fi
+          echo "expect size=$EXPECT_SIZE sha=$EXPECT_SHA"
+
+          curl -fsSL -o /tmp/paradise.exe -D /tmp/paradise.hdr \
+            https://cultivationparadise.com/api/atlas/download
+          P_SIZE=$(wc -c </tmp/paradise.exe)
+          P_SHA=$(sha256sum /tmp/paradise.exe | awk '{print $1}')
+          P_SRC=$(rg -i '^x-atlas-source:' /tmp/paradise.hdr | tr -d '\r' || true)
+          echo "paradise size=$P_SIZE sha=$P_SHA $P_SRC"
+
+          mkdir -p /tmp/rel
+          gh release download v1.2.0 -p Atlas-Setup.exe -D /tmp/rel --clobber
+          R_SIZE=$(wc -c </tmp/rel/Atlas-Setup.exe)
+          R_SHA=$(sha256sum /tmp/rel/Atlas-Setup.exe | awk '{print $1}')
+          echo "release v1.2.0 size=$R_SIZE sha=$R_SHA"
+
+          test "$R_SIZE" = "$EXPECT_SIZE"
+          test "$R_SHA" = "$EXPECT_SHA"
+
+          if [[ "$P_SIZE" != "$EXPECT_SIZE" || "$P_SHA" != "$EXPECT_SHA" ]]; then
+            echo "::error::Paradise download DRIFT — still serving stale PE (often x-atlas-source: paradise-gate bundled fallback)."
+            echo "Refresh Paradise: set ATLAS_V1_DOWNLOAD_URL + ATLAS_GITHUB_TOKEN, redeploy (see remote-work/offline-installer/SHIP.md)."
+            exit 1
+          fi
+          echo "ok — Paradise matches Release ship identity"
