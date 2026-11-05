@@ -17,6 +17,7 @@ import { RetentionModule } from "./retention/retention.module";
 import { BillingModule } from "./billing/billing.module";
 import { OpsModule } from "./ops/ops.module";
 import { HealthController } from "./health.controller";
+import { ModulesModule } from "./control/modules.module";
 import { PrismaService } from "./prisma/prisma.service";
 
 @Module({
@@ -26,6 +27,7 @@ import { PrismaService } from "./prisma/prisma.service";
     MailModule,
     QueueModule,
     ConnectorsModule,
+    ModulesModule,
     MissionsModule,
     ApprovalsModule,
     HierarchyModule,

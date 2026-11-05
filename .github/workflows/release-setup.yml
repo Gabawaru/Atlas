@@ -1,5 +1,5 @@
 # Publish Atlas-Setup.exe to GitHub Releases (Paradise download chain).
-# Musk: one asset name Paradise already expects; automate after proven upload.
+# Musk: rebuild ship PE here so Release never re-uploads a stale stub; one asset name.
 name: Release Atlas-Setup
 
 on:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or update (e.g. v1.0.1)"
+        description: "Release tag to create or update (e.g. v1.2.0)"
         required: true
         type: string
 
@@ -18,25 +18,56 @@ permissions:
 
 jobs:
   release:
-    name: upload Atlas-Setup.exe
+    name: build + upload Atlas-Setup.exe
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify PE ship asset
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install NSIS
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis
+
+      - name: Ensure AtlasLocal.exe present for Setup payload
+        run: |
+          set -euo pipefail
+          LOCAL=remote-work/offline-installer/bin/AtlasLocal.exe
+          if [[ ! -f "$LOCAL" ]]; then
+            echo "ERROR: missing $LOCAL (needed by atlas-v1/build.sh)" >&2
+            exit 1
+          fi
+          file "$LOCAL"
+
+      - name: Rebuild Atlas-Setup.exe
+        run: |
+          set -euo pipefail
+          cd remote-work/atlas-v1
+          ./build.sh
+
+      - name: Verify PE ship asset (reject stub)
+        id: pe
         run: |
           set -euo pipefail
           ASSET=remote-work/offline-installer/bin/Atlas-Setup.exe
           test -f "$ASSET"
-          # MZ header
           python3 - <<'PY'
           from pathlib import Path
+          import hashlib, os
           p = Path("remote-work/offline-installer/bin/Atlas-Setup.exe")
           data = p.read_bytes()
           assert data[:2] == b"MZ", data[:2]
-          print(f"ok size={p.stat().st_size} sha256={__import__('hashlib').sha256(data).hexdigest()}")
+          # Pre-v1 Scan/AtlasLocal stub was ~688793; current ship is ~2 MB.
+          assert len(data) >= 1_500_000, f"PE too small ({len(data)}); refusing stub upload"
+          digest = hashlib.sha256(data).hexdigest()
+          print(f"ok size={len(data)} sha256={digest}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"size={len(data)}\n")
+              f.write(f"sha256={digest}\n")
           PY
 
       - name: Resolve tag
@@ -52,14 +83,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.name }}
+          PE_SIZE: ${{ steps.pe.outputs.size }}
+          PE_SHA: ${{ steps.pe.outputs.sha256 }}
         run: |
           set -euo pipefail
           ASSET=remote-work/offline-installer/bin/Atlas-Setup.exe
+          NOTES="Windows installer \`Atlas-Setup.exe\` for Paradise download (\`/api/atlas/download\`).
+
+          - size: ${PE_SIZE}
+          - sha256: \`${PE_SHA}\`
+          - Scan UI + bundled AtlasLocal (Démarrer l’API); no Docker images in PE."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" --clobber
+            gh release edit "$TAG" --notes "$NOTES"
           else
             gh release create "$TAG" "$ASSET" \
               --title "Atlas Setup ${TAG}" \
-              --notes "Windows installer \`Atlas-Setup.exe\` for Paradise PIN download (\`/api/atlas/download\`). Same asset name Paradise expects."
+              --notes "$NOTES"
           fi
-          gh release view "$TAG" --json tagName,assets,url --jq '{tag:.tagName,url:.url,assets:[.assets[].name]}'
+          gh release view "$TAG" --json tagName,assets,url --jq '{tag:.tagName,url:.url,assets:[.assets[]|{name,size,digest}]}'

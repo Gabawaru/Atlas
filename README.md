@@ -30,7 +30,7 @@ Postgres RLS + `PrismaService.asTenant` existent pour les **tests d’isolation*
 apps/api          NestJS — auth, missions, BullMQ, exports, connecteurs, SignatureProvider (Pragma Sign ou mock)
 apps/admin        Next.js — file d’approbation + config routage (stub)
 apps/client       React — 5 besoins, connecteurs, conversation mock, bilans ; `pnpm client:smoke`
-apps/client/src-tauri  Stub Tauri 2 (conf + cargo message-only ; pas de bundle signé)
+apps/client/src-tauri  Stub Tauri 2 — **hors acceptation v1** (ship = NSIS `remote-work/atlas-v1`)
 packages/shared   Types, états mission, UX needs, transitions
 packages/policy-guard  evaluateExecution() déterministe + tests sans LLM
 docker-compose.yml     Postgres 16 + Redis 7 (requis pour BullMQ)
