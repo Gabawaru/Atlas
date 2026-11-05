@@ -13,19 +13,22 @@ Mission (Circuit A + Paradise owner authz + RoE)
         → findings + report unifié (presence + suite)
 ```
 
-- **Pas de secrets Paradise / Sign** touchés — clés optionnelles shortlist via `.env` (`HIBP_API_KEY`, `VT_API_KEY`, …).
-- **Pas d’exploits** — adapters passifs / locaux / `needs_config` / `blocked` uniquement.
+- **Pas de secrets Paradise / Sign** touchés — clés optionnelles shortlist via `.env` (voir `.env.example`).
+- **Pas d’exploits** — adapters passifs / auth read-only / locaux / `needs_config` / `blocked`.
 - Catalogue HTTP : `GET /v1/modules` (auth).
+- Clés absentes → `needs_config` avec `evidence.requiredEnv` (jamais de secrets inventés).
 
 ## Statuts
 
 | wireStatus | Signification |
 | --- | --- |
-| `wired` | Adapter exécutable dans la suite (API publique, DNS, ou CLI local) |
-| `stub` | Entrée catalogue + connecteur ; renvoie `needs_config` jusqu’à clés/agent |
-| `blocked` | Non branchable sous contraintes Atlas (enrollment, agents endpoint, chaos, HR/legal, etc.) |
+| `wired` | Adapter exécutable (live si clés/binaire ; sinon `needs_config` / `binary_missing`) |
+| `stub` | Réservé (aucun après pass d’adapters) |
+| `blocked` | Contrainte policy/architecture — non exécutable (chaos, UI-only, kernel agents, …) |
 
-Code : `apps/api/src/control/modules/`.
+**Compte courant :** 79 wired · 0 stub · 15 blocked.
+
+Code : `apps/api/src/control/modules/` (`passive-api.ts`, `local-analyzers.ts`, `auth-api.ts`).
 
 ## Suite passive par défaut
 
@@ -41,16 +44,25 @@ Exécutée après la présence web (sauf `skipSuite`) :
 - `ti.virustotal.passive.v1`
 - `breach.hibp.passive.v1`
 
+Autres modules wired (SaaS/auth/enrolled) : opt-in via `suiteModuleIds` sur le job — **pas** dans la suite passive par défaut.
+
 ## Suite locale
 
-Si `localPath` est fourni sur le job BullMQ : Trivy, Gitleaks, TruffleHog, OSV, Grype, Syft, Checkov, Semgrep, Bandit, Conftest.
+Si `localPath` est fourni sur le job BullMQ : Trivy, Gitleaks, TruffleHog, OSV, Grype, Syft, Checkov, Semgrep, Bandit, Conftest.  
+CLI additionnels (wired, opt-in) : fwupd, Prowler, kube-bench, Kubescape, CodeQL, OpenSCAP, NeMo Guardrails.
 
-## Connecteurs ajoutés
+## Phishing lab
+
+`phish.gophish` / `phish.knowbe4` / `phish.proofpoint` : **lecture métriques uniquement** ; exigent `ATLAS_PHISH_LAB_APPROVED` + clés API. Aucun envoi de campagne depuis Atlas.
+
+## Connecteurs
 
 - `asm.passive.enrichment`
 - `breach.hibp`
 - `ti.passive.enrichment`
 - `sca.local.analyzers`
-- `cloud.posture.auth` (stub)
+- `cloud.posture.auth`
+- `github.read_only`
+- `saas.auth.enrichment`
 
-Voir aussi le rapport d’intégration projet (store) `docs/atlas-shortlist-modules-integration.md`.
+Voir le rapport d’intégration projet `docs/atlas-shortlist-modules-integration.md` (Agent Store).

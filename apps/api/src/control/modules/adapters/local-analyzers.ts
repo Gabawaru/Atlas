@@ -154,14 +154,168 @@ export const runConftest: ModuleAdapter = (ctx) =>
     ctx,
   });
 
+/** fwupd — inventory on worker host only when binary present (not customer endpoints). */
+export const runFwupd: ModuleAdapter = async (ctx) => {
+  const def = mustDef("firmware.fwupd.local.v1");
+  if (ctx.forceMock || ctx.syntheticMission) {
+    return baseResult(def, {
+      status: "ok",
+      evidence: { source: "fwupdmgr", mocked: true, devices: [] },
+    });
+  }
+  const result = await runLocalCli({
+    bin: "fwupdmgr",
+    args: ["get-devices", "--json"],
+    timeoutMs: 30_000,
+  });
+  if (result.binaryMissing) {
+    return baseResult(def, {
+      status: "binary_missing",
+      evidence: {
+        bin: "fwupdmgr",
+        note: "fwupd runs on the Atlas worker host only — not a substitute for endpoint agents.",
+      },
+      error: result.stderr,
+    });
+  }
+  let parsed: unknown = result.stdout;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    /* text */
+  }
+  return baseResult(def, {
+    status: result.ok ? "ok" : "error",
+    evidence: { source: "fwupdmgr", host: "worker", result: parsed },
+  });
+};
+
+export const runProwler: ModuleAdapter = async (ctx) => {
+  const def = mustDef("cloud.prowler.auth.v1");
+  if (ctx.forceMock || ctx.syntheticMission) {
+    return baseResult(def, {
+      status: "ok",
+      evidence: { source: "prowler", mocked: true },
+    });
+  }
+  const awsKey = ctx.env?.AWS_ACCESS_KEY_ID?.trim() || process.env.AWS_ACCESS_KEY_ID?.trim();
+  const awsSecret =
+    ctx.env?.AWS_SECRET_ACCESS_KEY?.trim() ||
+    process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  if (!awsKey || !awsSecret) {
+    return stubNeedsConfig(def, ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]);
+  }
+  const result = await runLocalCli({
+    bin: "prowler",
+    args: ["aws", "-M", "json", "--quiet"],
+    timeoutMs: 120_000,
+  });
+  if (result.binaryMissing) {
+    return baseResult(def, {
+      status: "binary_missing",
+      evidence: { bin: "prowler", credentialsPresent: true },
+      error: result.stderr,
+    });
+  }
+  let parsed: unknown = result.stdout;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    /* text */
+  }
+  return baseResult(def, {
+    status: result.ok || result.code === 0 || result.code === 3 ? "ok" : "error",
+    evidence: { source: "prowler", result: parsed, stderrTail: result.stderr.slice(-2000) },
+  });
+};
+
+export const runKubeBench: ModuleAdapter = (ctx) =>
+  runScanner({
+    moduleId: "cloud.kube-bench.auth.v1",
+    bin: "kube-bench",
+    argsFor: () => ["run", "--json"],
+    ctx,
+  });
+
+export const runKubescape: ModuleAdapter = (ctx) =>
+  runScanner({
+    moduleId: "cloud.kubescape.auth.v1",
+    bin: "kubescape",
+    argsFor: (p) => ["scan", "framework", "nsa", p, "--format", "json"],
+    ctx,
+  });
+
+export const runCodeql: ModuleAdapter = (ctx) =>
+  runScanner({
+    moduleId: "sast.codeql.local.v1",
+    bin: "codeql",
+    argsFor: (p) => ["database", "create", "--language=javascript", "--source-root", p, `${p}/.atlas-codeql-db`],
+    ctx,
+  });
+
+export const runOpenScap: ModuleAdapter = (ctx) =>
+  runScanner({
+    moduleId: "compliance.openscap.local.v1",
+    bin: "oscap",
+    argsFor: (p) => ["info", p],
+    ctx,
+  });
+
+/** NeMo Guardrails — config-dir check; library embed not a remote scanner. */
+export const runNemoGuardrails: ModuleAdapter = async (ctx) => {
+  const def = mustDef("ai.nemo-guardrails.local.v1");
+  const path = requireLocalPath(ctx);
+  if (!path) {
+    return stubNeedsConfig(def, ["localPath (NeMo config / rails dir)"]);
+  }
+  if (path === "__mock__") {
+    return baseResult(def, {
+      status: "ok",
+      evidence: { source: "nemo-guardrails", mocked: true, path },
+    });
+  }
+  const result = await runLocalCli({
+    bin: "nemoguardrails",
+    args: ["--help"],
+    timeoutMs: 15_000,
+  });
+  if (result.binaryMissing) {
+    return baseResult(def, {
+      status: "binary_missing",
+      evidence: {
+        bin: "nemoguardrails",
+        path,
+        note: "Install NVIDIA NeMo Guardrails CLI or embed rails in the app; Atlas only verifies config path + binary.",
+      },
+      error: result.stderr,
+    });
+  }
+  return baseResult(def, {
+    status: "ok",
+    evidence: {
+      source: "nemo-guardrails",
+      path,
+      binaryPresent: true,
+      note: "Rails config path accepted — runtime enforcement stays in the LLM app process.",
+    },
+  });
+};
+
 export const LOCAL_ANALYZER_ADAPTERS: Record<string, ModuleAdapter> = {
   "sca.trivy.local.v1": runTrivy,
   "secrets.gitleaks.local.v1": runGitleaks,
   "secrets.trufflehog.local.v1": runTrufflehog,
   "sca.grype.local.v1": runGrype,
   "firmware.syft.local.v1": runSyft,
+  "firmware.fwupd.local.v1": runFwupd,
   "cloud.checkov.local.v1": runCheckov,
+  "cloud.prowler.auth.v1": runProwler,
+  "cloud.kube-bench.auth.v1": runKubeBench,
+  "cloud.kubescape.auth.v1": runKubescape,
   "sast.semgrep.local.v1": runSemgrep,
   "sast.bandit.local.v1": runBandit,
+  "sast.codeql.local.v1": runCodeql,
   "compliance.conftest.local.v1": runConftest,
+  "compliance.openscap.local.v1": runOpenScap,
+  "ai.nemo-guardrails.local.v1": runNemoGuardrails,
 };

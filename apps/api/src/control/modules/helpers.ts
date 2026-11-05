@@ -61,15 +61,147 @@ export function stubNeedsConfig(
   def: ModuleDefinition,
   missing: string[],
 ): ModuleRunResult {
+  const requiredEnv = missing.length
+    ? missing
+    : [...(def.envKeys ?? [])];
   return baseResult(def, {
     status: "needs_config",
     evidence: {
       wireStatus: def.wireStatus,
       wireNote: def.wireNote,
       missingEnv: missing,
+      requiredEnv,
     },
-    error: `Configuration manquante: ${missing.join(", ") || def.wireNote || "n/a"}`,
+    error: `Configuration manquante: ${requiredEnv.join(", ") || def.wireNote || "n/a"}`,
   });
+}
+
+/** Resolve required env keys; empty map → needs_config list. */
+export function requireAllEnv(
+  env: NodeJS.ProcessEnv | undefined,
+  keys: string[],
+): { ok: true; values: Record<string, string> } | { ok: false; missing: string[] } {
+  const e = env ?? process.env;
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const k of keys) {
+    const v = e[k]?.trim();
+    if (!v) missing.push(k);
+    else values[k] = v;
+  }
+  if (missing.length) return { ok: false, missing };
+  return { ok: true, values };
+}
+
+/**
+ * Keyed auth/passive adapter skeleton:
+ * - forceMock/synthetic → synthetic evidence (no live call)
+ * - missing env → needs_config with requiredEnv
+ * - else → call fetchLive and wrap evidence
+ */
+export async function runKeyedAdapter(opts: {
+  def: ModuleDefinition;
+  ctx: ModuleRunContext;
+  requiredKeys: string[];
+  /** Any-of groups: each inner array is alternatives for one logical secret */
+  anyOfKeys?: string[][];
+  source: string;
+  mockEvidence?: unknown;
+  /** Scope assert before live/mock (default true for target-based modules) */
+  assertScope?: boolean;
+  fetchLive: (args: {
+    ctx: ModuleRunContext;
+    values: Record<string, string>;
+    fetch: typeof fetch;
+  }) => Promise<unknown>;
+}): Promise<ModuleRunResult> {
+  const { def, ctx } = opts;
+  if (opts.assertScope !== false) {
+    assertAllTargetsInScope(ctx);
+  }
+
+  if (ctx.forceMock || ctx.syntheticMission) {
+    return baseResult(def, {
+      status: "ok",
+      evidence: {
+        source: opts.source,
+        mocked: true,
+        synthetic: true,
+        ...(typeof opts.mockEvidence === "object" && opts.mockEvidence
+          ? (opts.mockEvidence as object)
+          : { mock: opts.mockEvidence ?? true }),
+      },
+      findings: [
+        {
+          severity: "info",
+          title: `${def.label} (mock)`,
+          summary: "Preuve synthétique — aucun appel live.",
+        },
+      ],
+    });
+  }
+
+  const required = [...opts.requiredKeys];
+  const values: Record<string, string> = {};
+  const e = ctx.env ?? process.env;
+
+  for (const k of opts.requiredKeys) {
+    const v = e[k]?.trim();
+    if (v) values[k] = v;
+  }
+
+  const missingRequired = opts.requiredKeys.filter((k) => !values[k]);
+  const missingAnyOf: string[] = [];
+  for (const group of opts.anyOfKeys ?? []) {
+    const hit = group.find((k) => e[k]?.trim());
+    if (hit) {
+      values[hit] = e[hit]!.trim();
+      // alias first key for adapters that expect a canonical name
+      if (!values[group[0]!]) values[group[0]!] = values[hit]!;
+    } else {
+      missingAnyOf.push(group.join("|"));
+      missingRequired.push(...group);
+    }
+  }
+
+  if (missingRequired.length || missingAnyOf.length) {
+    const listed = [
+      ...opts.requiredKeys.filter((k) => !values[k]),
+      ...missingAnyOf,
+    ];
+    return stubNeedsConfig(def, listed.length ? listed : required);
+  }
+
+  try {
+    const evidenceBody = await opts.fetchLive({
+      ctx,
+      values,
+      fetch: ctxFetch(ctx),
+    });
+    await sleepRate(ctx, def.rateLimitPerMinuteDefault);
+    return baseResult(def, {
+      status: "ok",
+      evidence: {
+        source: opts.source,
+        live: true,
+        evidenceHash: hashJson(evidenceBody),
+        result: evidenceBody,
+      },
+      findings: [
+        {
+          severity: "info",
+          title: def.label,
+          summary: `Connecteur authentifié ${opts.source} — lecture seule / in-scope.`,
+        },
+      ],
+    });
+  } catch (err) {
+    return baseResult(def, {
+      status: "error",
+      evidence: { source: opts.source },
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export function stubBlocked(def: ModuleDefinition): ModuleRunResult {

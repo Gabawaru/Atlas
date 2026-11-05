@@ -17,9 +17,8 @@ describe("shortlist module registry", () => {
   it("couvre ~94 outils shortlist", () => {
     const s = registrySummary();
     assert.equal(s.total, 94);
-    assert.ok(s.wired >= 15, `wired=${s.wired}`);
-    assert.ok(s.stub >= 20, `stub=${s.stub}`);
-    assert.ok(s.blocked >= 15, `blocked=${s.blocked}`);
+    assert.ok(s.wired >= 70, `wired=${s.wired}`);
+    assert.ok(s.blocked >= 10 && s.blocked <= 20, `blocked=${s.blocked}`);
     assert.equal(s.wired + s.stub + s.blocked, 94);
   });
 
@@ -34,7 +33,7 @@ describe("shortlist module registry", () => {
     }
   });
 
-  it("modules passifs wired ne sont pas aggressifs Policy Guard", () => {
+  it("modules wired non-chaos ne sont pas aggressifs Policy Guard", () => {
     for (const id of listWiredModuleIds()) {
       assert.equal(isAggressiveModule(id), false, id);
     }
@@ -78,7 +77,7 @@ describe("cooperating suite", () => {
   });
 
   it("blocked module → skipped", async () => {
-    const results = await runCooperatingSuite(["asm.cisa-cyhy.enrolled.v1"], {
+    const results = await runCooperatingSuite(["chaos.chaos-mesh.auth.v1"], {
       targets: [{ host: "console.pragma-serve.com" }],
       allowedHosts: new Set(["console.pragma-serve.com"]),
       exclusions: new Set(),
@@ -91,7 +90,25 @@ describe("cooperating suite", () => {
     assert.equal(results[0]!.status, "skipped");
   });
 
-  it("stub sans adapter → needs_config", async () => {
+  it("keyed adapter sans clés (hors mock) → needs_config + requiredEnv", async () => {
+    const results = await runCooperatingSuite(["asm.shodan.passive.v1"], {
+      targets: [{ host: "console.pragma-serve.com" }],
+      allowedHosts: new Set(["console.pragma-serve.com"]),
+      exclusions: new Set(),
+      rateLimitPerMinute: 60,
+      syntheticMission: false,
+      forceMock: false,
+      isCancelled: () => false,
+      priorEvidence: {},
+      env: {},
+      sleepFn: async () => undefined,
+    });
+    assert.equal(results[0]!.status, "needs_config");
+    const ev = results[0]!.evidence as { requiredEnv?: string[] };
+    assert.ok(ev.requiredEnv?.includes("SHODAN_API_KEY"));
+  });
+
+  it("keyed adapter forceMock → ok sans clés", async () => {
     const results = await runCooperatingSuite(["asm.shodan.passive.v1"], {
       targets: [{ host: "console.pragma-serve.com" }],
       allowedHosts: new Set(["console.pragma-serve.com"]),
@@ -101,6 +118,23 @@ describe("cooperating suite", () => {
       forceMock: true,
       isCancelled: () => false,
       priorEvidence: {},
+      sleepFn: async () => undefined,
+    });
+    assert.equal(results[0]!.status, "ok");
+  });
+
+  it("phish lab sans ATLAS_PHISH_LAB_APPROVED → needs_config", async () => {
+    const results = await runCooperatingSuite(["phish.gophish.auth.v1"], {
+      targets: [{ host: "console.pragma-serve.com" }],
+      allowedHosts: new Set(["console.pragma-serve.com"]),
+      exclusions: new Set(),
+      rateLimitPerMinute: 60,
+      syntheticMission: false,
+      forceMock: false,
+      isCancelled: () => false,
+      priorEvidence: {},
+      env: { GOPHISH_URL: "https://gophish.example", GOPHISH_API_KEY: "x" },
+      sleepFn: async () => undefined,
     });
     assert.equal(results[0]!.status, "needs_config");
   });
@@ -157,7 +191,7 @@ describe("cooperating suite", () => {
     assert.equal(results[0]!.status, "ok");
   });
 
-  it("listRunnableModuleIds non vide", () => {
-    assert.ok(listRunnableModuleIds().length >= 15);
+  it("listRunnableModuleIds couvre les wired", () => {
+    assert.ok(listRunnableModuleIds().length >= 70);
   });
 });

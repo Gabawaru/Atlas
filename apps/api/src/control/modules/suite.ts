@@ -10,6 +10,7 @@ import {
 } from "./registry";
 import { PASSIVE_API_ADAPTERS } from "./adapters/passive-api";
 import { LOCAL_ANALYZER_ADAPTERS } from "./adapters/local-analyzers";
+import { AUTH_API_ADAPTERS } from "./adapters/auth-api";
 import {
   stubBlocked,
   stubCatalog,
@@ -23,6 +24,7 @@ import type {
 const ADAPTERS: Record<string, ModuleAdapter> = {
   ...PASSIVE_API_ADAPTERS,
   ...LOCAL_ANALYZER_ADAPTERS,
+  ...AUTH_API_ADAPTERS,
 };
 
 export function resolveAdapter(moduleId: string): ModuleAdapter | undefined {
