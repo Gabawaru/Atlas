@@ -47,6 +47,29 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.banner-real {
+  background: #e8f4ec;
+  border-left-color: var(--moss);
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.15rem;
+  margin-top: 0.35rem;
+}
+
+.export-btn {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.export-hint {
+  margin-left: 0.35rem;
+}
+
 .grid {
   display: grid;
   gap: 1rem;

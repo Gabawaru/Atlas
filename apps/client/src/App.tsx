@@ -7,6 +7,13 @@ import {
   buildUnifiedResults,
   type UnifiedResultRow,
 } from "./unifiedResults";
+import {
+  REPORT_EXPORT_FORMATS,
+  filenameFromDisposition,
+  reportExportUrl,
+  triggerBlobDownload,
+  type ReportExportFormat,
+} from "./reportExport";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -125,6 +132,54 @@ export function App() {
   });
 
   const unified = buildUnifiedResults(missions, findings);
+  const hasRealMission = missions.some((m) => m.synthetic === false);
+  const [exportBusyKey, setExportBusyKey] = useState<string | null>(null);
+
+  async function downloadReportExport(
+    missionId: string,
+    reportId: string,
+    format: ReportExportFormat,
+  ) {
+    if (!token) return;
+    const key = `${reportId}:${format}`;
+    setExportBusyKey(key);
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(
+        reportExportUrl(API, missionId, reportId, format),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        let message = `Export ${format} impossible (${res.status})`;
+        try {
+          const data = (await res.json()) as { message?: unknown };
+          if (typeof data.message === "string") message = data.message;
+        } catch {
+          /* non-JSON error body */
+        }
+        setError(message);
+        return;
+      }
+      const blob = await res.blob();
+      const filename = filenameFromDisposition(
+        res.headers.get("Content-Disposition"),
+        reportId,
+        format,
+      );
+      triggerBlobDownload(blob, filename);
+      const fictif = res.headers.get("X-Atlas-Synthetic") === "true";
+      setInfo(
+        fictif
+          ? `Export ${format.toUpperCase()} téléchargé (marqué FICTIF).`
+          : `Export ${format.toUpperCase()} téléchargé.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportBusyKey(null);
+    }
+  }
 
   async function login() {
     setError(null);
@@ -309,9 +364,19 @@ export function App() {
         Scanner autorisé — un CTA, résultats unifiés. Policy Guard décide ;
         l&apos;IA n&apos;exécute rien.
       </p>
-      <div className="banner">
-        <strong>Données de démonstration</strong> — aucune cible réelle.
-        Abonnement ≠ autorisation. Pas de faux « terminé » sur besoins non branchés.
+      <div className={hasRealMission ? "banner banner-real" : "banner"}>
+        {hasRealMission ? (
+          <>
+            <strong>Mission réelle présente</strong> — exports non marqués
+            FICTIF disponibles sur les bilans. Abonnement ≠ autorisation.
+          </>
+        ) : (
+          <>
+            <strong>Données de démonstration</strong> — aucune cible réelle.
+            Abonnement ≠ autorisation. Pas de faux « terminé » sur besoins non
+            branchés.
+          </>
+        )}
       </div>
 
       <section className="scanner-hero" aria-labelledby="scanner-cta-title">
@@ -383,6 +448,45 @@ export function App() {
                         <div className="muted">Sévérité : {row.severity}</div>
                       )}
                       <div className="muted">{row.detail}</div>
+                      {row.kind === "report" &&
+                        row.missionId &&
+                        row.reportId && (
+                          <div
+                            className="export-actions"
+                            role="group"
+                            aria-label={`Exporter le bilan ${row.reportId}`}
+                          >
+                            {REPORT_EXPORT_FORMATS.map((fmt) => {
+                              const busyKey = `${row.reportId}:${fmt}`;
+                              return (
+                                <button
+                                  key={fmt}
+                                  type="button"
+                                  className="ghost export-btn"
+                                  disabled={
+                                    busy || exportBusyKey === busyKey
+                                  }
+                                  onClick={() =>
+                                    void downloadReportExport(
+                                      row.missionId!,
+                                      row.reportId!,
+                                      fmt,
+                                    )
+                                  }
+                                >
+                                  {exportBusyKey === busyKey
+                                    ? `… ${fmt.toUpperCase()}`
+                                    : fmt.toUpperCase()}
+                                </button>
+                              );
+                            })}
+                            {!row.synthetic && (
+                              <span className="muted export-hint">
+                                Rapport réel (non FICTIF)
+                              </span>
+                            )}
+                          </div>
+                        )}
                       {finding && (
                         <>
                           <label>Remédiation</label>

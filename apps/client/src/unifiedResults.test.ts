@@ -44,6 +44,9 @@ describe("buildUnifiedResults", () => {
       rows.map((r) => r.kind),
       ["service", "finding", "report"],
     );
+    const report = rows.find((r) => r.kind === "report");
+    assert.equal(report?.missionId, "m1");
+    assert.equal(report?.reportId, "r1");
   });
 
   it("n'ajoute pas deux fois le même finding", () => {

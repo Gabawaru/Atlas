@@ -9,6 +9,9 @@ export type UnifiedResultRow = {
   detail: string;
   severity?: string;
   synthetic?: boolean;
+  /** Present on report rows — for GET …/reports/:reportId/export */
+  missionId?: string;
+  reportId?: string;
 };
 
 export type MissionLike = {
@@ -86,6 +89,8 @@ export function buildUnifiedResults(
         title: `Bilan — ${m.title}`,
         detail: r.executiveSummary,
         synthetic: r.synthetic ?? m.synthetic,
+        missionId: m.id,
+        reportId: r.id,
       });
     }
   }
