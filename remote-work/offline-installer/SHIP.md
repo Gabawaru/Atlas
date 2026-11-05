@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|--------|
 | Asset name | `Atlas-Setup.exe` |
-| Size (bytes) | `2089611` |
-| SHA256 | `f3178e782b2096c03d930421d523a812e5c2043311a4cddcc36eaf597c82dd26` |
+| Size (bytes) | `2089266` |
+| SHA256 | `b4e09dda7444861e3b086b0c704cf8657fea058b64f36cea5b533fd0d3ae19ab` |
 | GitHub Releases | `v1.0.0` (clobber) · `v1.2.0` |
 | Build | `cd remote-work/atlas-v1 && ./build.sh` → `bin/Atlas-Setup.exe` |
 
@@ -14,7 +14,7 @@
 
 | Surface | Size | SHA256 | Source header |
 |---------|------|--------|---------------|
-| GitHub Release `v1.0.0` / `v1.2.0` | 2089611 | `f3178e78…` | — |
+| GitHub Release `v1.0.0` / `v1.2.0` | 2089266 | `b4e09dda…` | — |
 | Paradise `/api/atlas/download` | **688793** (stale) | `a5c0476f…` | `x-atlas-source: **paradise-gate**` |
 
 `paradise-gate` = Paradise is **not** re-streaming GitHub Release (bundled `server-assets` fallback and/or missing token). Updating Atlas Release alone does not change live bytes until Paradise refreshes.
@@ -39,7 +39,7 @@ From this repo (after clone of Cultivation-Paradise):
    - `ATLAS_V1_DOWNLOAD_URL` = `https://github.com/Gabawaru/Atlas/releases/download/v1.2.0/Atlas-Setup.exe`
    - `ATLAS_GITHUB_TOKEN` = Contents:Read PAT on **Gabawaru/Atlas** (dashboard only)
 3. **Redeploy** Production.
-4. Smoke body size **2089611**; prefer `x-atlas-source: github-release`.
+4. Smoke body size **2089266**; prefer `x-atlas-source: github-release`.
 
 ## atlas-secu.com CTA
 

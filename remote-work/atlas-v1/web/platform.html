@@ -364,13 +364,37 @@
       return status === "A_APPROVED" || status === "A_SKIPPED_DEMO";
     }
 
-    async function pollMission(id, attempts) {
+    async function pollMission(id, attempts, phase) {
+      const label = phase === "job"
+        ? "job BullMQ / suite passive"
+        : "attente Circuit A";
       for (let i = 0; i < attempts; i++) {
         const m = await apiJson("/v1/missions/" + id);
-        if (canExecute(m.status) || m.status === "REPORT_AVAILABLE" || m.status === "BLOCKED") {
-          return m;
+        const reports = (m.reports && m.reports.length) || 0;
+        if (phase === "job") {
+          if (
+            m.status === "REPORT_AVAILABLE" ||
+            m.status === "BLOCKED" ||
+            m.status === "FAILED" ||
+            m.status === "CANCELLED" ||
+            m.status === "CLOSED" ||
+            reports > 0
+          ) {
+            return m;
+          }
+          setStatus(
+            "Mission " + id + " → " + m.status +
+              " · " + label + "… " + (i + 1) + "/" + attempts +
+              (reports ? " · rapports=" + reports : ""),
+          );
+        } else {
+          if (canExecute(m.status) || m.status === "REPORT_AVAILABLE" || m.status === "BLOCKED") {
+            return m;
+          }
+          setStatus(
+            "Mission " + id + " → " + m.status + " (" + label + "… " + (i + 1) + "/" + attempts + ")",
+          );
         }
-        setStatus("Mission " + id + " → " + m.status + " (attente Circuit A… " + (i + 1) + "/" + attempts + ")");
         await new Promise((r) => setTimeout(r, 4000));
       }
       return apiJson("/v1/missions/" + id);
@@ -415,18 +439,31 @@
         showCircuitResume(missionId);
         return;
       }
-
-      const done = await pollMission(missionId, 30);
-      if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
-        hideCircuitResume();
-        setStatus("Scan terminé — " + done.status + ". Téléchargez l’export ci-dessous.", "ok");
-        await showExports(missionId);
-      } else {
+      if (run.jobId || run.job) {
         setStatus(
-          "Exécution lancée — statut " + done.status + ". Rafraîchissez ou ouvrez le client pour le bilan.",
-          "ok",
+          "Job lancé" + (run.jobId ? " (" + run.jobId + ")" : "") +
+            " — poll mission jusqu’à REPORT_AVAILABLE…",
         );
       }
+
+      // Dedicated job-phase poll (not Circuit A wording); longer window for shortlist suite.
+      const done = await pollMission(missionId, 45, "job");
+      if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
+        hideCircuitResume();
+        setStatus("Scan terminé — " + done.status + ". Exports JSON / CSV / PDF ci-dessous.", "ok");
+        await showExports(missionId);
+        return;
+      }
+      if (done.status === "BLOCKED" || done.status === "FAILED" || done.status === "CANCELLED" || done.status === "CLOSED") {
+        setStatus("Mission " + done.status + (done.blockReason ? " — " + done.blockReason : ""), "err");
+        return;
+      }
+      setStatus(
+        "Toujours " + done.status + " après poll job — pas de rapport encore.\n" +
+          "Rouvrir le client :3002 ou relancer Reprendre si Circuit A / job a bougé.",
+        "err",
+      );
+      showCircuitResume(missionId);
     }
 
     async function resumeAfterCircuitA() {
