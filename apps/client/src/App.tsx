@@ -533,10 +533,12 @@ export function App() {
       </div>
 
       <section className="scanner-hero" aria-labelledby="scanner-cta-title">
-        <h2 id="scanner-cta-title">Scanner</h2>
+        <h2 id="scanner-cta-title">Scan</h2>
         <p className="muted">
           Contrôle passif in-scope uniquement. Exécution refusée sans session,
-          cible, connecteur et autorisation valides.
+          cible, connecteur et autorisation valides. Suite shortlist après
+          présence web (Policy Guard parent{" "}
+          <code>web.passive.presence.v1</code>).
         </p>
         <label className="mode-toggle">
           <input
@@ -593,10 +595,10 @@ export function App() {
           {busy
             ? missionMode === "real"
               ? "Attachement…"
-              : "Exécution…"
+              : "Scan…"
             : missionMode === "real"
-              ? "Attacher & préparer"
-              : "Scanner"}
+              ? "Scan — Attacher Paradise"
+              : "Scan"}
         </button>
         {readiness.blockReason && (
           <p className="block-reason" role="status">
