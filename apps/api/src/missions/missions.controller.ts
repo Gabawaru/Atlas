@@ -77,20 +77,13 @@ class OwnerAuthDto {
 
 /**
  * Bind an already-signed envelope — no createEnvelope / partner /request email.
- * Paradise P0: pass `paradiseAttestation` (compact HMAC token from drawn signature).
- * Pragma: pass `signatureEnvelopeId` only (poll GET status).
+ * Pass `signatureEnvelopeId` (Pragma Sign) — poll GET status only.
  */
 class AttachOwnerAuthDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
   signatureEnvelopeId?: string;
-
-  /** Compact Paradise attestation (session person + drawn stroke proof). */
-  @IsOptional()
-  @IsString()
-  @MinLength(8)
-  paradiseAttestation?: string;
 
   @IsOptional()
   @IsString()
@@ -159,7 +152,6 @@ export class MissionsController {
     this.auth.requireTenant(req.user, ["owner", "operator"]);
     return this.missions.attachExistingOwnerAuth(id, req.user, {
       signatureEnvelopeId: body.signatureEnvelopeId,
-      paradiseAttestation: body.paradiseAttestation,
       signerLabel: body.signerLabel,
     });
   }

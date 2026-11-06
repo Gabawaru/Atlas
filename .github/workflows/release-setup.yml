@@ -1,5 +1,5 @@
-# Publish Atlas-Setup.exe to GitHub Releases (Paradise download chain).
-# Musk: one asset name Paradise already expects; automate after proven upload.
+# Publish Atlas-Setup.exe to GitHub Releases (Atlas download chain).
+# Ship asset name expected by /api/atlas/download consumers.
 name: Release Atlas-Setup
 
 on:
@@ -60,6 +60,6 @@ jobs:
           else
             gh release create "$TAG" "$ASSET" \
               --title "Atlas Setup ${TAG}" \
-              --notes "Windows installer \`Atlas-Setup.exe\` for Paradise PIN download (\`/api/atlas/download\`). Same asset name Paradise expects."
+              --notes "Windows installer \`Atlas-Setup.exe\` for Atlas download (\`/api/atlas/download\`)."
           fi
           gh release view "$TAG" --json tagName,assets,url --jq '{tag:.tagName,url:.url,assets:[.assets[].name]}'

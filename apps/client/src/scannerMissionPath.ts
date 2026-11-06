@@ -1,5 +1,5 @@
 /**
- * Scanner CTA path selection — FICTIF (demo) vs real (Paradise attach).
+ * Scanner CTA path selection — FICTIF (demo) vs real (Sign envelope attach).
  * Policy Guard / Circuit A remain authoritative; this only shapes client requests.
  */
 
@@ -8,25 +8,25 @@ export type ScannerMissionMode = "fictif" | "real";
 export const DEFAULT_REAL_TARGET = "pragma-serve.com";
 
 export type RealMissionInput = {
-  paradiseAttestation: string;
+  signatureEnvelopeId: string;
   targetHost: string;
 };
 
 export type RealMissionValidation =
-  | { ok: true; attestation: string; targetHost: string }
+  | { ok: true; envelopeId: string; targetHost: string }
   | { ok: false; reason: string };
 
-/** Validate operator-provided Paradise attestation + in-scope target before POST. */
+/** Validate operator-provided Sign envelope id + in-scope target before POST. */
 export function validateRealMissionInput(
   input: RealMissionInput,
 ): RealMissionValidation {
-  const attestation = input.paradiseAttestation.trim();
+  const envelopeId = input.signatureEnvelopeId.trim();
   const targetHost = input.targetHost.trim().toLowerCase().replace(/\.$/, "");
-  if (!attestation || attestation.length < 8) {
+  if (!envelopeId || envelopeId.length < 1) {
     return {
       ok: false,
       reason:
-        "Attestation Paradise requise (coller le jeton HMAC compact, ≥ 8 caractères).",
+        "signatureEnvelopeId requis (enveloppe Pragma Sign déjà signée).",
     };
   }
   if (!targetHost || targetHost.length < 3) {
@@ -35,7 +35,7 @@ export function validateRealMissionInput(
       reason: "Cible FQDN requise (ex. pragma-serve.com, in-scope RoE).",
     };
   }
-  return { ok: true, attestation, targetHost };
+  return { ok: true, envelopeId, targetHost };
 }
 
 export function createMissionBody(args: {
@@ -59,14 +59,14 @@ export function createMissionBody(args: {
     assetIds: [args.assetId],
     synthetic: false,
     exclusions: [],
-    notes: "RoE réel — owner-auth via Paradise attach ; Circuit A requis",
+    notes: "RoE réel — owner-auth via Sign attach ; Circuit A requis",
   };
 }
 
-/** Operator-facing message after paradise attach (before Circuit A). */
+/** Operator-facing message after Sign attach (before Circuit A). */
 export function circuitAPendingMessage(missionId: string, status: string): string {
   return (
-    `Mission ${missionId} → ${status}. Attestation Paradise attachée. ` +
+    `Mission ${missionId} → ${status}. Enveloppe Sign attachée. ` +
     `Circuit A encore requis : un approbateur staff doit décider dans l’admin ` +
     `(POST /v1/admin/approvals/:id/decide). Puis « Exécuter » ici — Policy Guard inchangé.`
   );

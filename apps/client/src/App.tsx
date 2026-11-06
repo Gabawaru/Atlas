@@ -119,9 +119,9 @@ export function App() {
   const [roe, setRoe] = useState<Roe | null>(null);
   const [roeExclusions, setRoeExclusions] = useState("mail.example.com");
   const [findings, setFindings] = useState<Finding[]>([]);
-  /** FICTIF remains the default demo path; real requires Paradise attestation. */
+  /** FICTIF remains the default demo path; real requires a signed Sign envelope. */
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
-  const [paradiseAttestation, setParadiseAttestation] = useState("");
+  const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
 
   const headers = useMemo(
@@ -318,7 +318,7 @@ export function App() {
 
   /**
    * Scanner CTA: FICTIF (default) = mock owner-auth + execute.
-   * Mission réelle = synthetic:false + Paradise attach — stops for Circuit A
+   * Mission réelle = synthetic:false + Sign envelope attach — stops for Circuit A
    * (admin decide). Does not weaken Policy Guard; no auto-execute on real path.
    */
   async function runScanner() {
@@ -374,7 +374,7 @@ export function App() {
       }
 
       const validated = validateRealMissionInput({
-        paradiseAttestation,
+        signatureEnvelopeId,
         targetHost: realTargetHost,
       });
       if (!validated.ok) {
@@ -409,7 +409,7 @@ export function App() {
           method: "POST",
           headers,
           body: JSON.stringify({
-            paradiseAttestation: validated.attestation,
+            signatureEnvelopeId: validated.envelopeId,
             signerLabel: email,
           }),
         },
@@ -434,7 +434,7 @@ export function App() {
           circuitAPendingMessage(String(attached?.id ?? mission.id), status),
         );
       }
-      setParadiseAttestation("");
+      setSignatureEnvelopeId("");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -546,7 +546,7 @@ export function App() {
               setMissionMode(e.target.checked ? "real" : "fictif")
             }
           />{" "}
-          Mission réelle (Paradise attach — pas FICTIF)
+          Mission réelle (Sign attach — pas FICTIF)
         </label>
         {missionMode === "real" ? (
           <div className="real-mission-fields">
@@ -558,15 +558,14 @@ export function App() {
               placeholder={DEFAULT_REAL_TARGET}
               autoComplete="off"
             />
-            <label htmlFor="paradise-attestation">
-              Attestation Paradise (jeton compact fourni par l&apos;opérateur)
+            <label htmlFor="signature-envelope-id">
+              Enveloppe Sign (signatureEnvelopeId déjà signée)
             </label>
-            <textarea
-              id="paradise-attestation"
-              rows={3}
-              value={paradiseAttestation}
-              onChange={(e) => setParadiseAttestation(e.target.value)}
-              placeholder="coller paradiseAttestation ici"
+            <input
+              id="signature-envelope-id"
+              value={signatureEnvelopeId}
+              onChange={(e) => setSignatureEnvelopeId(e.target.value)}
+              placeholder="coller signatureEnvelopeId ici"
               autoComplete="off"
               spellCheck={false}
             />
@@ -586,7 +585,7 @@ export function App() {
           disabled={
             busy ||
             !readiness.ready ||
-            (missionMode === "real" && paradiseAttestation.trim().length < 8)
+            (missionMode === "real" && signatureEnvelopeId.trim().length < 1)
           }
           onClick={() => void runScanner()}
         >

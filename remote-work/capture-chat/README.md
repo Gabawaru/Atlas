@@ -25,14 +25,9 @@ Send `Authorization: Bearer <token>` (or `X-Capture-Token`). Exe does **not** us
 
 Env names: `CAPTURE_CHAT_TOKEN`, `CAPTURE_CHAT_SESSION_SECRET`, `CAPTURE_CHAT_ALLOWED_DOMAIN`, `CAPTURE_CHAT_ALLOWED_EMAILS`, `COOKIE_SECURE`.
 
-## Public URLs (intended)
+## Public URLs
 
-| Role | URL |
-|------|-----|
-| Atlas principal | https://cultivationparadise.com/atlas-principal |
-| Atlas secondaire test | https://cultivationparadise.com/atlas-secondaire-test |
-
-Hosting/reorg onto those paths is owned separately (top-level principal/test folders). This package remains the capture-chat app source under `remote-work/capture-chat/` until that land.
+Hosted separately (atlas-secu / operator deploy). This package remains the capture-chat app source under `remote-work/capture-chat/`.
 
 ## API (MVP)
 

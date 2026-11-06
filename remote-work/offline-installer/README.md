@@ -8,14 +8,14 @@ Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git
 
 | File | Role |
 |------|------|
-| `bin/Atlas-Setup.exe` | **Ship / Paradise download name** — GitHub Release asset for `/api/atlas/download` |
+| `bin/Atlas-Setup.exe` | **Ship download name** — GitHub Release asset for `/api/atlas/download` |
 | `bin/AtlasLocal-Setup.exe` | NSIS installer (Start Menu shortcuts) |
 | `bin/AtlasLocal-portable.zip` | Same bits, no installer |
 | `bin/AtlasLocal.exe` | CLI launcher alone |
 
 (Uses `bin/` not `dist/` — root `.gitignore` ignores all `dist/`.)
 
-**Release chain:** tag `v*` (or `Release Atlas-Setup` workflow_dispatch) uploads `bin/Atlas-Setup.exe` only. Paradise sets `ATLAS_V1_DOWNLOAD_URL` to that Release asset (private repo → authenticated fetch).
+**Release chain:** tag `v*` (or `Release Atlas-Setup` workflow_dispatch) uploads `bin/Atlas-Setup.exe` only. Downstream download hosts set `ATLAS_V1_DOWNLOAD_URL` to that Release asset (private repo → authenticated fetch).
 
 ## On the Windows PC
 
