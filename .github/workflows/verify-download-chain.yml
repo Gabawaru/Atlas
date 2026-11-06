@@ -1,0 +1,88 @@
+# Prove Atlas Release PE vs live Paradise stream (download-chain drift).
+# Musk: accelerate visibility — fail soft on schedule so Gab sees paradise-gate staleness.
+name: Verify download chain
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+  push:
+    branches: [main, "cursor/atlas-v1-e2e-workflow-ee02"]
+    paths:
+      - "remote-work/offline-installer/**"
+      - "remote-work/atlas-v1/**"
+      - "index.html"
+      - ".github/workflows/verify-download-chain.yml"
+      - ".github/workflows/release-setup.yml"
+
+jobs:
+  pages-cta:
+    name: atlas-secu.com CTA
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Monorepo seed + live Pages CTA must hit Paradise
+        run: |
+          set -euo pipefail
+          EXPECT='https://cultivationparadise.com/api/atlas/download'
+          # Seed in this repo (Gab copies to Gabawaru/atlas-secu-pages)
+          rg -F "$EXPECT" index.html
+          if rg -F 'github.com/Gabawaru/Atlas/releases' index.html; then
+            echo "::error::monorepo index.html must not CTA private Releases"
+            exit 1
+          fi
+          curl -fsSL -o /tmp/atlas-secu.html https://atlas-secu.com/
+          if ! rg -F "$EXPECT" /tmp/atlas-secu.html; then
+            echo "::error::Live atlas-secu.com CTA drift — still not Paradise download."
+            echo "Copy monorepo index.html → Gabawaru/atlas-secu-pages (agent push 403)."
+            rg -o 'href="[^"]+"' /tmp/atlas-secu.html || true
+            exit 1
+          fi
+          echo "ok — live Pages CTA → Paradise"
+
+  drift:
+    name: Paradise vs Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare Paradise stream to SHIP / Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          EXPECT_SIZE=2089611
+          EXPECT_SHA=f3178e782b2096c03d930421d523a812e5c2043311a4cddcc36eaf597c82dd26
+          if [[ -f remote-work/offline-installer/SHIP.md ]]; then
+            EXPECT_SIZE=$(rg -oN 'Size \(bytes\) \| `([0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
+            EXPECT_SHA=$(rg -oN 'SHA256 \| `([a-f0-9]+)`' -r '$1' remote-work/offline-installer/SHIP.md | head -1)
+          fi
+          echo "expect size=$EXPECT_SIZE sha=$EXPECT_SHA"
+
+          curl -fsSL -o /tmp/paradise.exe -D /tmp/paradise.hdr \
+            https://cultivationparadise.com/api/atlas/download
+          P_SIZE=$(wc -c </tmp/paradise.exe)
+          P_SHA=$(sha256sum /tmp/paradise.exe | awk '{print $1}')
+          P_SRC=$(rg -i '^x-atlas-source:' /tmp/paradise.hdr | tr -d '\r' || true)
+          echo "paradise size=$P_SIZE sha=$P_SHA $P_SRC"
+
+          mkdir -p /tmp/rel
+          gh release download v1.2.0 -p Atlas-Setup.exe -D /tmp/rel --clobber
+          R_SIZE=$(wc -c </tmp/rel/Atlas-Setup.exe)
+          R_SHA=$(sha256sum /tmp/rel/Atlas-Setup.exe | awk '{print $1}')
+          echo "release v1.2.0 size=$R_SIZE sha=$R_SHA"
+
+          test "$R_SIZE" = "$EXPECT_SIZE"
+          test "$R_SHA" = "$EXPECT_SHA"
+
+          if [[ "$P_SIZE" != "$EXPECT_SIZE" || "$P_SHA" != "$EXPECT_SHA" ]]; then
+            echo "::error::Paradise download DRIFT — still serving stale PE (often x-atlas-source: paradise-gate bundled fallback)."
+            echo "Refresh: remote-work/offline-installer/scripts/refresh-paradise-server-asset.sh  OR  Vercel ATLAS_V1_DOWNLOAD_URL+token (SHIP.md)."
+            exit 1
+          fi
+          echo "ok — Paradise matches Release ship identity"

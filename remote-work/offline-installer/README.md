@@ -8,14 +8,19 @@ Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git
 
 | File | Role |
 |------|------|
-| `bin/Atlas-Setup.exe` | **Ship / Paradise download name** — GitHub Release asset for `/api/atlas/download` |
-| `bin/AtlasLocal-Setup.exe` | NSIS installer (Start Menu shortcuts) |
+| `bin/Atlas-Setup.exe` | **Ship / Paradise download name** — GitHub Release / Paradise `/api/atlas/download` (from `../atlas-v1`) |
+| `bin/Atlas.exe` | Optional copy of Scan platform shell |
+| `bin/AtlasLocal-Setup.exe` | NSIS installer for stack launcher (Start Menu shortcuts) |
 | `bin/AtlasLocal-portable.zip` | Same bits, no installer |
 | `bin/AtlasLocal.exe` | CLI launcher alone |
 
 (Uses `bin/` not `dist/` — root `.gitignore` ignores all `dist/`.)
 
-**Release chain:** tag `v*` (or `Release Atlas-Setup` workflow_dispatch) uploads `bin/Atlas-Setup.exe` only. Paradise sets `ATLAS_V1_DOWNLOAD_URL` to that Release asset (private repo → authenticated fetch).
+**Release chain:** tag `v*` (or `Release Atlas-Setup` workflow_dispatch) rebuilds + uploads `bin/Atlas-Setup.exe` only. Paradise serves `https://cultivationparadise.com/api/atlas/download` (or `ATLAS_V1_DOWNLOAD_URL` → Release asset).
+
+**Ship identity / Paradise refresh:** see [`SHIP.md`](./SHIP.md) (size + SHA + Vercel steps). CI workflow `Verify download chain` fails while Paradise still streams the stale `paradise-gate` PE.
+
+**Rebuild ship PE (Scan UI):** `cd remote-work/atlas-v1 && ./build.sh` → copies Setup into `bin/Atlas-Setup.exe`.
 
 ## On the Windows PC
 

@@ -21,6 +21,13 @@ import {
   runWebPassivePresence,
   WEB_PASSIVE_MODULE_ID,
 } from "../control/web-passive";
+import {
+  DEFAULT_PASSIVE_SUITE_IDS,
+  planDefaultSuite,
+  runCooperatingSuite,
+  suiteEvidenceSummary,
+  type ModuleRunResult,
+} from "../control/modules";
 import { evaluateMissionExecution } from "../control/execution-gate";
 import { generateReportExports } from "../reports/report-export";
 import { assertTransition } from "../mission/mission-state";
@@ -442,6 +449,60 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       return { cancelled: true };
     }
 
+    // Cooperating shortlist suite — same RoE / cancel / mission contract
+    let suiteResults: ModuleRunResult[] = [];
+    if (!p.skipSuite) {
+      await this.prisma.jobRun.update({
+        where: { id: p.jobRunId },
+        data: {
+          progressPercent: 92,
+          progressMessage: "Suite modules shortlist (passif / local)",
+        },
+      });
+      const plan = planDefaultSuite({
+        includePassive: true,
+        includeLocal: Boolean(p.localPath),
+        localPath: p.localPath,
+      });
+      const suiteIds =
+        p.suiteModuleIds && p.suiteModuleIds.length > 0
+          ? p.suiteModuleIds
+          : [...plan.passiveIds, ...plan.localIds];
+      const ids =
+        suiteIds.length > 0 ? suiteIds : [...DEFAULT_PASSIVE_SUITE_IDS];
+      try {
+        suiteResults = await runCooperatingSuite(ids, {
+          targets: p.targets,
+          allowedHosts: new Set(p.allowedHosts),
+          exclusions: new Set(p.exclusions ?? []),
+          rateLimitPerMinute: p.rateLimitPerMinute,
+          syntheticMission: p.syntheticMission,
+          forceMock: forceMock,
+          isCancelled: () => cancelFlag,
+          priorEvidence: {},
+          presenceEvidence: evidence,
+          localPath: p.localPath,
+          sleepFn: forceMock ? async () => undefined : undefined,
+        });
+      } catch (e) {
+        this.logger.warn(
+          `suite shortlist ignorée: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
+    if (await isCancelled()) {
+      await this.finishCancelled(p, { presence: evidence, suite: suiteResults });
+      return { cancelled: true };
+    }
+
+    const suiteSummary = suiteEvidenceSummary(suiteResults);
+    const combinedEvidence = {
+      presence: evidence,
+      suite: suiteResults,
+      suiteSummary,
+    };
+
     await this.prisma.jobRun.update({
       where: { id: p.jobRunId },
       data: {
@@ -449,7 +510,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         finishedAt: new Date(),
         progressPercent: 95,
         progressMessage: "Génération exports",
-        evidenceJson: evidence as object,
+        evidenceJson: combinedEvidence as object,
       },
     });
 
@@ -473,6 +534,31 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    // Extra findings from cooperating suite (info/low by default)
+    for (const sr of suiteResults) {
+      for (const f of sr.findings ?? []) {
+        await this.prisma.finding.create({
+          data: {
+            missionId: p.missionId,
+            jobRunId: p.jobRunId,
+            severity: f.severity === "critical" || f.severity === "high"
+              ? "high"
+              : f.severity === "medium"
+                ? "medium"
+                : f.severity === "low"
+                  ? "low"
+                  : "info",
+            title: p.syntheticMission
+              ? `[FICTIF] ${f.title} (${sr.moduleId})`
+              : `${f.title} (${sr.moduleId})`,
+            summary: f.summary,
+            technical: f.technical ?? JSON.stringify(sr.evidence).slice(0, 8_000),
+            synthetic: p.syntheticMission,
+          },
+        });
+      }
+    }
+
     // Inventaire passif depuis bannières HTTP → matching feeds (confiance ≠ gravité)
     try {
       await this.vuln.ingestEvidenceBanners(
@@ -490,11 +576,13 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
 
     const executiveSummary = p.syntheticMission
       ? "[FICTIF] Bilan décideur : exposition web de démonstration — DNS, certificats TLS et headers de sécurité observés dans le scope uniquement."
-      : "Bilan décideur : observation passive (DNS, TLS, headers sécu) sur le périmètre autorisé.";
+      : "Bilan décideur : observation passive (DNS, TLS, headers sécu) + suite shortlist coopérative sur le périmètre autorisé.";
     const technicalDetail = [
       `Module ${WEB_PASSIVE_MODULE_ID}`,
       `Cibles contrôlées : ${evidence.length}`,
       `Preuves : DNS + headers sécu + TLS + OSINT RDAP (apex in-scope, public)`,
+      `Suite shortlist : ${suiteSummary.moduleCount} modules (${JSON.stringify(suiteSummary.byStatus)})`,
+      `Modules : ${suiteSummary.moduleIds.join(", ") || "(aucune)"}`,
       `Exclusions RoE : ${(p.exclusions ?? []).join(", ") || "(aucune)"}`,
       `Rate limit : ${p.rateLimitPerMinute}/min · file BullMQ · pas de scan agressif`,
       forceMock ? "Réseau : mock forcé (ATLAS_FORCE_MOCK_NETWORK)" : "Réseau : sondes réelles",
@@ -510,12 +598,19 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         exportJson: {
           module: WEB_PASSIVE_MODULE_ID,
           evidence,
+          suite: suiteResults,
+          suiteSummary,
           findingId: finding.id,
           disclaimer: p.syntheticMission
             ? "Données de démonstration — aucune cible réelle"
             : undefined,
         } as object,
       },
+    });
+
+    const allFindings = await this.prisma.finding.findMany({
+      where: { missionId: p.missionId, jobRunId: p.jobRunId },
+      orderBy: { createdAt: "asc" },
     });
 
     const exports = await generateReportExports({
@@ -525,15 +620,13 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       synthetic: p.syntheticMission,
       executiveSummary,
       technicalDetail,
-      findings: [
-        {
-          severity: finding.severity,
-          title: finding.title,
-          summary: finding.summary,
-          technical: finding.technical,
-        },
-      ],
-      evidence,
+      findings: allFindings.map((f) => ({
+        severity: f.severity,
+        title: f.title,
+        summary: f.summary,
+        technical: f.technical,
+      })),
+      evidence: combinedEvidence,
       scopeHash: p.scopeHash,
       moduleId: WEB_PASSIVE_MODULE_ID,
     });

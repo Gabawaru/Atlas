@@ -1,5 +1,7 @@
 # Client desktop Tauri — packaging MVP
 
+**Out of Atlas v1 acceptance (2026-11-05).** Paradise download + Scan path ship via NSIS `remote-work/atlas-v1` (`Atlas-Setup.exe`). This stub is **not** a v1 Done criterion — do not block merge/release on `tauri build` or signed bundles.
+
 ## Livré maintenant
 
 1. **Build web** : `pnpm --filter @atlas/client run build` → `apps/client/dist/`
