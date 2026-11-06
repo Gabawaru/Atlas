@@ -8,10 +8,13 @@ import {
   type UnifiedResultRow,
 } from "./unifiedResults";
 import {
+  AUTO_REPORT_FORMAT,
   REPORT_EXPORT_FORMATS,
   filenameFromDisposition,
+  pickReadyReportFromExecute,
   reportExportUrl,
   triggerBlobDownload,
+  type ReadyReportRef,
   type ReportExportFormat,
 } from "./reportExport";
 import {
@@ -146,17 +149,22 @@ export function App() {
   const unified = buildUnifiedResults(missions, findings);
   const hasRealMission = missions.some((m) => m.synthetic === false);
   const [exportBusyKey, setExportBusyKey] = useState<string | null>(null);
+  /** Last report produced by Scanner/Exécuter — for auto + one-click re-download. */
+  const [readyReport, setReadyReport] = useState<ReadyReportRef | null>(null);
 
   async function downloadReportExport(
     missionId: string,
     reportId: string,
     format: ReportExportFormat,
-  ) {
-    if (!token) return;
+    opts?: { quiet?: boolean },
+  ): Promise<boolean> {
+    if (!token) return false;
     const key = `${reportId}:${format}`;
     setExportBusyKey(key);
-    setError(null);
-    setInfo(null);
+    if (!opts?.quiet) {
+      setError(null);
+      setInfo(null);
+    }
     try {
       const res = await fetch(
         reportExportUrl(API, missionId, reportId, format),
@@ -171,7 +179,7 @@ export function App() {
           /* non-JSON error body */
         }
         setError(message);
-        return;
+        return false;
       }
       const blob = await res.blob();
       const filename = filenameFromDisposition(
@@ -186,10 +194,37 @@ export function App() {
           ? `Export ${format.toUpperCase()} téléchargé (marqué FICTIF).`
           : `Export ${format.toUpperCase()} téléchargé.`,
       );
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setExportBusyKey(null);
+    }
+  }
+
+  /** On terminal success: auto-download PDF via existing Nest export path. */
+  async function autoDownloadReportAfterExecute(
+    run: Parameters<typeof pickReadyReportFromExecute>[0],
+    fallbackMissionId?: string,
+  ) {
+    const ref = pickReadyReportFromExecute(run, fallbackMissionId);
+    if (!ref) return;
+    setReadyReport(ref);
+    const ok = await downloadReportExport(
+      ref.missionId,
+      ref.reportId,
+      AUTO_REPORT_FORMAT,
+      { quiet: true },
+    );
+    if (ok) {
+      setInfo(
+        `Scan terminé — rapport ${AUTO_REPORT_FORMAT.toUpperCase()} téléchargé. Relance possible ci-dessous.`,
+      );
+    } else {
+      setInfo(
+        "Scan terminé — rapport prêt. Utilisez « Télécharger le rapport » si le navigateur a bloqué le téléchargement automatique.",
+      );
     }
   }
 
@@ -368,6 +403,8 @@ export function App() {
 
         if (run.gate?.decision === "REJECT") {
           setError(`${run.gate.code}: ${run.gate.reason}`);
+        } else {
+          await autoDownloadReportAfterExecute(run, mission.id);
         }
         await refresh();
         return;
@@ -462,7 +499,10 @@ export function App() {
       } else if (run.gate?.decision === "REJECT") {
         setError(`${run.gate.code}: ${run.gate.reason}`);
       } else {
-        setInfo(`Exécution lancée pour ${missionId}.`);
+        await autoDownloadReportAfterExecute(run, missionId);
+        if (!pickReadyReportFromExecute(run, missionId)) {
+          setInfo(`Exécution terminée pour ${missionId}.`);
+        }
       }
       await refresh();
     } catch (e) {
@@ -601,6 +641,33 @@ export function App() {
         {readiness.blockReason && (
           <p className="block-reason" role="status">
             {readiness.blockReason}
+          </p>
+        )}
+        {readyReport && (
+          <p className="ready-report" role="status">
+            <button
+              type="button"
+              className="ghost"
+              disabled={
+                busy ||
+                exportBusyKey === `${readyReport.reportId}:${AUTO_REPORT_FORMAT}`
+              }
+              onClick={() =>
+                void downloadReportExport(
+                  readyReport.missionId,
+                  readyReport.reportId,
+                  AUTO_REPORT_FORMAT,
+                )
+              }
+            >
+              Télécharger le rapport (
+              {AUTO_REPORT_FORMAT.toUpperCase()})
+            </button>
+            <span className="muted">
+              {" "}
+              Mission <code>{readyReport.missionId}</code> — export Nest{" "}
+              <code>/v1/…/export</code>
+            </span>
           </p>
         )}
         {missions.some(

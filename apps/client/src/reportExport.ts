@@ -8,6 +8,41 @@ export const REPORT_EXPORT_FORMATS: ReportExportFormat[] = [
   "pdf",
 ];
 
+/** Preferred format for the post-scan auto-download (existing Nest export path). */
+export const AUTO_REPORT_FORMAT: ReportExportFormat = "pdf";
+
+export type ExecuteRunPayload = {
+  gate?: { decision?: string; code?: string; reason?: string };
+  mission?: {
+    id?: string;
+    status?: string;
+    reports?: Array<{ id?: string } | null> | null;
+  } | null;
+  message?: unknown;
+};
+
+export type ReadyReportRef = {
+  missionId: string;
+  reportId: string;
+};
+
+/**
+ * After POST …/execute succeeds (Policy Guard ALLOW + REPORT_AVAILABLE),
+ * pick the first report for auto-download via the existing export endpoint.
+ */
+export function pickReadyReportFromExecute(
+  run: ExecuteRunPayload,
+  fallbackMissionId?: string,
+): ReadyReportRef | null {
+  if (run.gate?.decision === "REJECT") return null;
+  const missionId = run.mission?.id ?? fallbackMissionId;
+  const reportId = run.mission?.reports?.[0]?.id;
+  if (!missionId || !reportId) return null;
+  const status = run.mission?.status;
+  if (status && status !== "REPORT_AVAILABLE") return null;
+  return { missionId, reportId };
+}
+
 export function reportExportUrl(
   apiBase: string,
   missionId: string,

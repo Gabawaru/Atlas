@@ -181,6 +181,15 @@ pre {
   max-width: 36rem;
 }
 
+.ready-report {
+  margin: 0.85rem 0 0;
+  max-width: 40rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
 .mode-toggle {
   display: flex;
   align-items: center;
