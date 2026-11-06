@@ -5,13 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Atlas</title>
   <style>
-    body{font-family:system-ui,sans-serif;max-width:720px;margin:10vh auto;padding:0 20px;color:#111}
-    a.btn{display:inline-block;margin-top:24px;padding:12px 20px;background:#111;color:#fff;border-radius:8px;text-decoration:none}
+    body{font-family:system-ui,sans-serif;max-width:720px;margin:10vh auto;padding:0 20px;color:#111;line-height:1.45}
+    a.btn{display:inline-block;margin-top:8px;margin-right:8px;padding:12px 20px;background:#111;color:#fff;border-radius:8px;text-decoration:none}
+    a.btn.secondary{background:#fff;color:#111;border:1px solid #111}
+    .scope{margin-top:32px;padding-top:24px;border-top:1px solid #ddd}
+    .scope code{font-size:0.95em}
+    .muted{color:#444;font-size:0.95rem}
+    .actions{margin-top:12px}
   </style>
 </head>
 <body>
   <h1>Atlas</h1>
   <p>Assistant de pentest autorisé.</p>
-  <a class="btn" href="https://github.com/Gabawaru/Atlas/releases/latest">Télécharger la dernière version</a>
+  <a class="btn" href="https://github.com/Gabawaru/Atlas/releases/latest/download/Atlas-Setup.exe">Télécharger Atlas-Setup.exe</a>
+
+  <section class="scope" aria-labelledby="roe-title">
+    <h2 id="roe-title">Périmètre RoE (Gab)</h2>
+    <p class="muted">
+      Capacités autorisées uniquement sur
+      <code>*.pragma-serve.com</code>,
+      <code>*.pragma-cloud.com</code>,
+      <code>*.pragma.mc</code>
+      — hors liste = hors scope.
+    </p>
+  </section>
+
+  <section class="scope" aria-labelledby="caps-title" style="border-top:none;padding-top:8px;margin-top:8px">
+    <h2 id="caps-title">Lancer une capacité autorisée</h2>
+    <p class="muted">
+      Après installation et démarrage d’Atlas en local
+      (<code>pnpm dev:client</code> → <code>http://localhost:3002</code>,
+      Vite peut n’écouter que <code>::1</code>), ouvre le Scanner
+      prérempli (cible défaut <code>pragma-serve.com</code>).
+      Utiliser <code>localhost</code>, pas <code>127.0.0.1</code>.
+    </p>
+    <div class="actions">
+      <a class="btn secondary" href="http://localhost:3002/?action=recon&amp;host=pragma-serve.com#scanner">Reconnaissance</a>
+      <a class="btn secondary" href="http://localhost:3002/?action=scan&amp;host=pragma-serve.com#scanner">Scan</a>
+      <a class="btn secondary" href="http://localhost:3002/?action=vuln&amp;host=pragma-serve.com#scanner">Éval. vulnérabilités</a>
+      <a class="btn secondary" href="http://localhost:3002/?action=osint&amp;host=pragma-serve.com#scanner">OSINT</a>
+    </div>
+  </section>
 </body>
 </html>
