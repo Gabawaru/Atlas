@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Atlas</title>
+  <style>
+    :root {
+      --bg0: #0f1419;
+      --bg1: #1a222c;
+      --ink: #e8eef4;
+      --muted: #9aabbc;
+      --accent: #3d9cf0;
+      --accent2: #1f6fbf;
+      --ok: #3cb371;
+      --alert: #e26d5a;
+      --line: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #2a4a3a 0%, transparent 50%),
+        linear-gradient(165deg, var(--bg0), var(--bg1));
+    }
+    .shell {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+    }
+    .brand {
+      font-size: 2.75rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 8px;
+      line-height: 1.05;
+    }
+    .tagline {
+      color: var(--muted);
+      margin: 0 0 28px;
+      font-size: 1.05rem;
+    }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 12px 0 6px;
+    }
+    input, textarea {
+      width: 100%;
+      background: #0c1117;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      padding: 10px 12px;
+      font: inherit;
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .cta {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 1.1rem;
+      font-weight: 650;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(180deg, var(--accent), var(--accent2));
+      box-shadow: 0 8px 24px rgba(31, 111, 191, 0.35);
+      margin-top: 18px;
+    }
+    .cta:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .muted { color: var(--muted); font-size: 0.92rem; }
+    .status { margin-top: 14px; white-space: pre-wrap; }
+    .ok { color: var(--ok); }
+    .err { color: var(--alert); }
+    .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    code { font-size: 0.85em; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1 class="brand">Atlas</h1>
+    <p class="tagline">
+      Contrôle passif autorisé — un bouton Scan, Policy Guard / RoE, exports unifiés.
+    </p>
+
+    <div class="card">
+      <div class="row">
+        <span class="muted">API</span>
+        <code id="apiBase">http://127.0.0.1:3001</code>
+        <button type="button" class="ghost" id="startApiBtn">Démarrer l’API</button>
+        <button type="button" class="ghost" id="pingBtn">Tester</button>
+        <span id="apiHealth" class="muted"></span>
+      </div>
+      <p class="muted" style="margin:8px 0 0">
+        Un clic lance <code>AtlasLocal start</code> (stack locale). Première fois :
+        menu Démarrer → Atlas → <em>Installer le stack</em>, puis .env.
+      </p>
+      <label for="apiUrl">URL API (si différente)</label>
+      <input id="apiUrl" value="http://127.0.0.1:3001" autocomplete="off" />
+    </div>
+
+    <div class="card">
+      <label for="email">Compte</label>
+      <input id="email" value="owner@demo.atlas.local" autocomplete="username" />
+      <label for="password">Mot de passe</label>
+      <input id="password" type="password" value="atlas-demo" autocomplete="current-password" />
+
+      <label for="target">Cible FQDN (allowlist RoE)</label>
+      <input id="target" value="pragma-serve.com" autocomplete="off" />
+
+      <p class="muted">
+        Scan réel : create mission → owner-authorization (stub local / Sign) → Circuit A (admin) → Policy Guard →
+        <code>web.passive.presence.v1</code> + suite shortlist → bilan JSON/CSV/PDF.
+        Pas d’auto-execute avant approbation A. Authz locale : <code>ATLAS_AUTHZ=signed</code>
+        (sans <code>PRAGMA_SIGN_API_KEY</code> qui masque ce chemin).
+      </p>
+
+      <div class="row" style="margin-top:18px;gap:10px;align-items:stretch">
+        <button type="button" class="cta" id="scanBtn" style="margin-top:0">Scan</button>
+        <button type="button" class="ghost" id="resumeBtn" hidden title="Reprend la mission déjà autorisée (owner-auth déjà soumis)">
+          Reprendre après Circuit A
+        </button>
+      </div>
+      <p id="circuitHint" class="muted" hidden style="margin-top:10px">
+        Admin Circuit A :
+        <a id="adminLink" href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">ouvrir le client / admin</a>
+        — puis <strong>Reprendre</strong> ici (même mission, owner-auth déjà soumis).
+      </p>
+      <div id="status" class="status muted" role="status"></div>
+      <div id="exports" class="exports" hidden></div>
+    </div>
+
+    <p class="muted">
+      RoE : <code>*.pragma-cloud.com</code>, <code>*.pragma-serve.com</code>, <code>*.pragma.mc</code>.
+      Aucun secret dans ce binaire. Client complet :
+      <a href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">localhost:3002</a>.
+      Download public :
+      <a href="https://atlas-secu.com/Atlas-Setup.exe" target="_blank" rel="noreferrer">atlas-secu.com/Atlas-Setup.exe</a>.
+    </p>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const exportsEl = $("exports");
+    let token = null;
+    let lastMissionId = null;
+
+    function api() {
+      return ($("apiUrl").value || "http://127.0.0.1:3001").replace(/\/$/, "");
+    }
+
+    function setStatus(text, cls) {
+      statusEl.className = "status " + (cls || "muted");
+      statusEl.textContent = text;
+    }
+
+    function showCircuitResume(missionId) {
+      lastMissionId = missionId;
+      $("resumeBtn").hidden = false;
+      $("circuitHint").hidden = false;
+      const clientBase = api().replace(/:3001$/, ":3002");
+      $("adminLink").href = clientBase;
+    }
+
+    function hideCircuitResume() {
+      $("resumeBtn").hidden = true;
+      $("circuitHint").hidden = true;
+    }
+
+    async function apiJson(path, opts = {}) {
+      const headers = Object.assign(
+        { "Content-Type": "application/json" },
+        opts.headers || {},
+      );
+      if (token) headers.Authorization = "Bearer " + token;
+      const res = await fetch(api() + path, Object.assign({}, opts, { headers }));
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = { message: text }; }
+      if (!res.ok) {
+        const msg = (data && (data.message || data.error)) || ("HTTP " + res.status);
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      return data;
+    }
+
+    async function ping() {
+      $("apiBase").textContent = api();
+      try {
+        const res = await fetch(api() + "/v1/health");
+        $("apiHealth").textContent = res.ok ? "OK" : "HTTP " + res.status;
+        $("apiHealth").className = res.ok ? "ok" : "err";
+        return res.ok;
+      } catch (e) {
+        $("apiHealth").textContent = "hors ligne — cliquez Démarrer l’API";
+        $("apiHealth").className = "err";
+        return false;
+      }
+    }
+
+    async function startApi() {
+      $("startApiBtn").disabled = true;
+      setStatus("Lancement AtlasLocal start…");
+      try {
+        const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setStatus(
+            (data && (data.error || data.message)) || ("HTTP " + res.status) +
+              "\n" + ((data && data.hint) || "Vérifiez AtlasLocal.exe à côté de Atlas.exe."),
+            "err",
+          );
+          return;
+        }
+        setStatus(
+          (data.message || "AtlasLocal start lancé.") +
+            "\nPoll health :3001 (jusqu’à ~2 min si docker/pnpm)…",
+        );
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          if (await ping()) {
+            setStatus("API OK — vous pouvez Scan.", "ok");
+            return;
+          }
+          setStatus("AtlasLocal start en cours… health " + (i + 1) + "/30");
+        }
+        setStatus(
+          "API toujours hors ligne après ~2 min. Menu Démarrer → Atlas → Installer le stack (une fois), .env, puis Démarrer l’API.",
+          "err",
+        );
+      } catch (e) {
+        setStatus(
+          (e instanceof Error ? e.message : String(e)) +
+            "\nRelancez Atlas.exe (shell local :17865) puis Démarrer l’API.",
+          "err",
+        );
+      } finally {
+        $("startApiBtn").disabled = false;
+      }
+    }
+
+    async function ensureLogin() {
+      if (token) return token;
+      const login = await apiJson("/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: $("email").value.trim(),
+          password: $("password").value,
+        }),
+      });
+      token = login.accessToken;
+      if (!token) throw new Error("Pas de jeton — vérifiez les identifiants");
+      return token;
+    }
+
+    async function ensureConnector() {
+      const grants = await apiJson("/v1/connectors");
+      const active = Array.isArray(grants) && grants.some(
+        (g) => g.connectorId === "web.passive.presence" && g.status === "active",
+      );
+      if (!active) {
+        await apiJson("/v1/connectors/connect", {
+          method: "POST",
+          body: JSON.stringify({ connectorId: "web.passive.presence" }),
+        });
+      }
+    }
+
+    async function ensureAsset(host) {
+      const assets = await apiJson("/v1/assets");
+      const normalized = host.trim().toLowerCase().replace(/\.$/, "");
+      const existing = (assets || []).find(
+        (a) => a.normalized === normalized || a.value.toLowerCase() === normalized,
+      );
+      if (existing) return existing;
+      return apiJson("/v1/assets", {
+        method: "POST",
+        body: JSON.stringify({ type: "domain", value: normalized, synthetic: false }),
+      });
+    }
+
+    function canExecute(status) {
+      return status === "A_APPROVED" || status === "A_SKIPPED_DEMO";
+    }
+
+    async function pollMission(id, attempts, phase) {
+      const label = phase === "job"
+        ? "job BullMQ / suite passive"
+        : "attente Circuit A";
+      for (let i = 0; i < attempts; i++) {
+        const m = await apiJson("/v1/missions/" + id);
+        const reports = (m.reports && m.reports.length) || 0;
+        if (phase === "job") {
+          if (
+            m.status === "REPORT_AVAILABLE" ||
+            m.status === "BLOCKED" ||
+            m.status === "FAILED" ||
+            m.status === "CANCELLED" ||
+            m.status === "CLOSED" ||
+            reports > 0
+          ) {
+            return m;
+          }
+          setStatus(
+            "Mission " + id + " → " + m.status +
+              " · " + label + "… " + (i + 1) + "/" + attempts +
+              (reports ? " · rapports=" + reports : ""),
+          );
+        } else {
+          if (canExecute(m.status) || m.status === "REPORT_AVAILABLE" || m.status === "BLOCKED") {
+            return m;
+          }
+          setStatus(
+            "Mission " + id + " → " + m.status + " (" + label + "… " + (i + 1) + "/" + attempts + ")",
+          );
+        }
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+      return apiJson("/v1/missions/" + id);
+    }
+
+    async function showExports(missionId) {
+      const m = await apiJson("/v1/missions/" + missionId);
+      const report = (m.reports && m.reports[0]) || null;
+      if (!report) {
+        exportsEl.hidden = true;
+        return;
+      }
+      exportsEl.hidden = false;
+      exportsEl.innerHTML = "";
+      for (const fmt of ["json", "csv", "pdf"]) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ghost";
+        btn.textContent = fmt.toUpperCase();
+        btn.onclick = async () => {
+          const res = await fetch(
+            api() + "/v1/missions/" + missionId + "/reports/" + report.id + "/export?format=" + fmt,
+            { headers: { Authorization: "Bearer " + token } },
+          );
+          if (!res.ok) throw new Error("Export " + fmt + " échoué (" + res.status + ")");
+          const blob = await res.blob();
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "atlas-report-" + report.id + "." + fmt;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        };
+        exportsEl.appendChild(btn);
+      }
+    }
+
+    async function executeAndExport(missionId) {
+      setStatus("Exécution (Policy Guard → BullMQ web.passive.presence.v1 + suite)…");
+      const run = await apiJson("/v1/missions/" + missionId + "/execute", { method: "POST" });
+      if (run.gate && run.gate.decision === "REJECT") {
+        setStatus(run.gate.code + ": " + run.gate.reason, "err");
+        showCircuitResume(missionId);
+        return;
+      }
+      if (run.jobId || run.job) {
+        setStatus(
+          "Job lancé" + (run.jobId ? " (" + run.jobId + ")" : "") +
+            " — poll mission jusqu’à REPORT_AVAILABLE…",
+        );
+      }
+
+      const done = await pollMission(missionId, 45, "job");
+      if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
+        hideCircuitResume();
+        setStatus("Scan terminé — " + done.status + ". Exports JSON / CSV / PDF ci-dessous.", "ok");
+        await showExports(missionId);
+        return;
+      }
+      if (done.status === "BLOCKED" || done.status === "FAILED" || done.status === "CANCELLED" || done.status === "CLOSED") {
+        setStatus("Mission " + done.status + (done.blockReason ? " — " + done.blockReason : ""), "err");
+        return;
+      }
+      setStatus(
+        "Toujours " + done.status + " après poll job — pas de rapport encore.\n" +
+          "Rouvrir le client :3002 ou relancer Reprendre si Circuit A / job a bougé.",
+        "err",
+      );
+      showCircuitResume(missionId);
+    }
+
+    async function resumeAfterCircuitA() {
+      if (!lastMissionId) {
+        setStatus("Aucune mission en attente — lancez Scan d’abord.", "err");
+        return;
+      }
+      $("scanBtn").disabled = true;
+      $("resumeBtn").disabled = true;
+      exportsEl.hidden = true;
+      try {
+        if (!(await ping())) {
+          setStatus(
+            "API hors ligne — cliquez Démarrer l’API, attendez OK, puis Reprendre.",
+            "err",
+          );
+          return;
+        }
+        setStatus("Connexion…");
+        await ensureLogin();
+        setStatus("Mission " + lastMissionId + " — vérif Circuit A…");
+        const m = await pollMission(lastMissionId, 15);
+        if (!canExecute(m.status)) {
+          showCircuitResume(lastMissionId);
+          setStatus(
+            "Toujours " + m.status +
+              " — staff doit décider dans l’admin, puis Reprendre (owner-auth déjà soumis).",
+            "err",
+          );
+          return;
+        }
+        await executeAndExport(lastMissionId);
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e), "err");
+        showCircuitResume(lastMissionId);
+      } finally {
+        $("scanBtn").disabled = false;
+        $("resumeBtn").disabled = false;
+      }
+    }
+
+    async function runScan() {
+      const target = $("target").value.trim().toLowerCase().replace(/\.$/, "");
+      if (target.length < 3) {
+        setStatus("Cible FQDN requise.", "err");
+        return;
+      }
+
+      $("scanBtn").disabled = true;
+      $("resumeBtn").disabled = true;
+      hideCircuitResume();
+      exportsEl.hidden = true;
+      try {
+        if (!(await ping())) {
+          setStatus(
+            "API hors ligne — cliquez Démarrer l’API (AtlasLocal) et attendez OK avant Scan.\nSetup n’embarque pas Docker/images — seulement le lanceur.",
+            "err",
+          );
+          return;
+        }
+
+        setStatus("Connexion…");
+        await ensureLogin();
+
+        setStatus("Connecteur web.passive.presence…");
+        await ensureConnector();
+
+        setStatus("Actif " + target + "…");
+        const asset = await ensureAsset(target);
+
+        setStatus("Création mission réelle…");
+        const mission = await apiJson("/v1/missions", {
+          method: "POST",
+          body: JSON.stringify({
+            title: "Mission présence web (réelle)",
+            uxNeedIds: ["web_presence"],
+            assetIds: [asset.id],
+            synthetic: false,
+            exclusions: [],
+            notes: "Atlas v1 Scan — owner-auth stub / ATLAS_AUTHZ=signed ; Circuit A requis",
+          }),
+        });
+        lastMissionId = mission.id;
+
+        setStatus("Owner-authorization…");
+        const attached = await apiJson(
+          "/v1/missions/" + mission.id + "/owner-authorization",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              signerLabel: $("email").value.trim() || "Atlas Scan",
+            }),
+          },
+        );
+
+        let status = String(attached.status || mission.status || "?");
+        setStatus("Mission " + mission.id + " → " + status);
+
+        if (!canExecute(status)) {
+          showCircuitResume(mission.id);
+          setStatus(
+            "Mission " + mission.id + " → " + status +
+              ".\nOwner-authorization soumis. Circuit A requis : un approbateur staff décide dans l’admin.\nScan attend l’approbation (poll ~3 min) — ou Reprendre après décision…",
+          );
+          const polled = await pollMission(mission.id, 45);
+          status = polled.status;
+        }
+
+        if (!canExecute(status)) {
+          showCircuitResume(mission.id);
+          setStatus(
+            "Toujours " + status +
+              " — ouvrez l’admin, décidez, puis cliquez Reprendre après Circuit A (pas besoin de re-soumettre l’owner-auth).",
+            "err",
+          );
+          return;
+        }
+
+        await executeAndExport(mission.id);
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e), "err");
+        if (lastMissionId) showCircuitResume(lastMissionId);
+      } finally {
+        $("scanBtn").disabled = false;
+        $("resumeBtn").disabled = false;
+      }
+    }
+
+    $("pingBtn").onclick = () => void ping();
+    $("startApiBtn").onclick = () => void startApi();
+    $("apiUrl").onchange = () => { $("apiBase").textContent = api(); };
+    $("scanBtn").onclick = () => void runScan();
+    $("resumeBtn").onclick = () => void resumeAfterCircuitA();
+    void ping();
+  </script>
+</body>
+</html>
