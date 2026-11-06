@@ -22,6 +22,10 @@ import {
   validateRealMissionInput,
   type ScannerMissionMode,
 } from "./scannerMissionPath";
+import {
+  parseAuthorizedLaunch,
+  type AuthorizedLaunchIntent,
+} from "./authorizedLaunch";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -123,6 +127,9 @@ export function App() {
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
   const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
+  /** RoE deep-link from atlas-secu.com (?action=&host=) — no Paradise. */
+  const [authorizedLaunch, setAuthorizedLaunch] =
+    useState<AuthorizedLaunchIntent | null>(null);
 
   const headers = useMemo(
     () =>
@@ -251,6 +258,23 @@ export function App() {
   useEffect(() => {
     if (token) void refresh();
   }, [token]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const parsed = parseAuthorizedLaunch(window.location.search);
+    if (!parsed.ok) {
+      if (parsed.reason) setError(parsed.reason);
+      return;
+    }
+    setAuthorizedLaunch(parsed.intent);
+    setRealTargetHost(parsed.intent.host);
+    setInfo(
+      `Lancement RoE : ${parsed.intent.label} → ${parsed.intent.host} ` +
+        `(*.pragma-serve.com / *.pragma-cloud.com / *.pragma.mc uniquement).`,
+    );
+    const el = document.getElementById("scanner-cta-title");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   async function addAsset() {
     await fetch(`${API}/v1/assets`, {
@@ -532,12 +556,24 @@ export function App() {
         )}
       </div>
 
-      <section className="scanner-hero" aria-labelledby="scanner-cta-title">
+      <section
+        id="scanner"
+        className="scanner-hero"
+        aria-labelledby="scanner-cta-title"
+      >
         <h2 id="scanner-cta-title">Scanner</h2>
         <p className="muted">
           Contrôle passif in-scope uniquement. Exécution refusée sans session,
           cible, connecteur et autorisation valides.
         </p>
+        {authorizedLaunch && (
+          <div className="banner" role="status">
+            <strong>{authorizedLaunch.label}</strong> — cible RoE{" "}
+            <code>{authorizedLaunch.host}</code>. Périmètre :{" "}
+            <code>*.pragma-serve.com</code>, <code>*.pragma-cloud.com</code>,{" "}
+            <code>*.pragma.mc</code>. Pas de Paradise sur ce deep-link.
+          </div>
+        )}
         <label className="mode-toggle">
           <input
             type="checkbox"
