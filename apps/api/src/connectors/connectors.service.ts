@@ -68,6 +68,14 @@ export class ConnectorsService {
       externalRef = `mock-github-oauth:${randomUUID()}`;
     } else if (connectorId === "web.passive.presence") {
       externalRef = `web-passive-grant:${randomUUID()}`;
+    } else if (
+      connectorId === "asm.passive.enrichment" ||
+      connectorId === "breach.hibp" ||
+      connectorId === "ti.passive.enrichment" ||
+      connectorId === "sca.local.analyzers" ||
+      connectorId === "cloud.posture.auth"
+    ) {
+      externalRef = `${connectorId}-grant:${randomUUID()}`;
     }
 
     const grant = await this.prisma.connectorGrant.create({

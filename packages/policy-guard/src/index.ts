@@ -53,9 +53,20 @@ export function isSignedAuthzAttested(
   return env.ATLAS_AUTHZ === "signed";
 }
 
+/**
+ * Modules passifs / locaux défensifs (shortlist Atlas) — non agressifs.
+ * Chaos / active exploit patterns remain aggressive.
+ */
+const PASSIVE_MODULE_HINT =
+  /\.passive\.|local\.v1$|web\.passive\.|vuln\.match\.passive/i;
+
 /** Modules agressifs / non-MVP — refusés sans authz signée. */
 export function isAggressiveModule(moduleId: string): boolean {
   if (moduleId === MODULE_WEB_PASSIVE) return false;
+  if (PASSIVE_MODULE_HINT.test(moduleId)) return false;
+  if (/chaos\.|exploit|aggressive|active\.scan|bruteforce|fuzz\.active/i.test(moduleId)) {
+    return true;
+  }
   return /aggressive|exploit|active\.scan|bruteforce|fuzz\.active/i.test(
     moduleId,
   );
