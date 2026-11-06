@@ -123,11 +123,15 @@ export function parseAuthorizedLaunch(
   };
 }
 
-/** Build local client deep-link used by atlas-secu.com capability CTAs. */
+/**
+ * Build local client deep-link used by atlas-secu.com capability CTAs.
+ * Default origin is `http://localhost:3002` (not 127.0.0.1): Vite often
+ * binds ::1 only, so IPv4 loopback deep-links miss the scanner.
+ */
 export function authorizedLaunchHref(
   action: AuthorizedAction,
   host: string = DEFAULT_AUTHORIZED_HOST,
-  origin: string = "http://127.0.0.1:3002",
+  origin: string = "http://localhost:3002",
 ): string {
   const q = new URLSearchParams({ action, host });
   return `${origin}/?${q.toString()}#scanner`;

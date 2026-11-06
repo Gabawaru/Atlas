@@ -52,7 +52,7 @@ describe("authorizedLaunchHref", () => {
   it("builds local scanner deep-link", () => {
     assert.equal(
       authorizedLaunchHref("recon"),
-      "http://127.0.0.1:3002/?action=recon&host=pragma-serve.com#scanner",
+      "http://localhost:3002/?action=recon&host=pragma-serve.com#scanner",
     );
   });
 });
