@@ -127,7 +127,7 @@ export function App() {
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
   const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
-  /** RoE deep-link from atlas-secu.com (?action=&host=) — no Paradise. */
+  /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
   const [authorizedLaunch, setAuthorizedLaunch] =
     useState<AuthorizedLaunchIntent | null>(null);
 
@@ -571,7 +571,7 @@ export function App() {
             <strong>{authorizedLaunch.label}</strong> — cible RoE{" "}
             <code>{authorizedLaunch.host}</code>. Périmètre :{" "}
             <code>*.pragma-serve.com</code>, <code>*.pragma-cloud.com</code>,{" "}
-            <code>*.pragma.mc</code>. Pas de Paradise sur ce deep-link.
+            <code>*.pragma.mc</code>.
           </div>
         )}
         <label className="mode-toggle">

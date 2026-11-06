@@ -459,6 +459,9 @@ func startService(root string, svc serviceSpec) error {
 	cmd.Stdout = lf
 	cmd.Stderr = lf
 	cmd.Stdin = nil
+	// Inject root .env into child (ATLAS_AUTHZ, CORS, VITE_*, DB…) without printing secrets.
+	// Existing process env wins over .env so operators can override from the shell.
+	cmd.Env = mergeDotEnv(os.Environ(), filepath.Join(root, ".env"))
 	setDetached(cmd)
 
 	if err := cmd.Start(); err != nil {
@@ -478,6 +481,45 @@ func startService(root string, svc serviceSpec) error {
 	}()
 	fmt.Printf("Started %s (pid %d) — log %s\n", svc.name, pid, logFile(root, svc.name))
 	return nil
+}
+
+// mergeDotEnv returns base environ with KEY=VALUE from .env filled only when KEY is unset.
+// Skips comments/blank lines. Does not log values. Missing file → base unchanged.
+func mergeDotEnv(base []string, envPath string) []string {
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		return base
+	}
+	have := map[string]bool{}
+	for _, e := range base {
+		if i := strings.IndexByte(e, '='); i > 0 {
+			have[e[:i]] = true
+		}
+	}
+	out := append([]string{}, base...)
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		if key == "" || have[key] {
+			continue
+		}
+		val := strings.TrimSpace(line[eq+1:])
+		if len(val) >= 2 {
+			if (val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
+		out = append(out, key+"="+val)
+		have[key] = true
+	}
+	return out
 }
 
 func ensureEnv(root string) error {

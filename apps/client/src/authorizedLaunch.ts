@@ -2,7 +2,7 @@
  * Deep-link entry from atlas-secu.com → local Atlas client.
  * RoE Gab: recon / scan / vuln / osint only on *.pragma-serve.com,
  * *.pragma-cloud.com, *.pragma.mc (+ apex pragma-serve.com).
- * No Paradise — launch intent only prefills Scanner UX.
+ * Launch intent only prefills Scanner UX (RoE host allowlist still enforced).
  */
 
 export const AUTHORIZED_ACTIONS = [
@@ -125,8 +125,8 @@ export function parseAuthorizedLaunch(
 
 /**
  * Build local client deep-link used by atlas-secu.com capability CTAs.
- * Default origin is `http://localhost:3002` (not 127.0.0.1): Vite often
- * binds ::1 only, so IPv4 loopback deep-links miss the scanner.
+ * Default origin is `http://localhost:3002`. Vite `server.host: true` also
+ * serves `127.0.0.1:3002` (Atlas.exe / IPv4 bookmarks).
  */
 export function authorizedLaunchHref(
   action: AuthorizedAction,
