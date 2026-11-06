@@ -5,8 +5,8 @@ Public CTA (`atlas-secu.com`) → `Gabawaru/Atlas` `releases/latest` → asset `
 | Field | Value |
 |-------|--------|
 | Asset name | `Atlas-Setup.exe` |
-| Size (bytes) | `2089922` |
-| SHA256 | `51696c9755e3cf062a881e64a4af49f6b9aa1d641e0a4e1758e81c7f939681e2` |
+| Size (bytes) | `2090089` |
+| SHA256 | `881e5beef17cdda81a323f6455172a3cc31c4fafbd28d1de86fe3207efb9fde3` |
 | GitHub Releases | `v1.3.0` (latest) · prior `v1.2.0` |
 | Build | `cd remote-work/atlas-v1 && ./build.sh` → `../offline-installer/bin/Atlas-Setup.exe` |
 | Product version (NSIS) | `1.3.0` |
