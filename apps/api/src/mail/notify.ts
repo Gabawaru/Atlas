@@ -5,7 +5,7 @@
 import { Logger } from "@nestjs/common";
 import type { MailProvider, SendMailResult } from "./mail-provider";
 
-export const ATLAS_MAIL_FROM = "ops@atlas-secu.com";
+export const ATLAS_MAIL_FROM = "gabriel@hq.atlas-secu.com";
 export const ATLAS_MAIL_REPLY_TO = "gabriel@atlas-secu.com";
 
 const log = new Logger("AtlasMailNotify");
