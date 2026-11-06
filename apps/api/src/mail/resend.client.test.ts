@@ -30,7 +30,7 @@ describe("ResendClient (mocked HTTP)", () => {
       fetchImpl,
     });
     const out = await client.sendEmail({
-      from: "ops@atlas-secu.com",
+      from: "gabriel@hq.atlas-secu.com",
       to: ["owner@t.local"],
       subject: "hello",
       text: "body",
@@ -42,7 +42,7 @@ describe("ResendClient (mocked HTTP)", () => {
     assert.equal(h.Authorization, "Bearer re_test_key_not_real");
     assert.equal(h["User-Agent"], RESEND_USER_AGENT);
     const parsed = JSON.parse(seen.body!) as Record<string, unknown>;
-    assert.equal(parsed.from, "ops@atlas-secu.com");
+    assert.equal(parsed.from, "gabriel@hq.atlas-secu.com");
     assert.deepEqual(parsed.to, ["owner@t.local"]);
     assert.equal(parsed.reply_to, "gabriel@atlas-secu.com");
   });
@@ -64,7 +64,7 @@ describe("ResendMailProvider (mocked HTTP)", () => {
       fetchImpl,
     });
     const r = await p.send({
-      from: "ops@atlas-secu.com",
+      from: "gabriel@hq.atlas-secu.com",
       to: "a@t.local",
       subject: "subj",
       html: "<p>hi</p>",
@@ -79,7 +79,7 @@ describe("MockMailProvider", () => {
   it("send → isMock true sans réseau", async () => {
     const p = new MockMailProvider();
     const r = await p.send({
-      from: "ops@atlas-secu.com",
+      from: "gabriel@hq.atlas-secu.com",
       to: "a@t.local",
       subject: "subj",
       text: "hi",
