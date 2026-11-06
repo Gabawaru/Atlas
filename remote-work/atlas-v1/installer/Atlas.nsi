@@ -3,7 +3,7 @@
 ; for Atlas.exe, finish-page launch.
 
 !define PRODUCT_NAME "Atlas"
-!define PRODUCT_VERSION "1.2.0"
+!define PRODUCT_VERSION "1.3.0"
 !define PRODUCT_PUBLISHER "Pragma / Gabawaru"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\Atlas.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"

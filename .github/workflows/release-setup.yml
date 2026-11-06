@@ -88,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           ASSET=remote-work/offline-installer/bin/Atlas-Setup.exe
-          NOTES="Windows installer \`Atlas-Setup.exe\` for Paradise download (\`/api/atlas/download\`).
+          NOTES="Windows installer \`Atlas-Setup.exe\`.
 
           - size: ${PE_SIZE}
           - sha256: \`${PE_SHA}\`
