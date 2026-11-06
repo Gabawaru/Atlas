@@ -8,32 +8,32 @@ import {
 } from "./scannerMissionPath.js";
 
 describe("validateRealMissionInput", () => {
-  it("refuse attestation trop courte", () => {
+  it("refuse envelopeId vide", () => {
     const r = validateRealMissionInput({
-      paradiseAttestation: "ab.cd",
+      signatureEnvelopeId: "  ",
       targetHost: "pragma-serve.com",
     });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.match(r.reason, /Attestation Paradise/);
+    if (!r.ok) assert.match(r.reason, /signatureEnvelopeId/);
   });
 
   it("refuse cible vide", () => {
     const r = validateRealMissionInput({
-      paradiseAttestation: "body.signaturehex",
+      signatureEnvelopeId: "244",
       targetHost: "  ",
     });
     assert.equal(r.ok, false);
     if (!r.ok) assert.match(r.reason, /FQDN/);
   });
 
-  it("normalise cible et attestation", () => {
+  it("normalise cible et envelopeId", () => {
     const r = validateRealMissionInput({
-      paradiseAttestation: "  body.sigabcdef  ",
+      signatureEnvelopeId: "  244  ",
       targetHost: "Pragma-Serve.com.",
     });
     assert.equal(r.ok, true);
     if (r.ok) {
-      assert.equal(r.attestation, "body.sigabcdef");
+      assert.equal(r.envelopeId, "244");
       assert.equal(r.targetHost, "pragma-serve.com");
     }
   });

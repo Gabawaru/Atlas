@@ -1,13 +1,13 @@
 /**
  * SignatureProvider pluggable — hypothèse workflow-approbation.md §6.
  * Runtime:
- * - Paradise drawn signatures when ATLAS_PARADISE_AUTHZ_SECRET is set (P0)
- * - else Pragma Sign when PRAGMA_SIGN_API_KEY is set
+ * - Pragma Sign when PRAGMA_SIGN_API_KEY is set
  * - else mock (CI / démo)
- * Circuit deux parties (mock) ou enveloppe Paradise / Pragma Sign (owner signer).
+ * Circuit deux parties (mock) ou enveloppe Pragma Sign (owner signer).
  * L'IA n'appelle jamais createEnvelope sans action humaine.
  *
  * signed-authorization (chat) : `sign` → signed | pending | rejected.
+ * Local/dev signed-authz without Sign key: ATLAS_AUTHZ=signed (Policy Guard).
  */
 
 export type SignatureStatus = "pending" | "signed" | "declined" | "expired";

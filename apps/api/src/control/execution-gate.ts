@@ -40,9 +40,8 @@ export type GateMissionSlice = {
     scopeHash: string;
     /** Mock SignatureProvider / stub — fail-closed when omitted. */
     isStubSignature?: boolean;
-    /** Pragma Sign / Paradise envelope id — polled when provider configured. */
+    /** Pragma Sign envelope id — polled when provider configured. */
     signatureEnvelopeId?: string | null;
-    /** paradise-attestation://v1/<token> when attached via Paradise drawn signature. */
     signatureArtifactRef?: string | null;
   }>;
   approvalReqs: Array<{
@@ -101,18 +100,11 @@ export async function buildExecutionGateInput(
     args.roeScopeOverride === true || mission.synthetic,
   );
 
-  const paradiseAttestation = (() => {
-    const ref = owner?.signatureArtifactRef?.trim() ?? "";
-    const prefix = "paradise-attestation://v1/";
-    return ref.startsWith(prefix) ? ref.slice(prefix.length) : null;
-  })();
-
   const signedAuthzAttested =
     args.signedAuthzAttested !== undefined
       ? args.signedAuthzAttested
       : await resolveSignedAuthzAttested({
           envelopeId: owner?.signatureEnvelopeId,
-          paradiseAttestation,
         });
 
   return {
