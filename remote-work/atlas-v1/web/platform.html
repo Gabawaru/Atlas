@@ -495,7 +495,7 @@
         lastMissionId = mission.id;
 
         setStatus("Owner-authorization…");
-        const attached = await apiJson(
+        let attached = await apiJson(
           "/v1/missions/" + mission.id + "/owner-authorization",
           {
             method: "POST",
@@ -504,6 +504,15 @@
             }),
           },
         );
+
+        // Real missions: stub owner auth leaves counterparty pending — complete mock counter-sign.
+        if (String(attached.status || "") === "AUTH_PENDING") {
+          setStatus("Contre-signature (mock)…");
+          attached = await apiJson(
+            "/v1/missions/" + mission.id + "/counter-signature",
+            { method: "POST" },
+          );
+        }
 
         let status = String(attached.status || mission.status || "?");
         setStatus("Mission " + mission.id + " → " + status);
