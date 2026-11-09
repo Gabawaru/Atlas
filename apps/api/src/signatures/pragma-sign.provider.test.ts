@@ -212,7 +212,7 @@ describe("resolveSignedAuthzAttested", () => {
     assert.equal(ok, false);
   });
 
-  it("avec clé sans envelopeId → false (pas de theater ATLAS_AUTHZ)", async () => {
+  it("avec clé sans envelopeId → ATLAS_AUTHZ=signed (checkbox path, no Sign)", async () => {
     const ok = await resolveSignedAuthzAttested({
       env: {
         PRAGMA_SIGN_API_KEY: "test-key-not-real",
@@ -220,6 +220,13 @@ describe("resolveSignedAuthzAttested", () => {
       },
       envelopeId: null,
     });
-    assert.equal(ok, false);
+    assert.equal(ok, true);
+    const no = await resolveSignedAuthzAttested({
+      env: {
+        PRAGMA_SIGN_API_KEY: "test-key-not-real",
+      },
+      envelopeId: null,
+    });
+    assert.equal(no, false);
   });
 });

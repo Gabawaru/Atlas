@@ -1,6 +1,7 @@
 /**
- * Scanner CTA path selection — FICTIF (demo) vs real (Sign envelope attach).
- * Policy Guard / Circuit A remain authoritative; this only shapes client requests.
+ * Scanner CTA path selection — FICTIF (demo) vs real (liability checkbox).
+ * Policy Guard / Circuit A / RoE remain authoritative; this only shapes client requests.
+ * No Pragma Sign envelope paste on the real path.
  */
 
 export type ScannerMissionMode = "fictif" | "real";
@@ -16,40 +17,30 @@ export const TEST_RESPONSIBILITY_LABEL =
   "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
 
 export type RealMissionInput = {
-  signatureEnvelopeId: string;
   targetHost: string;
-  /** Required gate before Sign attach / scan — operator acknowledges responsibility. */
+  /** Required gate before real scan — operator accepts liability if unauthorized. */
   testResponsibilityAccepted: boolean;
 };
 
 export type RealMissionValidation =
   | {
       ok: true;
-      envelopeId: string;
       targetHost: string;
       testResponsibilityAccepted: true;
     }
   | { ok: false; reason: string };
 
-/** Validate responsibility ack + Sign envelope id + in-scope target before POST. */
+/** Validate liability ack + in-scope target before POST (no Sign envelope). */
 export function validateRealMissionInput(
   input: RealMissionInput,
 ): RealMissionValidation {
   if (!input.testResponsibilityAccepted) {
     return {
       ok: false,
-      reason: `Cochez « ${TEST_RESPONSIBILITY_LABEL} » avant Sign / scan.`,
+      reason: `Cochez « ${TEST_RESPONSIBILITY_LABEL} » avant le scan.`,
     };
   }
-  const envelopeId = input.signatureEnvelopeId.trim();
   const targetHost = input.targetHost.trim().toLowerCase().replace(/\.$/, "");
-  if (!envelopeId || envelopeId.length < 1) {
-    return {
-      ok: false,
-      reason:
-        "signatureEnvelopeId requis (enveloppe Pragma Sign déjà signée).",
-    };
-  }
   if (!targetHost || targetHost.length < 3) {
     return {
       ok: false,
@@ -58,7 +49,6 @@ export function validateRealMissionInput(
   }
   return {
     ok: true,
-    envelopeId,
     targetHost,
     testResponsibilityAccepted: true,
   };
@@ -85,16 +75,17 @@ export function createMissionBody(args: {
     assetIds: [args.assetId],
     synthetic: false,
     exclusions: [],
-    notes: "RoE réel — owner-auth via Sign attach ; Circuit A requis",
+    notes:
+      "RoE réel — responsabilité opérateur cochée ; Circuit A + Policy Guard",
   };
 }
 
-/** Operator-facing message after Sign attach (before Circuit A). */
+/** Operator-facing message after responsibility owner-auth (before Circuit A). */
 export function circuitAPendingMessage(missionId: string, status: string): string {
   return (
-    `Mission ${missionId} → ${status}. Enveloppe Sign attachée. ` +
+    `Mission ${missionId} → ${status}. Responsabilité opérateur enregistrée. ` +
     `Circuit A encore requis : un approbateur staff doit décider dans l’admin ` +
-    `(POST /v1/admin/approvals/:id/decide). Puis « Exécuter » ici — Policy Guard inchangé.`
+    `(POST /v1/admin/approvals/:id/decide). Puis « Exécuter » ici — Policy Guard / RoE inchangés.`
   );
 }
 

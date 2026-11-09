@@ -2,8 +2,11 @@
  * Resolve signed-authz for real / aggressive runs.
  *
  * Order:
- * 1. Pragma Sign poll when PRAGMA_SIGN_API_KEY set
- * 2. Local/dev ATLAS_AUTHZ=signed only (Policy Guard / RoE)
+ * 1. If an envelope id is present and PRAGMA_SIGN_API_KEY set → poll Sign
+ * 2. Else ATLAS_AUTHZ=signed (operator liability checkbox path — no Sign required)
+ *
+ * Product gate for real scans is the responsibility checkbox + Policy Guard / RoE.
+ * A present Sign API key alone must not block that path.
  */
 import { isSignedAuthzAttested } from "@atlas/policy-guard";
 import {
@@ -28,12 +31,9 @@ export async function resolveSignedAuthzAttested(
   const env = opts.env ?? process.env;
   const envelopeId = opts.envelopeId?.trim() ?? "";
 
-  // 1) Pragma Sign
+  // 1) Optional Pragma Sign poll only when an envelope was attached
   const key = (env.PRAGMA_SIGN_API_KEY ?? "").trim();
-  if (key) {
-    if (!envelopeId) {
-      return false;
-    }
+  if (key && envelopeId) {
     try {
       const client =
         opts.client ??
@@ -48,6 +48,6 @@ export async function resolveSignedAuthzAttested(
     }
   }
 
-  // 2) Local / CI / dev without Sign — operator attestation only.
+  // 2) Operator liability / local-dev attestation (Policy Guard + RoE still apply)
   return isSignedAuthzAttested(env);
 }

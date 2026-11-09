@@ -125,11 +125,10 @@ export function App() {
   const [roe, setRoe] = useState<Roe | null>(null);
   const [roeExclusions, setRoeExclusions] = useState("mail.example.com");
   const [findings, setFindings] = useState<Finding[]>([]);
-  /** FICTIF remains the default demo path; real requires a signed Sign envelope. */
+  /** FICTIF remains the default demo path; real requires liability checkbox. */
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
-  const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
-  /** Gate before Sign attach / scan — liability if scan turns out unauthorized. */
+  /** Gate before real scan — liability if scan turns out unauthorized. */
   const [testResponsibilityAccepted, setTestResponsibilityAccepted] =
     useState(false);
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
@@ -347,8 +346,8 @@ export function App() {
 
   /**
    * Scanner CTA: FICTIF (default) = mock owner-auth + execute.
-   * Mission réelle = synthetic:false + Sign envelope attach — stops for Circuit A
-   * (admin decide). Does not weaken Policy Guard; no auto-execute on real path.
+   * Mission réelle = liability checkbox only — Circuit A then Policy Guard / RoE.
+   * No Pragma Sign envelope paste or partner attach on the product path.
    */
   async function runScanner() {
     if (!readiness.ready) return;
@@ -403,7 +402,6 @@ export function App() {
       }
 
       const validated = validateRealMissionInput({
-        signatureEnvelopeId,
         targetHost: realTargetHost,
         testResponsibilityAccepted,
       });
@@ -433,40 +431,41 @@ export function App() {
         return;
       }
 
-      const attached = await fetch(
-        `${API}/v1/missions/${mission.id}/owner-authorization/attach`,
+      const authorized = await fetch(
+        `${API}/v1/missions/${mission.id}/owner-authorization`,
         {
           method: "POST",
           headers,
           body: JSON.stringify({
-            signatureEnvelopeId: validated.envelopeId,
             signerLabel: email,
             testResponsibilityAccepted: true,
             testResponsibilityLabel: TEST_RESPONSIBILITY_LABEL,
           }),
         },
       ).then((r) => r.json());
-      if (!attached?.id && attached?.message) {
+      if (!authorized?.id && authorized?.message) {
         setError(
-          typeof attached.message === "string"
-            ? attached.message
-            : JSON.stringify(attached.message),
+          typeof authorized.message === "string"
+            ? authorized.message
+            : JSON.stringify(authorized.message),
         );
         await refresh();
         return;
       }
 
-      const status = String(attached?.status ?? mission.status ?? "?");
+      const status = String(authorized?.status ?? mission.status ?? "?");
       if (canClientExecute(status)) {
         setInfo(
-          `Mission ${attached.id ?? mission.id} → ${status}. Circuit A déjà satisfait — vous pouvez « Exécuter ».`,
+          `Mission ${authorized.id ?? mission.id} → ${status}. Circuit A déjà satisfait — vous pouvez « Exécuter ».`,
         );
       } else {
         setInfo(
-          circuitAPendingMessage(String(attached?.id ?? mission.id), status),
+          circuitAPendingMessage(
+            String(authorized?.id ?? mission.id),
+            status,
+          ),
         );
       }
-      setSignatureEnvelopeId("");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -573,7 +572,7 @@ export function App() {
         <p className="muted">
           Contrôle passif in-scope uniquement (RoE : {ROE_SCOPE_LABEL}).
           Exécution refusée sans session, cible autorisée, connecteur et
-          autorisation Sign valides.
+          responsabilité opérateur.
         </p>
         {authorizedLaunch && (
           <div className="banner" role="status">
@@ -593,7 +592,7 @@ export function App() {
               if (!real) setTestResponsibilityAccepted(false);
             }}
           />{" "}
-          Mission réelle (Pragma Sign attach — pas FICTIF)
+          Mission réelle (responsabilité opérateur — pas FICTIF)
         </label>
         {missionMode === "real" ? (
           <div className="real-mission-fields">
@@ -617,23 +616,12 @@ export function App() {
               onChange={(e) => setRealTargetHost(e.target.value)}
               placeholder={DEFAULT_REAL_TARGET}
               autoComplete="off"
-            />
-            <label htmlFor="signature-envelope-id">
-              Enveloppe Pragma Sign (signatureEnvelopeId déjà signée)
-            </label>
-            <input
-              id="signature-envelope-id"
-              value={signatureEnvelopeId}
-              onChange={(e) => setSignatureEnvelopeId(e.target.value)}
-              placeholder="coller signatureEnvelopeId ici"
-              autoComplete="off"
-              spellCheck={false}
               disabled={!testResponsibilityAccepted}
             />
             <p className="muted real-mission-note">
-              Gate : responsabilité cochée → attach Sign → Circuit A (admin
-              approvals/decide) → Policy Guard. Paradise n&apos;est pas utilisé.
-              Hors RoE ({ROE_SCOPE_LABEL}) → REJECT.
+              Gate : responsabilité cochée → Circuit A (admin
+              approvals/decide) → Policy Guard / RoE. Pas de Pragma Sign ni
+              Paradise. Hors RoE ({ROE_SCOPE_LABEL}) → REJECT.
             </p>
           </div>
         ) : (
@@ -647,18 +635,16 @@ export function App() {
           disabled={
             busy ||
             !readiness.ready ||
-            (missionMode === "real" &&
-              (!testResponsibilityAccepted ||
-                signatureEnvelopeId.trim().length < 1))
+            (missionMode === "real" && !testResponsibilityAccepted)
           }
           onClick={() => void runScanner()}
         >
           {busy
             ? missionMode === "real"
-              ? "Attachement…"
+              ? "Préparation…"
               : "Exécution…"
             : missionMode === "real"
-              ? "Attacher & préparer"
+              ? "Préparer le scan"
               : "Scanner"}
         </button>
         {readiness.blockReason && (

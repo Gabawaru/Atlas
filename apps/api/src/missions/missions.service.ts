@@ -356,6 +356,10 @@ export class MissionsService {
     missionId: string,
     user: AuthUser,
     signerLabel: string,
+    opts?: {
+      testResponsibilityAccepted?: boolean;
+      testResponsibilityLabel?: string;
+    },
   ) {
     const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
@@ -364,6 +368,84 @@ export class MissionsService {
       throw new BadRequestException(
         "Périmètre révoqué — mettez à jour le RoE puis re-signez.",
       );
+    }
+
+    const responsibilityLabel =
+      opts?.testResponsibilityLabel?.trim() ||
+      "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
+
+    /**
+     * Real product path: liability checkbox only — no partner Sign create/attach.
+     * Policy Guard + RoE still gate execute (ATLAS_AUTHZ=signed for stub authz).
+     */
+    if (!mission.synthetic) {
+      if (opts?.testResponsibilityAccepted !== true) {
+        throw new BadRequestException(
+          "Acceptation de responsabilité requise avant scan (scan non autorisé).",
+        );
+      }
+
+      if (mission.status === "PREP_READY") {
+        await this.transition(missionId, "AUTH_PENDING", user);
+      }
+
+      const authRow = await this.prisma.ownerAuthorization.create({
+        data: {
+          missionId,
+          scopeVersionId: scope.id,
+          scopeHash: scope.scopeHash,
+          status: "valid",
+          signerLabel,
+          counterpartyLabel: this.ATLAS_COUNTERPARTY.name,
+          counterpartyEmail: this.ATLAS_COUNTERPARTY.email,
+          ownerSignedAt: new Date(),
+          counterpartySignedAt: new Date(),
+          signatureArtifactRef: `operator-responsibility://v1/${missionId}`,
+          isStubSignature: true,
+          signatureProvider: "operator-responsibility",
+          signatureEnvelopeId: null,
+          signatureStatus: "signed",
+        },
+      });
+
+      await this.audit.append({
+        tenantId: mission.tenantId,
+        actorId: user.userId,
+        action: "signature.owner.responsibility",
+        objectType: "owner_authorization",
+        objectId: authRow.id,
+        payload: {
+          provider: "operator-responsibility",
+          testResponsibilityAccepted: true,
+          testResponsibilityLabel: responsibilityLabel,
+          isMock: true,
+          scopeHash: scope.scopeHash,
+          scopeVersion: scope.version,
+        },
+      });
+
+      await this.transition(missionId, "AUTH_VALID", user);
+
+      const route = await this.hasApprovalRoute(mission.tenantId);
+      const next = nextAfterAuthValid({
+        isRealMission: mission.isRealMission,
+        isSyntheticDemo: mission.synthetic,
+        approvalRouteConfigured: route,
+      });
+
+      if (next.status === "BLOCKED") {
+        await this.transition(missionId, "BLOCKED", user, {
+          blockedReason: next.blockedReason,
+        });
+      } else if (next.status === "A_APPROVAL_PENDING") {
+        await this.transition(missionId, "A_APPROVAL_PENDING", user);
+        await this.createApprovalRequest(missionId, user, route);
+      } else if (next.status === "A_SKIPPED_DEMO") {
+        await this.transition(missionId, "A_SKIPPED_DEMO", user);
+        await this.issueToken(missionId, user);
+      }
+
+      return this.get(missionId, this.requireUserTenantId(user));
     }
 
     if (mission.status === "PREP_READY") {
@@ -433,13 +515,9 @@ export class MissionsService {
     });
 
     // Démo synthétique : contrepartie mock auto pour boucler le parcours
-    if (mission.synthetic) {
-      return this.completeCounterSignature(missionId, user, {
-        autoDemo: true,
-      });
-    }
-
-    return this.get(missionId, this.requireUserTenantId(user));
+    return this.completeCounterSignature(missionId, user, {
+      autoDemo: true,
+    });
   }
 
   /**
