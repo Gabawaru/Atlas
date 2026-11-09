@@ -129,7 +129,7 @@ export function App() {
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
   const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
-  /** Gate before Sign attach / scan — « se déclarer responsable des tests ». */
+  /** Gate before Sign attach / scan — liability if scan turns out unauthorized. */
   const [testResponsibilityAccepted, setTestResponsibilityAccepted] =
     useState(false);
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
@@ -442,6 +442,7 @@ export function App() {
             signatureEnvelopeId: validated.envelopeId,
             signerLabel: email,
             testResponsibilityAccepted: true,
+            testResponsibilityLabel: TEST_RESPONSIBILITY_LABEL,
           }),
         },
       ).then((r) => r.json());

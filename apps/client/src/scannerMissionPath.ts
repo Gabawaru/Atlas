@@ -11,8 +11,9 @@ export const DEFAULT_REAL_TARGET = "pragma-serve.com";
 export const ROE_SCOPE_LABEL =
   "*.pragma-serve.com, *.pragma-cloud.com, *.pragma.mc";
 
+/** Exact checkbox / ack label — liability if the scan turns out unauthorized. */
 export const TEST_RESPONSIBILITY_LABEL =
-  "Je me déclare responsable des tests sur les domaines Pragma autorisés (RoE).";
+  "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
 
 export type RealMissionInput = {
   signatureEnvelopeId: string;
@@ -37,8 +38,7 @@ export function validateRealMissionInput(
   if (!input.testResponsibilityAccepted) {
     return {
       ok: false,
-      reason:
-        "Cochez « se déclarer responsable des tests » avant Sign / scan (RoE Pragma).",
+      reason: `Cochez « ${TEST_RESPONSIBILITY_LABEL} » avant Sign / scan.`,
     };
   }
   const envelopeId = input.signatureEnvelopeId.trim();

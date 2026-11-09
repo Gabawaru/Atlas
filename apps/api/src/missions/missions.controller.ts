@@ -78,7 +78,7 @@ class OwnerAuthDto {
 /**
  * Bind an already-signed envelope — no createEnvelope / partner /request email.
  * Pass `signatureEnvelopeId` (Pragma Sign) — poll GET status only.
- * `testResponsibilityAccepted` must be true (operator declares responsibility for tests).
+ * `testResponsibilityAccepted` must be true (operator accepts liability if unauthorized).
  */
 class AttachOwnerAuthDto {
   @IsOptional()
@@ -90,9 +90,15 @@ class AttachOwnerAuthDto {
   @IsString()
   signerLabel?: string;
 
-  /** Operator must declare responsibility for tests before Sign attach. */
+  /** Operator accepts liability if the scan turns out unauthorized. */
   @IsBoolean()
   testResponsibilityAccepted!: boolean;
+
+  /** Exact French checkbox label acknowledged by the operator (audit). */
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  testResponsibilityLabel?: string;
 }
 
 @Controller()
@@ -159,6 +165,7 @@ export class MissionsController {
       signatureEnvelopeId: body.signatureEnvelopeId,
       signerLabel: body.signerLabel,
       testResponsibilityAccepted: body.testResponsibilityAccepted,
+      testResponsibilityLabel: body.testResponsibilityLabel,
     });
   }
 

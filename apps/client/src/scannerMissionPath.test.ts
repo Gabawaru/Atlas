@@ -15,7 +15,10 @@ describe("validateRealMissionInput", () => {
       testResponsibilityAccepted: false,
     });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.match(r.reason, /responsable des tests/i);
+    if (!r.ok) {
+      assert.match(r.reason, /responsabilité de ce scan/i);
+      assert.match(r.reason, /non autorisé/i);
+    }
   });
 
   it("refuse envelopeId vide", () => {

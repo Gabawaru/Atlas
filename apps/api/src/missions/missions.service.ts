@@ -452,17 +452,22 @@ export class MissionsService {
     args: {
       signatureEnvelopeId?: string;
       signerLabel?: string;
-      /** Operator must declare responsibility for tests before Sign attach. */
+      /** Operator accepts liability if the scan turns out unauthorized. */
       testResponsibilityAccepted?: boolean;
+      /** Exact French checkbox label (stored in audit). */
+      testResponsibilityLabel?: string;
     },
   ) {
     const envelopeId = args.signatureEnvelopeId?.trim() ?? "";
     const signerLabel =
       args.signerLabel?.trim() || user.displayName || user.email;
+    const responsibilityLabel =
+      args.testResponsibilityLabel?.trim() ||
+      "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
 
     if (args.testResponsibilityAccepted !== true) {
       throw new BadRequestException(
-        "Déclaration de responsabilité des tests requise avant Sign / autorisation.",
+        "Acceptation de responsabilité requise avant Sign / autorisation (scan non autorisé).",
       );
     }
 
@@ -535,6 +540,7 @@ export class MissionsService {
         isMock: false,
         attached: true,
         testResponsibilityAccepted: true,
+        testResponsibilityLabel: responsibilityLabel,
         scopeHash: scope.scopeHash,
         scopeVersion: scope.version,
       },
