@@ -16,6 +16,8 @@ import {
 } from "./reportExport";
 import {
   DEFAULT_REAL_TARGET,
+  ROE_SCOPE_LABEL,
+  TEST_RESPONSIBILITY_LABEL,
   canClientExecute,
   circuitAPendingMessage,
   createMissionBody,
@@ -127,6 +129,9 @@ export function App() {
   const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
   const [signatureEnvelopeId, setSignatureEnvelopeId] = useState("");
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
+  /** Gate before Sign attach / scan — « se déclarer responsable des tests ». */
+  const [testResponsibilityAccepted, setTestResponsibilityAccepted] =
+    useState(false);
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
   const [authorizedLaunch, setAuthorizedLaunch] =
     useState<AuthorizedLaunchIntent | null>(null);
@@ -400,6 +405,7 @@ export function App() {
       const validated = validateRealMissionInput({
         signatureEnvelopeId,
         targetHost: realTargetHost,
+        testResponsibilityAccepted,
       });
       if (!validated.ok) {
         setError(validated.reason);
@@ -435,6 +441,7 @@ export function App() {
           body: JSON.stringify({
             signatureEnvelopeId: validated.envelopeId,
             signerLabel: email,
+            testResponsibilityAccepted: true,
           }),
         },
       ).then((r) => r.json());
@@ -563,8 +570,9 @@ export function App() {
       >
         <h2 id="scanner-cta-title">Scanner</h2>
         <p className="muted">
-          Contrôle passif in-scope uniquement. Exécution refusée sans session,
-          cible, connecteur et autorisation valides.
+          Contrôle passif in-scope uniquement (RoE : {ROE_SCOPE_LABEL}).
+          Exécution refusée sans session, cible autorisée, connecteur et
+          autorisation Sign valides.
         </p>
         {authorizedLaunch && (
           <div className="banner" role="status">
@@ -578,15 +586,30 @@ export function App() {
           <input
             type="checkbox"
             checked={missionMode === "real"}
-            onChange={(e) =>
-              setMissionMode(e.target.checked ? "real" : "fictif")
-            }
+            onChange={(e) => {
+              const real = e.target.checked;
+              setMissionMode(real ? "real" : "fictif");
+              if (!real) setTestResponsibilityAccepted(false);
+            }}
           />{" "}
-          Mission réelle (Sign attach — pas FICTIF)
+          Mission réelle (Pragma Sign attach — pas FICTIF)
         </label>
         {missionMode === "real" ? (
           <div className="real-mission-fields">
-            <label htmlFor="real-target">Cible FQDN (allowlist RoE)</label>
+            <label className="mode-toggle responsibility-gate" htmlFor="test-responsibility">
+              <input
+                id="test-responsibility"
+                type="checkbox"
+                checked={testResponsibilityAccepted}
+                onChange={(e) =>
+                  setTestResponsibilityAccepted(e.target.checked)
+                }
+              />{" "}
+              {TEST_RESPONSIBILITY_LABEL}
+            </label>
+            <label htmlFor="real-target">
+              Cible FQDN (RoE Pragma — pas n&apos;importe quelle URL)
+            </label>
             <input
               id="real-target"
               value={realTargetHost}
@@ -595,7 +618,7 @@ export function App() {
               autoComplete="off"
             />
             <label htmlFor="signature-envelope-id">
-              Enveloppe Sign (signatureEnvelopeId déjà signée)
+              Enveloppe Pragma Sign (signatureEnvelopeId déjà signée)
             </label>
             <input
               id="signature-envelope-id"
@@ -604,10 +627,12 @@ export function App() {
               placeholder="coller signatureEnvelopeId ici"
               autoComplete="off"
               spellCheck={false}
+              disabled={!testResponsibilityAccepted}
             />
             <p className="muted real-mission-note">
-              Après attach : Circuit A reste obligatoire (admin
-              approvals/decide). Le Scanner ne court-circuite pas Policy Guard.
+              Gate : responsabilité cochée → attach Sign → Circuit A (admin
+              approvals/decide) → Policy Guard. Paradise n&apos;est pas utilisé.
+              Hors RoE ({ROE_SCOPE_LABEL}) → REJECT.
             </p>
           </div>
         ) : (
@@ -621,7 +646,9 @@ export function App() {
           disabled={
             busy ||
             !readiness.ready ||
-            (missionMode === "real" && signatureEnvelopeId.trim().length < 1)
+            (missionMode === "real" &&
+              (!testResponsibilityAccepted ||
+                signatureEnvelopeId.trim().length < 1))
           }
           onClick={() => void runScanner()}
         >

@@ -7,19 +7,40 @@ export type ScannerMissionMode = "fictif" | "real";
 
 export const DEFAULT_REAL_TARGET = "pragma-serve.com";
 
+/** Platform RoE apexes — mirrors packages/policy-guard roe-allowlist (not any URL). */
+export const ROE_SCOPE_LABEL =
+  "*.pragma-serve.com, *.pragma-cloud.com, *.pragma.mc";
+
+export const TEST_RESPONSIBILITY_LABEL =
+  "Je me déclare responsable des tests sur les domaines Pragma autorisés (RoE).";
+
 export type RealMissionInput = {
   signatureEnvelopeId: string;
   targetHost: string;
+  /** Required gate before Sign attach / scan — operator acknowledges responsibility. */
+  testResponsibilityAccepted: boolean;
 };
 
 export type RealMissionValidation =
-  | { ok: true; envelopeId: string; targetHost: string }
+  | {
+      ok: true;
+      envelopeId: string;
+      targetHost: string;
+      testResponsibilityAccepted: true;
+    }
   | { ok: false; reason: string };
 
-/** Validate operator-provided Sign envelope id + in-scope target before POST. */
+/** Validate responsibility ack + Sign envelope id + in-scope target before POST. */
 export function validateRealMissionInput(
   input: RealMissionInput,
 ): RealMissionValidation {
+  if (!input.testResponsibilityAccepted) {
+    return {
+      ok: false,
+      reason:
+        "Cochez « se déclarer responsable des tests » avant Sign / scan (RoE Pragma).",
+    };
+  }
   const envelopeId = input.signatureEnvelopeId.trim();
   const targetHost = input.targetHost.trim().toLowerCase().replace(/\.$/, "");
   if (!envelopeId || envelopeId.length < 1) {
@@ -32,10 +53,15 @@ export function validateRealMissionInput(
   if (!targetHost || targetHost.length < 3) {
     return {
       ok: false,
-      reason: "Cible FQDN requise (ex. pragma-serve.com, in-scope RoE).",
+      reason: `Cible FQDN requise dans le RoE (${ROE_SCOPE_LABEL}).`,
     };
   }
-  return { ok: true, envelopeId, targetHost };
+  return {
+    ok: true,
+    envelopeId,
+    targetHost,
+    testResponsibilityAccepted: true,
+  };
 }
 
 export function createMissionBody(args: {

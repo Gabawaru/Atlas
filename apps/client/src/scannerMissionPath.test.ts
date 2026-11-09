@@ -8,10 +8,21 @@ import {
 } from "./scannerMissionPath.js";
 
 describe("validateRealMissionInput", () => {
+  it("refuse sans déclaration de responsabilité", () => {
+    const r = validateRealMissionInput({
+      signatureEnvelopeId: "244",
+      targetHost: "pragma-serve.com",
+      testResponsibilityAccepted: false,
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /responsable des tests/i);
+  });
+
   it("refuse envelopeId vide", () => {
     const r = validateRealMissionInput({
       signatureEnvelopeId: "  ",
       targetHost: "pragma-serve.com",
+      testResponsibilityAccepted: true,
     });
     assert.equal(r.ok, false);
     if (!r.ok) assert.match(r.reason, /signatureEnvelopeId/);
@@ -21,20 +32,23 @@ describe("validateRealMissionInput", () => {
     const r = validateRealMissionInput({
       signatureEnvelopeId: "244",
       targetHost: "  ",
+      testResponsibilityAccepted: true,
     });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.match(r.reason, /FQDN/);
+    if (!r.ok) assert.match(r.reason, /FQDN|RoE/);
   });
 
   it("normalise cible et envelopeId", () => {
     const r = validateRealMissionInput({
       signatureEnvelopeId: "  244  ",
       targetHost: "Pragma-Serve.com.",
+      testResponsibilityAccepted: true,
     });
     assert.equal(r.ok, true);
     if (r.ok) {
       assert.equal(r.envelopeId, "244");
       assert.equal(r.targetHost, "pragma-serve.com");
+      assert.equal(r.testResponsibilityAccepted, true);
     }
   });
 });

@@ -156,6 +156,7 @@ describe("attachExistingOwnerAuth", () => {
     const mission = await svc.attachExistingOwnerAuth("m1", user, {
       signatureEnvelopeId: "244",
       signerLabel: "Gab",
+      testResponsibilityAccepted: true,
     });
 
     assert.ok(mission);
@@ -182,6 +183,7 @@ describe("attachExistingOwnerAuth", () => {
       () =>
         svc.attachExistingOwnerAuth("m1", user, {
           signatureEnvelopeId: "244",
+          testResponsibilityAccepted: true,
         }),
       (e: unknown) =>
         e instanceof BadRequestException &&
@@ -202,6 +204,7 @@ describe("attachExistingOwnerAuth", () => {
       () =>
         svc.attachExistingOwnerAuth("m1", user, {
           signatureEnvelopeId: "999",
+          testResponsibilityAccepted: true,
         }),
       BadRequestException,
     );
@@ -219,6 +222,7 @@ describe("attachExistingOwnerAuth", () => {
     });
     await svc.attachExistingOwnerAuth("m1", user, {
       signatureEnvelopeId: "244",
+      testResponsibilityAccepted: true,
     });
     assert.equal(createCalled, false);
   });
@@ -228,7 +232,10 @@ describe("attachExistingOwnerAuth", () => {
       getStatus: async () => "signed",
     });
     await assert.rejects(
-      () => svc.attachExistingOwnerAuth("m1", user, {}),
+      () =>
+        svc.attachExistingOwnerAuth("m1", user, {
+          testResponsibilityAccepted: true,
+        }),
       (e: unknown) =>
         e instanceof BadRequestException &&
         String((e as BadRequestException).message).includes(
@@ -236,5 +243,25 @@ describe("attachExistingOwnerAuth", () => {
         ),
     );
     assert.equal(createdAuths.length, 0);
+  });
+
+  it("missing testResponsibilityAccepted → BadRequest before Sign poll", async () => {
+    const { svc, createdAuths, providerCalls } = makeService({
+      getStatus: async () => "signed",
+    });
+    await assert.rejects(
+      () =>
+        svc.attachExistingOwnerAuth("m1", user, {
+          signatureEnvelopeId: "244",
+          testResponsibilityAccepted: false,
+        }),
+      (e: unknown) =>
+        e instanceof BadRequestException &&
+        String((e as BadRequestException).message).includes(
+          "responsabilité",
+        ),
+    );
+    assert.equal(createdAuths.length, 0);
+    assert.ok(!providerCalls.some((c) => c.startsWith("getStatus:")));
   });
 });

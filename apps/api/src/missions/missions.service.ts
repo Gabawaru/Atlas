@@ -452,11 +452,19 @@ export class MissionsService {
     args: {
       signatureEnvelopeId?: string;
       signerLabel?: string;
+      /** Operator must declare responsibility for tests before Sign attach. */
+      testResponsibilityAccepted?: boolean;
     },
   ) {
     const envelopeId = args.signatureEnvelopeId?.trim() ?? "";
     const signerLabel =
       args.signerLabel?.trim() || user.displayName || user.email;
+
+    if (args.testResponsibilityAccepted !== true) {
+      throw new BadRequestException(
+        "Déclaration de responsabilité des tests requise avant Sign / autorisation.",
+      );
+    }
 
     const mission = await this.get(missionId, this.requireUserTenantId(user));
     const scope = mission.scopeVersions[0];
@@ -526,6 +534,7 @@ export class MissionsService {
         envelopeId,
         isMock: false,
         attached: true,
+        testResponsibilityAccepted: true,
         scopeHash: scope.scopeHash,
         scopeVersion: scope.version,
       },

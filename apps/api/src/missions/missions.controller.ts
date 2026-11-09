@@ -78,6 +78,7 @@ class OwnerAuthDto {
 /**
  * Bind an already-signed envelope — no createEnvelope / partner /request email.
  * Pass `signatureEnvelopeId` (Pragma Sign) — poll GET status only.
+ * `testResponsibilityAccepted` must be true (operator declares responsibility for tests).
  */
 class AttachOwnerAuthDto {
   @IsOptional()
@@ -88,6 +89,10 @@ class AttachOwnerAuthDto {
   @IsOptional()
   @IsString()
   signerLabel?: string;
+
+  /** Operator must declare responsibility for tests before Sign attach. */
+  @IsBoolean()
+  testResponsibilityAccepted!: boolean;
 }
 
 @Controller()
@@ -153,6 +158,7 @@ export class MissionsController {
     return this.missions.attachExistingOwnerAuth(id, req.user, {
       signatureEnvelopeId: body.signatureEnvelopeId,
       signerLabel: body.signerLabel,
+      testResponsibilityAccepted: body.testResponsibilityAccepted,
     });
   }
 
