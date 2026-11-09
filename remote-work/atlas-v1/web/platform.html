@@ -107,24 +107,17 @@
 <body>
   <div class="shell">
     <h1 class="brand">Atlas</h1>
-    <p class="tagline">
-      Contrôle passif autorisé — un bouton Scan, Policy Guard / RoE, exports unifiés.
-    </p>
+    <p class="tagline">Scan passif</p>
 
     <div class="card">
       <div class="row">
         <span class="muted">API</span>
         <code id="apiBase">http://127.0.0.1:3001</code>
-        <button type="button" class="ghost" id="startApiBtn">Démarrer l’API</button>
+        <button type="button" class="ghost" id="startApiBtn">Demarrer l'API</button>
         <button type="button" class="ghost" id="pingBtn">Tester</button>
         <span id="apiHealth" class="muted"></span>
       </div>
-      <p class="muted" style="margin:8px 0 0">
-        Un clic lance <code>AtlasLocal start</code> (stack locale). Première fois :
-        menu Démarrer → Atlas → <em>Installer le stack</em>, puis .env.
-      </p>
-      <label for="apiUrl">URL API (si différente)</label>
-      <input id="apiUrl" value="http://127.0.0.1:3001" autocomplete="off" />
+      <input id="apiUrl" type="hidden" value="http://127.0.0.1:3001" />
     </div>
 
     <div class="card">
@@ -133,7 +126,7 @@
       <label for="password">Mot de passe</label>
       <input id="password" type="password" value="atlas-demo" autocomplete="current-password" />
 
-      <label for="target">Cible FQDN (allowlist RoE)</label>
+      <label for="target">FQDN</label>
       <input id="target" value="pragma-serve.com" autocomplete="off" />
 
       <label class="mode-toggle" for="testResponsibility" style="display:flex;gap:10px;align-items:flex-start;margin:14px 0 8px;cursor:pointer">
@@ -141,35 +134,14 @@
         <span>Je prends la responsabilité de ce scan s'il s'avère non autorisé.</span>
       </label>
 
-      <p class="muted">
-        Scan réel : cocher la responsabilité → create mission → owner-authorization
-        (responsabilité opérateur, pas Pragma Sign) → Circuit A (admin) → Policy Guard / RoE →
-        <code>web.passive.presence.v1</code> + suite shortlist → bilan JSON/CSV/PDF.
-        Pas d’auto-execute avant approbation A. Aucune clé Sign ni enveloppe requise sur ce chemin.
-      </p>
-
       <div class="row" style="margin-top:18px;gap:10px;align-items:stretch">
         <button type="button" class="cta" id="scanBtn" style="margin-top:0" disabled>Scan</button>
-        <button type="button" class="ghost" id="resumeBtn" hidden title="Reprend la mission déjà autorisée (owner-auth déjà soumis)">
-          Reprendre après Circuit A
-        </button>
+        <button type="button" class="ghost" id="resumeBtn" hidden>Reprendre</button>
       </div>
-      <p id="circuitHint" class="muted" hidden style="margin-top:10px">
-        Admin Circuit A :
-        <a id="adminLink" href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">ouvrir le client / admin</a>
-        — puis <strong>Reprendre</strong> ici (même mission, owner-auth déjà soumis).
-      </p>
+      <p id="circuitHint" class="muted" hidden style="margin-top:10px"></p>
       <div id="status" class="status muted" role="status"></div>
       <div id="exports" class="exports" hidden></div>
     </div>
-
-    <p class="muted">
-      RoE : <code>*.pragma-cloud.com</code>, <code>*.pragma-serve.com</code>, <code>*.pragma.mc</code>.
-      Aucun secret dans ce binaire. Client complet :
-      <a href="http://127.0.0.1:3002" target="_blank" rel="noreferrer">localhost:3002</a>.
-      Download public :
-      <a href="https://atlas-secu.com/Atlas-Setup.exe" target="_blank" rel="noreferrer">atlas-secu.com/Atlas-Setup.exe</a>.
-    </p>
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
@@ -197,13 +169,13 @@
       lastMissionId = missionId;
       $("resumeBtn").hidden = false;
       $("circuitHint").hidden = false;
-      const clientBase = api().replace(/:3001$/, ":3002");
-      $("adminLink").href = clientBase;
+      $("circuitHint").textContent = "Circuit A en attente — Reprendre apres decision.";
     }
 
     function hideCircuitResume() {
       $("resumeBtn").hidden = true;
       $("circuitHint").hidden = true;
+      $("circuitHint").textContent = "";
     }
 
     async function apiJson(path, opts = {}) {
@@ -231,7 +203,7 @@
         $("apiHealth").className = res.ok ? "ok" : "err";
         return res.ok;
       } catch (e) {
-        $("apiHealth").textContent = "hors ligne — cliquez Démarrer l’API";
+        $("apiHealth").textContent = "hors ligne";
         $("apiHealth").className = "err";
         return false;
       }
@@ -239,40 +211,29 @@
 
     async function startApi() {
       $("startApiBtn").disabled = true;
-      setStatus("Lancement AtlasLocal start…");
+      setStatus("Demarrage API…");
       try {
         const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.ok === false) {
           setStatus(
-            (data && (data.error || data.message)) || ("HTTP " + res.status) +
-              "\n" + ((data && data.hint) || "Vérifiez AtlasLocal.exe à côté de Atlas.exe."),
+            (data && (data.error || data.message)) || ("HTTP " + res.status),
             "err",
           );
           return;
         }
-        setStatus(
-          (data.message || "AtlasLocal start lancé.") +
-            "\nPoll health :3001 (jusqu’à ~2 min si docker/pnpm)…",
-        );
+        setStatus("Attente health…");
         for (let i = 0; i < 30; i++) {
           await new Promise((r) => setTimeout(r, 4000));
           if (await ping()) {
-            setStatus("API OK — vous pouvez Scan.", "ok");
+            setStatus("API OK", "ok");
             return;
           }
-          setStatus("AtlasLocal start en cours… health " + (i + 1) + "/30");
+          setStatus("Demarrage… " + (i + 1) + "/30");
         }
-        setStatus(
-          "API toujours hors ligne après ~2 min. Menu Démarrer → Atlas → Installer le stack (une fois), .env, puis Démarrer l’API.",
-          "err",
-        );
+        setStatus("API toujours hors ligne.", "err");
       } catch (e) {
-        setStatus(
-          (e instanceof Error ? e.message : String(e)) +
-            "\nRelancez Atlas.exe (shell local :17865) puis Démarrer l’API.",
-          "err",
-        );
+        setStatus(e instanceof Error ? e.message : String(e), "err");
       } finally {
         $("startApiBtn").disabled = false;
       }
@@ -434,22 +395,18 @@
       try {
         if (!(await ping())) {
           setStatus(
-            "API hors ligne — cliquez Démarrer l’API, attendez OK, puis Reprendre.",
+            "API hors ligne — Demarrer l'API.",
             "err",
           );
           return;
         }
         setStatus("Connexion…");
         await ensureLogin();
-        setStatus("Mission " + lastMissionId + " — vérif Circuit A…");
+        setStatus("Circuit A…");
         const m = await pollMission(lastMissionId, 15);
         if (!canExecute(m.status)) {
           showCircuitResume(lastMissionId);
-          setStatus(
-            "Toujours " + m.status +
-              " — staff doit décider dans l’admin, puis Reprendre (owner-auth déjà soumis).",
-            "err",
-          );
+          setStatus("Toujours " + m.status + " — Reprendre plus tard.", "err");
           return;
         }
         await executeAndExport(lastMissionId);
@@ -479,38 +436,34 @@
       exportsEl.hidden = true;
       try {
         if (!(await ping())) {
-          setStatus(
-            "API hors ligne — cliquez Démarrer l’API (AtlasLocal) et attendez OK avant Scan.\nSetup n’embarque pas Docker/images — seulement le lanceur.",
-            "err",
-          );
+          setStatus("API hors ligne — Demarrer l'API.", "err");
           return;
         }
 
         setStatus("Connexion…");
         await ensureLogin();
 
-        setStatus("Connecteur web.passive.presence…");
+        setStatus("Connecteur…");
         await ensureConnector();
 
-        setStatus("Actif " + target + "…");
+        setStatus("Actif…");
         const asset = await ensureAsset(target);
 
-        setStatus("Création mission réelle…");
+        setStatus("Mission…");
         const mission = await apiJson("/v1/missions", {
           method: "POST",
           body: JSON.stringify({
-            title: "Mission présence web (réelle)",
+            title: "Presence web",
             uxNeedIds: ["web_presence"],
             assetIds: [asset.id],
             synthetic: false,
             exclusions: [],
-            notes:
-              "RoE réel — responsabilité opérateur cochée ; Circuit A + Policy Guard",
+            notes: "Responsabilite operateur",
           }),
         });
         lastMissionId = mission.id;
 
-        setStatus("Responsabilité opérateur…");
+        setStatus("Responsabilite…");
         const attached = await apiJson(
           "/v1/missions/" + mission.id + "/owner-authorization",
           {
@@ -524,25 +477,18 @@
         );
 
         let status = String(attached.status || mission.status || "?");
-        setStatus("Mission " + mission.id + " → " + status);
+        setStatus(mission.id + " → " + status);
 
         if (!canExecute(status)) {
           showCircuitResume(mission.id);
-          setStatus(
-            "Mission " + mission.id + " → " + status +
-              ".\nResponsabilité opérateur enregistrée. Circuit A requis : un approbateur staff décide dans l’admin.\nScan attend l’approbation (poll ~3 min) — ou Reprendre après décision…",
-          );
+          setStatus(mission.id + " → " + status + " (Circuit A)");
           const polled = await pollMission(mission.id, 45);
           status = polled.status;
         }
 
         if (!canExecute(status)) {
           showCircuitResume(mission.id);
-          setStatus(
-            "Toujours " + status +
-              " — ouvrez l’admin, décidez, puis cliquez Reprendre après Circuit A (pas besoin de re-cocher la responsabilité).",
-            "err",
-          );
+          setStatus("Toujours " + status + " — Reprendre apres Circuit A.", "err");
           return;
         }
 

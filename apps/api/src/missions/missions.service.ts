@@ -19,6 +19,7 @@ import { AuditService } from "../audit/audit.service";
 import {
   assertTransition,
   nextAfterAuthValid,
+  shouldAutoApproveCircuitA,
 } from "../mission/mission-state";
 import { WEB_PASSIVE_MODULE_ID } from "../control/web-passive";
 import { evaluateMissionExecution } from "../control/execution-gate";
@@ -439,7 +440,23 @@ export class MissionsService {
         });
       } else if (next.status === "A_APPROVAL_PENDING") {
         await this.transition(missionId, "A_APPROVAL_PENDING", user);
-        await this.createApprovalRequest(missionId, user, route);
+        if (shouldAutoApproveCircuitA()) {
+          await this.transition(missionId, "A_APPROVED", user);
+          await this.issueToken(missionId, user);
+          await this.audit.append({
+            tenantId: mission.tenantId,
+            actorId: user.userId,
+            action: "approval.auto_local_responsibility",
+            objectType: "mission",
+            objectId: missionId,
+            payload: {
+              reason: "ATLAS_ENV local/dev — Circuit A auto after liability checkbox",
+              provider: "operator-responsibility",
+            },
+          });
+        } else {
+          await this.createApprovalRequest(missionId, user, route);
+        }
       } else if (next.status === "A_SKIPPED_DEMO") {
         await this.transition(missionId, "A_SKIPPED_DEMO", user);
         await this.issueToken(missionId, user);

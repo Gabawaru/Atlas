@@ -23,31 +23,16 @@ export function evaluateScannerReadiness(
   input: ScannerReadinessInput,
 ): ScannerReadiness {
   if (!input.authenticated) {
-    return {
-      ready: false,
-      blockReason: "Connexion requise — le Scanner n'exécute rien sans session.",
-    };
+    return { ready: false, blockReason: "Connexion requise." };
   }
   if (input.selectedNeedId !== EXECUTABLE_NEED) {
-    return {
-      ready: false,
-      blockReason:
-        "Besoin non exécutable — seule « présence web » passe le Policy Guard en démo.",
-    };
+    return { ready: false, blockReason: "Besoin non executable." };
   }
   if (input.assetCount < 1) {
-    return {
-      ready: false,
-      blockReason:
-        "Aucune cible (actif) — ajoutez un actif in-scope ou utilisez le seed démo.",
-    };
+    return { ready: false, blockReason: "FQDN requis." };
   }
   if (!input.webConnectorActive) {
-    return {
-      ready: false,
-      blockReason:
-        "Connecteur « présence web » inactif — connectez-le (options avancées) ; sans lui Policy Guard refuse.",
-    };
+    return { ready: false, blockReason: "Connecteur inactif — reconnexion…" };
   }
   return { ready: true, blockReason: null };
 }

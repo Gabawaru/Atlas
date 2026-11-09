@@ -44,3 +44,22 @@ export function nextAfterAuthValid(opts: {
     blockedReason: "Mission non synthétique sans circuit A — bloquée.",
   };
 }
+
+/**
+ * Local/dev: after operator liability checkbox, auto-complete Circuit A
+ * so Scan can run without a staff admin ritual.
+ * Override with ATLAS_CIRCUIT_A_AUTO=0|1.
+ */
+export function shouldAutoApproveCircuitA(
+  env: NodeJS.Dict<string> | NodeJS.ProcessEnv = process.env,
+): boolean {
+  const flag = String(env.ATLAS_CIRCUIT_A_AUTO ?? "")
+    .trim()
+    .toLowerCase();
+  if (["0", "false", "off", "no"].includes(flag)) return false;
+  if (["1", "true", "on", "yes"].includes(flag)) return true;
+  const atlasEnv = String(env.ATLAS_ENV ?? "")
+    .trim()
+    .toLowerCase();
+  return ["development", "dev", "local", "test", "ci"].includes(atlasEnv);
+}
