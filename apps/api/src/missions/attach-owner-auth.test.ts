@@ -126,7 +126,12 @@ function makeService(opts: {
     },
   };
 
-  const audit = { append: async () => undefined };
+  const auditPayloads: Record<string, unknown>[] = [];
+  const audit = {
+    append: async (entry: { payload?: Record<string, unknown> }) => {
+      if (entry.payload) auditPayloads.push(entry.payload);
+    },
+  };
 
   const mail = {
     name: "mock",
@@ -144,7 +149,13 @@ function makeService(opts: {
     mail as never,
   );
 
-  return { svc, providerCalls, createdAuths, getStatus: () => missionStatus };
+  return {
+    svc,
+    providerCalls,
+    createdAuths,
+    auditPayloads,
+    getStatus: () => missionStatus,
+  };
 }
 
 describe("attachExistingOwnerAuth", () => {
@@ -156,6 +167,7 @@ describe("attachExistingOwnerAuth", () => {
     const mission = await svc.attachExistingOwnerAuth("m1", user, {
       signatureEnvelopeId: "244",
       signerLabel: "Gab",
+      testResponsibilityAccepted: true,
     });
 
     assert.ok(mission);
@@ -182,6 +194,7 @@ describe("attachExistingOwnerAuth", () => {
       () =>
         svc.attachExistingOwnerAuth("m1", user, {
           signatureEnvelopeId: "244",
+          testResponsibilityAccepted: true,
         }),
       (e: unknown) =>
         e instanceof BadRequestException &&
@@ -202,6 +215,7 @@ describe("attachExistingOwnerAuth", () => {
       () =>
         svc.attachExistingOwnerAuth("m1", user, {
           signatureEnvelopeId: "999",
+          testResponsibilityAccepted: true,
         }),
       BadRequestException,
     );
@@ -219,6 +233,7 @@ describe("attachExistingOwnerAuth", () => {
     });
     await svc.attachExistingOwnerAuth("m1", user, {
       signatureEnvelopeId: "244",
+      testResponsibilityAccepted: true,
     });
     assert.equal(createCalled, false);
   });
@@ -228,7 +243,10 @@ describe("attachExistingOwnerAuth", () => {
       getStatus: async () => "signed",
     });
     await assert.rejects(
-      () => svc.attachExistingOwnerAuth("m1", user, {}),
+      () =>
+        svc.attachExistingOwnerAuth("m1", user, {
+          testResponsibilityAccepted: true,
+        }),
       (e: unknown) =>
         e instanceof BadRequestException &&
         String((e as BadRequestException).message).includes(
@@ -236,5 +254,43 @@ describe("attachExistingOwnerAuth", () => {
         ),
     );
     assert.equal(createdAuths.length, 0);
+  });
+
+  it("missing testResponsibilityAccepted → BadRequest before Sign poll", async () => {
+    const { svc, createdAuths, providerCalls } = makeService({
+      getStatus: async () => "signed",
+    });
+    await assert.rejects(
+      () =>
+        svc.attachExistingOwnerAuth("m1", user, {
+          signatureEnvelopeId: "244",
+          testResponsibilityAccepted: false,
+        }),
+      (e: unknown) =>
+        e instanceof BadRequestException &&
+        String((e as BadRequestException).message).includes(
+          "responsabilité",
+        ),
+    );
+    assert.equal(createdAuths.length, 0);
+    assert.ok(!providerCalls.some((c) => c.startsWith("getStatus:")));
+  });
+
+  it("audit payload keeps exact liability label", async () => {
+    const label =
+      "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
+    const { svc, auditPayloads } = makeService({
+      getStatus: async () => "signed",
+    });
+    await svc.attachExistingOwnerAuth("m1", user, {
+      signatureEnvelopeId: "244",
+      testResponsibilityAccepted: true,
+      testResponsibilityLabel: label,
+    });
+    const attachAudit = auditPayloads.find(
+      (p) => p.testResponsibilityAccepted === true,
+    );
+    assert.ok(attachAudit);
+    assert.equal(attachAudit.testResponsibilityLabel, label);
   });
 });

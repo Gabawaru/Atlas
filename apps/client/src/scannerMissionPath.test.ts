@@ -8,33 +8,36 @@ import {
 } from "./scannerMissionPath.js";
 
 describe("validateRealMissionInput", () => {
-  it("refuse envelopeId vide", () => {
+  it("refuse sans déclaration de responsabilité", () => {
     const r = validateRealMissionInput({
-      signatureEnvelopeId: "  ",
       targetHost: "pragma-serve.com",
+      testResponsibilityAccepted: false,
     });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.match(r.reason, /signatureEnvelopeId/);
+    if (!r.ok) {
+      assert.match(r.reason, /responsabilité de ce scan/i);
+      assert.match(r.reason, /non autorisé/i);
+    }
   });
 
   it("refuse cible vide", () => {
     const r = validateRealMissionInput({
-      signatureEnvelopeId: "244",
       targetHost: "  ",
+      testResponsibilityAccepted: true,
     });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.match(r.reason, /FQDN/);
+    if (!r.ok) assert.match(r.reason, /FQDN|RoE/);
   });
 
-  it("normalise cible et envelopeId", () => {
+  it("normalise cible avec responsabilité cochée", () => {
     const r = validateRealMissionInput({
-      signatureEnvelopeId: "  244  ",
       targetHost: "Pragma-Serve.com.",
+      testResponsibilityAccepted: true,
     });
     assert.equal(r.ok, true);
     if (r.ok) {
-      assert.equal(r.envelopeId, "244");
       assert.equal(r.targetHost, "pragma-serve.com");
+      assert.equal(r.testResponsibilityAccepted, true);
     }
   });
 });
@@ -59,15 +62,17 @@ describe("createMissionBody", () => {
     assert.equal(body.synthetic, false);
     assert.deepEqual(body.exclusions, []);
     assert.doesNotMatch(String(body.title), /FICTIF/);
+    assert.doesNotMatch(String(body.notes), /Sign attach/i);
   });
 });
 
 describe("Circuit A helpers", () => {
-  it("message documente l’admin", () => {
+  it("message documente l’admin sans Sign attach", () => {
     const msg = circuitAPendingMessage("mid", "A_APPROVAL_PENDING");
     assert.match(msg, /Circuit A/);
     assert.match(msg, /admin\/approvals/);
     assert.match(msg, /mid/);
+    assert.doesNotMatch(msg, /Enveloppe Sign/i);
   });
 
   it("execute seulement après A_APPROVED / démo skip", () => {

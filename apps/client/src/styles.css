@@ -200,6 +200,11 @@ pre {
   margin: 0.35rem 0 0.5rem;
 }
 
+.responsibility-gate {
+  font-weight: 600;
+  margin: 0.55rem 0 0.75rem;
+}
+
 .real-mission-note {
   margin: 0.45rem 0 0;
 }

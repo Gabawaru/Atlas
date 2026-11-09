@@ -73,11 +73,25 @@ class UpdateRoeDto {
 class OwnerAuthDto {
   @IsString()
   signerLabel!: string;
+
+  /**
+   * Real-mission gate: operator liability if scan turns out unauthorized.
+   * Required true for non-synthetic owner-auth (no Pragma Sign on product path).
+   */
+  @IsOptional()
+  @IsBoolean()
+  testResponsibilityAccepted?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  testResponsibilityLabel?: string;
 }
 
 /**
  * Bind an already-signed envelope — no createEnvelope / partner /request email.
  * Pass `signatureEnvelopeId` (Pragma Sign) — poll GET status only.
+ * `testResponsibilityAccepted` must be true (operator accepts liability if unauthorized).
  */
 class AttachOwnerAuthDto {
   @IsOptional()
@@ -88,6 +102,16 @@ class AttachOwnerAuthDto {
   @IsOptional()
   @IsString()
   signerLabel?: string;
+
+  /** Operator accepts liability if the scan turns out unauthorized. */
+  @IsBoolean()
+  testResponsibilityAccepted!: boolean;
+
+  /** Exact French checkbox label acknowledged by the operator (audit). */
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  testResponsibilityLabel?: string;
 }
 
 @Controller()
@@ -139,7 +163,10 @@ export class MissionsController {
     @Req() req: { user: AuthUser },
   ) {
     this.auth.requireTenant(req.user, ["owner", "operator"]);
-    return this.missions.submitOwnerAuth(id, req.user, body.signerLabel);
+    return this.missions.submitOwnerAuth(id, req.user, body.signerLabel, {
+      testResponsibilityAccepted: body.testResponsibilityAccepted,
+      testResponsibilityLabel: body.testResponsibilityLabel,
+    });
   }
 
   /** Attach existing signed envelope id (poll GET only — never /signatures/request). */
@@ -153,6 +180,8 @@ export class MissionsController {
     return this.missions.attachExistingOwnerAuth(id, req.user, {
       signatureEnvelopeId: body.signatureEnvelopeId,
       signerLabel: body.signerLabel,
+      testResponsibilityAccepted: body.testResponsibilityAccepted,
+      testResponsibilityLabel: body.testResponsibilityLabel,
     });
   }
 
