@@ -68,10 +68,11 @@ describe("createMissionBody", () => {
 });
 
 describe("Circuit A helpers", () => {
-  it("message court Circuit A sans Sign", () => {
+  it("message court sans Sign ni Circuit A admin", () => {
     const msg = circuitAPendingMessage("mid", "A_APPROVAL_PENDING");
-    assert.match(msg, /Circuit A/);
+    assert.match(msg, /Scan non prêt/);
     assert.match(msg, /mid/);
+    assert.doesNotMatch(msg, /Circuit A/i);
     assert.doesNotMatch(msg, /Enveloppe Sign/i);
     assert.doesNotMatch(msg, /PRAGMA_SIGN/i);
   });
