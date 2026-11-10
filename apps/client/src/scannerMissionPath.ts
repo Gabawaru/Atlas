@@ -85,9 +85,9 @@ export function createMissionBody(args: {
   };
 }
 
-/** Short status after liability owner-auth when Circuit A still pending. */
+/** Residual status when liability path did not reach A_APPROVED (prod/staff route). */
 export function circuitAPendingMessage(missionId: string, status: string): string {
-  return `Mission ${missionId} → ${status}. Circuit A en attente.`;
+  return `Mission ${missionId} → ${status}. Scan non prêt.`;
 }
 
 export function canClientExecute(status: string): boolean {

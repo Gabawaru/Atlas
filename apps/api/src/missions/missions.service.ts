@@ -427,6 +427,15 @@ export class MissionsService {
 
       await this.transition(missionId, "AUTH_VALID", user);
 
+      /**
+       * Local/dev liability path: write a real ApprovalDecision so Policy Guard
+       * sees approvalApproved (status A_APPROVED alone is not enough).
+       */
+      if (shouldAutoApproveCircuitA()) {
+        await this.completeLocalCircuitAAfterLiability(missionId, user);
+        return this.get(missionId, this.requireUserTenantId(user));
+      }
+
       const route = await this.hasApprovalRoute(mission.tenantId);
       const next = nextAfterAuthValid({
         isRealMission: mission.isRealMission,
@@ -440,23 +449,7 @@ export class MissionsService {
         });
       } else if (next.status === "A_APPROVAL_PENDING") {
         await this.transition(missionId, "A_APPROVAL_PENDING", user);
-        if (shouldAutoApproveCircuitA()) {
-          await this.transition(missionId, "A_APPROVED", user);
-          await this.issueToken(missionId, user);
-          await this.audit.append({
-            tenantId: mission.tenantId,
-            actorId: user.userId,
-            action: "approval.auto_local_responsibility",
-            objectType: "mission",
-            objectId: missionId,
-            payload: {
-              reason: "ATLAS_ENV local/dev — Circuit A auto after liability checkbox",
-              provider: "operator-responsibility",
-            },
-          });
-        } else {
-          await this.createApprovalRequest(missionId, user, route);
-        }
+        await this.createApprovalRequest(missionId, user, route);
       } else if (next.status === "A_SKIPPED_DEMO") {
         await this.transition(missionId, "A_SKIPPED_DEMO", user);
         await this.issueToken(missionId, user);
@@ -753,6 +746,64 @@ export class MissionsService {
     return policies.some(
       (p) => p.staffGroup && p.staffGroup.memberIds.length > 0,
     );
+  }
+
+  /**
+   * Local/dev after liability checkbox: Circuit A without staff ritual.
+   * Creates ApprovalRequest + approved decision (Policy Guard reads these),
+   * then A_APPROVED + execution token.
+   */
+  private async completeLocalCircuitAAfterLiability(
+    missionId: string,
+    user: AuthUser,
+  ) {
+    const mission = await this.get(missionId, this.requireUserTenantId(user));
+    const scope = mission.scopeVersions[0];
+    const owner = mission.ownerAuths.find(
+      (o) => o.status === "valid" && !o.revokedAt,
+    );
+    if (!scope || !owner) {
+      throw new BadRequestException(
+        "Scope ou autorisation manquant pour Circuit A local.",
+      );
+    }
+
+    await this.transition(missionId, "A_APPROVAL_PENDING", user);
+
+    const req = await this.prisma.approvalRequest.create({
+      data: {
+        missionId,
+        scopeVersionId: scope.id,
+        scopeHash: scope.scopeHash,
+        ownerAuthorizationId: owner.id,
+        status: "approved",
+      },
+    });
+    await this.prisma.approvalDecision.create({
+      data: {
+        requestId: req.id,
+        decision: "approved",
+        approverUserId: user.userId,
+        scopeHash: scope.scopeHash,
+        comment:
+          "ATLAS_ENV local/dev — Circuit A auto after liability checkbox",
+      },
+    });
+
+    await this.transition(missionId, "A_APPROVED", user);
+    await this.issueToken(missionId, user);
+    await this.audit.append({
+      tenantId: mission.tenantId,
+      actorId: user.userId,
+      action: "approval.auto_local_responsibility",
+      objectType: "mission",
+      objectId: missionId,
+      payload: {
+        reason: "liability checkbox — ApprovalDecision written for Policy Guard",
+        provider: "operator-responsibility",
+        approvalRequestId: req.id,
+      },
+    });
   }
 
   private async createApprovalRequest(

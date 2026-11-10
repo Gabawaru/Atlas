@@ -136,9 +136,7 @@
 
       <div class="row" style="margin-top:18px;gap:10px;align-items:stretch">
         <button type="button" class="cta" id="scanBtn" style="margin-top:0" disabled>Scan</button>
-        <button type="button" class="ghost" id="resumeBtn" hidden>Reprendre</button>
       </div>
-      <p id="circuitHint" class="muted" hidden style="margin-top:10px"></p>
       <div id="status" class="status muted" role="status"></div>
       <div id="exports" class="exports" hidden></div>
     </div>
@@ -163,19 +161,6 @@
     function setStatus(text, cls) {
       statusEl.className = "status " + (cls || "muted");
       statusEl.textContent = text;
-    }
-
-    function showCircuitResume(missionId) {
-      lastMissionId = missionId;
-      $("resumeBtn").hidden = false;
-      $("circuitHint").hidden = false;
-      $("circuitHint").textContent = "Circuit A en attente — Reprendre apres decision.";
-    }
-
-    function hideCircuitResume() {
-      $("resumeBtn").hidden = true;
-      $("circuitHint").hidden = true;
-      $("circuitHint").textContent = "";
     }
 
     async function apiJson(path, opts = {}) {
@@ -283,37 +268,21 @@
       return status === "A_APPROVED" || status === "A_SKIPPED_DEMO";
     }
 
-    async function pollMission(id, attempts, phase) {
-      const label = phase === "job"
-        ? "job BullMQ / suite passive"
-        : "attente Circuit A";
+    async function pollMission(id, attempts) {
       for (let i = 0; i < attempts; i++) {
         const m = await apiJson("/v1/missions/" + id);
         const reports = (m.reports && m.reports.length) || 0;
-        if (phase === "job") {
-          if (
-            m.status === "REPORT_AVAILABLE" ||
-            m.status === "BLOCKED" ||
-            m.status === "FAILED" ||
-            m.status === "CANCELLED" ||
-            m.status === "CLOSED" ||
-            reports > 0
-          ) {
-            return m;
-          }
-          setStatus(
-            "Mission " + id + " → " + m.status +
-              " · " + label + "… " + (i + 1) + "/" + attempts +
-              (reports ? " · rapports=" + reports : ""),
-          );
-        } else {
-          if (canExecute(m.status) || m.status === "REPORT_AVAILABLE" || m.status === "BLOCKED") {
-            return m;
-          }
-          setStatus(
-            "Mission " + id + " → " + m.status + " (" + label + "… " + (i + 1) + "/" + attempts + ")",
-          );
+        if (
+          m.status === "REPORT_AVAILABLE" ||
+          m.status === "BLOCKED" ||
+          m.status === "FAILED" ||
+          m.status === "CANCELLED" ||
+          m.status === "CLOSED" ||
+          reports > 0
+        ) {
+          return m;
         }
+        setStatus(m.status + "… " + (i + 1) + "/" + attempts);
         await new Promise((r) => setTimeout(r, 4000));
       }
       return apiJson("/v1/missions/" + id);
@@ -351,72 +320,22 @@
     }
 
     async function executeAndExport(missionId) {
-      setStatus("Exécution (Policy Guard → BullMQ web.passive.presence.v1 + suite)…");
+      setStatus("Execution…");
       const run = await apiJson("/v1/missions/" + missionId + "/execute", { method: "POST" });
       if (run.gate && run.gate.decision === "REJECT") {
         setStatus(run.gate.code + ": " + run.gate.reason, "err");
-        showCircuitResume(missionId);
         return;
       }
-      if (run.jobId || run.job) {
-        setStatus(
-          "Job lancé" + (run.jobId ? " (" + run.jobId + ")" : "") +
-            " — poll mission jusqu’à REPORT_AVAILABLE…",
-        );
-      }
-
-      const done = await pollMission(missionId, 45, "job");
+      const done = await pollMission(missionId, 45);
       if (done.status === "REPORT_AVAILABLE" || (done.reports && done.reports.length)) {
-        hideCircuitResume();
-        setStatus("Scan terminé — " + done.status + ". Exports JSON / CSV / PDF ci-dessous.", "ok");
+        setStatus("OK — " + done.status, "ok");
         await showExports(missionId);
         return;
       }
-      if (done.status === "BLOCKED" || done.status === "FAILED" || done.status === "CANCELLED" || done.status === "CLOSED") {
-        setStatus("Mission " + done.status + (done.blockReason ? " — " + done.blockReason : ""), "err");
-        return;
-      }
       setStatus(
-        "Toujours " + done.status + " après poll job — pas de rapport encore.\n" +
-          "Rouvrir le client :3002 ou relancer Reprendre si Circuit A / job a bougé.",
+        done.status + (done.blockedReason ? " — " + done.blockedReason : ""),
         "err",
       );
-      showCircuitResume(missionId);
-    }
-
-    async function resumeAfterCircuitA() {
-      if (!lastMissionId) {
-        setStatus("Aucune mission en attente — lancez Scan d’abord.", "err");
-        return;
-      }
-      $("scanBtn").disabled = true;
-      $("resumeBtn").disabled = true;
-      exportsEl.hidden = true;
-      try {
-        if (!(await ping())) {
-          setStatus(
-            "API hors ligne — Demarrer l'API.",
-            "err",
-          );
-          return;
-        }
-        setStatus("Connexion…");
-        await ensureLogin();
-        setStatus("Circuit A…");
-        const m = await pollMission(lastMissionId, 15);
-        if (!canExecute(m.status)) {
-          showCircuitResume(lastMissionId);
-          setStatus("Toujours " + m.status + " — Reprendre plus tard.", "err");
-          return;
-        }
-        await executeAndExport(lastMissionId);
-      } catch (e) {
-        setStatus(e instanceof Error ? e.message : String(e), "err");
-        showCircuitResume(lastMissionId);
-      } finally {
-        $("scanBtn").disabled = false;
-        $("resumeBtn").disabled = false;
-      }
     }
 
     async function runScan() {
@@ -431,8 +350,6 @@
       }
 
       $("scanBtn").disabled = true;
-      $("resumeBtn").disabled = true;
-      hideCircuitResume();
       exportsEl.hidden = true;
       try {
         if (!(await ping())) {
@@ -476,29 +393,18 @@
           },
         );
 
-        let status = String(attached.status || mission.status || "?");
-        setStatus(mission.id + " → " + status);
-
+        const status = String(attached.status || mission.status || "?");
+        setStatus(status);
         if (!canExecute(status)) {
-          showCircuitResume(mission.id);
-          setStatus(mission.id + " → " + status + " (Circuit A)");
-          const polled = await pollMission(mission.id, 45);
-          status = polled.status;
-        }
-
-        if (!canExecute(status)) {
-          showCircuitResume(mission.id);
-          setStatus("Toujours " + status + " — Reprendre apres Circuit A.", "err");
+          setStatus("Refus: " + status + (attached.blockedReason ? " — " + attached.blockedReason : ""), "err");
           return;
         }
 
         await executeAndExport(mission.id);
       } catch (e) {
         setStatus(e instanceof Error ? e.message : String(e), "err");
-        if (lastMissionId) showCircuitResume(lastMissionId);
       } finally {
         syncScanEnabled();
-        $("resumeBtn").disabled = false;
       }
     }
 
@@ -507,7 +413,6 @@
     $("apiUrl").onchange = () => { $("apiBase").textContent = api(); };
     $("testResponsibility").onchange = () => syncScanEnabled();
     $("scanBtn").onclick = () => void runScan();
-    $("resumeBtn").onclick = () => void resumeAfterCircuitA();
     syncScanEnabled();
     void ping();
   </script>
