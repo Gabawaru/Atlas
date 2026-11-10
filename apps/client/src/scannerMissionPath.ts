@@ -16,6 +16,12 @@ export const ROE_SCOPE_LABEL =
 export const TEST_RESPONSIBILITY_LABEL =
   "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
 
+/**
+ * ASCII-safe mission titles (avoid Windows/UI mojibake on "présence" / "réelle").
+ */
+export const REAL_MISSION_TITLE = "Presence web";
+export const FICTIF_MISSION_TITLE = "[FICTIF] Presence web";
+
 export type RealMissionInput = {
   targetHost: string;
   /** Required gate before real scan — operator accepts liability if unauthorized. */
@@ -44,7 +50,7 @@ export function validateRealMissionInput(
   if (!targetHost || targetHost.length < 3) {
     return {
       ok: false,
-      reason: `Cible FQDN requise dans le RoE (${ROE_SCOPE_LABEL}).`,
+      reason: `Cible FQDN requise (${ROE_SCOPE_LABEL}).`,
     };
   }
   return {
@@ -61,32 +67,27 @@ export function createMissionBody(args: {
 }): Record<string, unknown> {
   if (args.mode === "fictif") {
     return {
-      title: "[FICTIF] Mission présence web",
+      title: FICTIF_MISSION_TITLE,
       uxNeedIds: [args.uxNeedId],
       assetIds: [args.assetId],
       synthetic: true,
       exclusions: ["mail.example.com"],
-      notes: "RoE démo — exclusions machine-readable",
+      notes: "Demo FICTIF",
     };
   }
   return {
-    title: "Mission présence web (réelle)",
+    title: REAL_MISSION_TITLE,
     uxNeedIds: [args.uxNeedId],
     assetIds: [args.assetId],
     synthetic: false,
     exclusions: [],
-    notes:
-      "RoE réel — responsabilité opérateur cochée ; Circuit A + Policy Guard",
+      notes: "Responsabilite operateur cochee",
   };
 }
 
-/** Operator-facing message after responsibility owner-auth (before Circuit A). */
+/** Short status after liability owner-auth when Circuit A still pending. */
 export function circuitAPendingMessage(missionId: string, status: string): string {
-  return (
-    `Mission ${missionId} → ${status}. Responsabilité opérateur enregistrée. ` +
-    `Circuit A encore requis : un approbateur staff doit décider dans l’admin ` +
-    `(POST /v1/admin/approvals/:id/decide). Puis « Exécuter » ici — Policy Guard / RoE inchangés.`
-  );
+  return `Mission ${missionId} → ${status}. Circuit A en attente.`;
 }
 
 export function canClientExecute(status: string): boolean {

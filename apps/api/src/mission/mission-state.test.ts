@@ -4,6 +4,7 @@ import {
   assertTransition,
   IllegalMissionTransitionError,
   nextAfterAuthValid,
+  shouldAutoApproveCircuitA,
 } from "./mission-state";
 
 describe("mission state machine (API)", () => {
@@ -53,5 +54,31 @@ describe("mission state machine (API)", () => {
       approvalRouteConfigured: true,
     });
     assert.equal(r.status, "A_APPROVAL_PENDING");
+  });
+});
+
+describe("shouldAutoApproveCircuitA", () => {
+  it("ATLAS_ENV=development → true", () => {
+    assert.equal(
+      shouldAutoApproveCircuitA({ ATLAS_ENV: "development" }),
+      true,
+    );
+  });
+
+  it("ATLAS_CIRCUIT_A_AUTO=0 overrides development", () => {
+    assert.equal(
+      shouldAutoApproveCircuitA({
+        ATLAS_ENV: "development",
+        ATLAS_CIRCUIT_A_AUTO: "0",
+      }),
+      false,
+    );
+  });
+
+  it("production without flag → false", () => {
+    assert.equal(
+      shouldAutoApproveCircuitA({ ATLAS_ENV: "production" }),
+      false,
+    );
   });
 });

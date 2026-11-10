@@ -16,7 +16,6 @@ import {
 } from "./reportExport";
 import {
   DEFAULT_REAL_TARGET,
-  ROE_SCOPE_LABEL,
   TEST_RESPONSIBILITY_LABEL,
   canClientExecute,
   circuitAPendingMessage,
@@ -125,10 +124,9 @@ export function App() {
   const [roe, setRoe] = useState<Roe | null>(null);
   const [roeExclusions, setRoeExclusions] = useState("mail.example.com");
   const [findings, setFindings] = useState<Finding[]>([]);
-  /** FICTIF remains the default demo path; real requires liability checkbox. */
-  const [missionMode, setMissionMode] = useState<ScannerMissionMode>("fictif");
+  const missionMode: ScannerMissionMode = "real";
   const [realTargetHost, setRealTargetHost] = useState(DEFAULT_REAL_TARGET);
-  /** Gate before real scan — liability if scan turns out unauthorized. */
+  /** Gate before scan — liability if scan turns out unauthorized. */
   const [testResponsibilityAccepted, setTestResponsibilityAccepted] =
     useState(false);
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
@@ -150,12 +148,15 @@ export function App() {
   const readiness = evaluateScannerReadiness({
     authenticated: Boolean(token),
     selectedNeedId: EXECUTABLE_NEED,
-    assetCount: assets.length,
+    // Real path creates the asset on Scan — FQDN field counts as target intent.
+    assetCount:
+      assets.length > 0 || realTargetHost.trim().length >= 3
+        ? Math.max(assets.length, 1)
+        : 0,
     webConnectorActive: webGrantActive,
   });
 
   const unified = buildUnifiedResults(missions, findings);
-  const hasRealMission = missions.some((m) => m.synthetic === false);
   const [exportBusyKey, setExportBusyKey] = useState<string | null>(null);
 
   async function downloadReportExport(
@@ -221,13 +222,26 @@ export function App() {
 
   async function refresh() {
     if (!token) return;
-    const [a, m, c, g, f] = await Promise.all([
+    let [a, m, c, g, f] = await Promise.all([
       fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
       fetch(`${API}/v1/findings`, { headers }).then((r) => r.json()),
     ]);
+    const grantsList = Array.isArray(g) ? g : [];
+    const webActive = grantsList.some(
+      (x: ConnectorGrant) =>
+        x.connectorId === "web.passive.presence" && x.status === "active",
+    );
+    if (!webActive) {
+      await fetch(`${API}/v1/connectors/connect`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ connectorId: "web.passive.presence" }),
+      });
+      g = await fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json());
+    }
     setAssets(a);
     setMissions(m);
     setCatalog(Array.isArray(c) ? c : []);
@@ -272,12 +286,6 @@ export function App() {
     }
     setAuthorizedLaunch(parsed.intent);
     setRealTargetHost(parsed.intent.host);
-    setInfo(
-      `Lancement RoE : ${parsed.intent.label} → ${parsed.intent.host} ` +
-        `(*.pragma-serve.com / *.pragma-cloud.com / *.pragma.mc uniquement).`,
-    );
-    const el = document.getElementById("scanner-cta-title");
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   async function addAsset() {
@@ -345,9 +353,7 @@ export function App() {
   }
 
   /**
-   * Scanner CTA: FICTIF (default) = mock owner-auth + execute.
-   * Mission réelle = liability checkbox only — Circuit A then Policy Guard / RoE.
-   * No Pragma Sign envelope paste or partner attach on the product path.
+   * One CTA: liability checkbox → mission → owner-auth → execute (local auto Circuit A).
    */
   async function runScanner() {
     if (!readiness.ready) return;
@@ -355,52 +361,6 @@ export function App() {
     setError(null);
     setInfo(null);
     try {
-      if (missionMode === "fictif") {
-        const assetList = (await fetch(`${API}/v1/assets`, {
-          headers,
-        }).then((r) => r.json())) as Asset[];
-        if (!assetList[0]) {
-          setError("Aucun actif — ajoutez une cible (options avancées).");
-          return;
-        }
-        const mission = await fetch(`${API}/v1/missions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(
-            createMissionBody({
-              mode: "fictif",
-              assetId: assetList[0].id,
-              uxNeedId: EXECUTABLE_NEED,
-            }),
-          ),
-        }).then((r) => r.json());
-        if (!mission?.id) {
-          setError(
-            typeof mission?.message === "string"
-              ? mission.message
-              : JSON.stringify(mission?.message ?? mission),
-          );
-          return;
-        }
-
-        await fetch(`${API}/v1/missions/${mission.id}/owner-authorization`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ signerLabel: "Camille Client (FICTIF)" }),
-        }).then((r) => r.json());
-
-        const run = await fetch(`${API}/v1/missions/${mission.id}/execute`, {
-          method: "POST",
-          headers,
-        }).then((r) => r.json());
-
-        if (run.gate?.decision === "REJECT") {
-          setError(`${run.gate.code}: ${run.gate.reason}`);
-        }
-        await refresh();
-        return;
-      }
-
       const validated = validateRealMissionInput({
         targetHost: realTargetHost,
         testResponsibilityAccepted,
@@ -453,18 +413,27 @@ export function App() {
         return;
       }
 
+      const missionId = String(authorized?.id ?? mission.id);
       const status = String(authorized?.status ?? mission.status ?? "?");
       if (canClientExecute(status)) {
-        setInfo(
-          `Mission ${authorized.id ?? mission.id} → ${status}. Circuit A déjà satisfait — vous pouvez « Exécuter ».`,
-        );
+        setInfo("Scan…");
+        const run = await fetch(`${API}/v1/missions/${missionId}/execute`, {
+          method: "POST",
+          headers,
+        }).then((r) => r.json());
+        if (run.gate?.decision === "REJECT") {
+          setError(`${run.gate.code}: ${run.gate.reason}`);
+        } else if (run.message && !run.id && !run.gate) {
+          setError(
+            typeof run.message === "string"
+              ? run.message
+              : JSON.stringify(run.message),
+          );
+        } else {
+          setInfo("OK");
+        }
       } else {
-        setInfo(
-          circuitAPendingMessage(
-            String(authorized?.id ?? mission.id),
-            status,
-          ),
-        );
+        setInfo(circuitAPendingMessage(missionId, status));
       }
       await refresh();
     } catch (e) {
@@ -541,159 +510,18 @@ export function App() {
     await refresh();
   }
 
+  void missionMode;
+  void catalog;
+  void authorizedLaunch;
+
+  const recentResults = unified.filter((r) => !r.synthetic).slice(0, 12);
+
   return (
     <div className="shell">
       <p className="brand">Atlas</p>
-      <p className="tagline">
-        Scanner autorisé — un CTA, résultats unifiés. Policy Guard décide ;
-        l&apos;IA n&apos;exécute rien.
-      </p>
-      <div className={hasRealMission ? "banner banner-real" : "banner"}>
-        {hasRealMission ? (
-          <>
-            <strong>Mission réelle présente</strong> — exports non marqués
-            FICTIF disponibles sur les bilans. Abonnement ≠ autorisation.
-          </>
-        ) : (
-          <>
-            <strong>Données de démonstration</strong> — aucune cible réelle.
-            Abonnement ≠ autorisation. Pas de faux « terminé » sur besoins non
-            branchés.
-          </>
-        )}
-      </div>
-
-      <section
-        id="scanner"
-        className="scanner-hero"
-        aria-labelledby="scanner-cta-title"
-      >
-        <h2 id="scanner-cta-title">Scanner</h2>
-        <p className="muted">
-          Contrôle passif in-scope uniquement (RoE : {ROE_SCOPE_LABEL}).
-          Exécution refusée sans session, cible autorisée, connecteur et
-          responsabilité opérateur.
-        </p>
-        {authorizedLaunch && (
-          <div className="banner" role="status">
-            <strong>{authorizedLaunch.label}</strong> — cible RoE{" "}
-            <code>{authorizedLaunch.host}</code>. Périmètre :{" "}
-            <code>*.pragma-serve.com</code>, <code>*.pragma-cloud.com</code>,{" "}
-            <code>*.pragma.mc</code>.
-          </div>
-        )}
-        <label className="mode-toggle">
-          <input
-            type="checkbox"
-            checked={missionMode === "real"}
-            onChange={(e) => {
-              const real = e.target.checked;
-              setMissionMode(real ? "real" : "fictif");
-              if (!real) setTestResponsibilityAccepted(false);
-            }}
-          />{" "}
-          Mission réelle (responsabilité opérateur — pas FICTIF)
-        </label>
-        {missionMode === "real" ? (
-          <div className="real-mission-fields">
-            <label className="mode-toggle responsibility-gate" htmlFor="test-responsibility">
-              <input
-                id="test-responsibility"
-                type="checkbox"
-                checked={testResponsibilityAccepted}
-                onChange={(e) =>
-                  setTestResponsibilityAccepted(e.target.checked)
-                }
-              />{" "}
-              {TEST_RESPONSIBILITY_LABEL}
-            </label>
-            <label htmlFor="real-target">
-              Cible FQDN (RoE Pragma — pas n&apos;importe quelle URL)
-            </label>
-            <input
-              id="real-target"
-              value={realTargetHost}
-              onChange={(e) => setRealTargetHost(e.target.value)}
-              placeholder={DEFAULT_REAL_TARGET}
-              autoComplete="off"
-              disabled={!testResponsibilityAccepted}
-            />
-            <p className="muted real-mission-note">
-              Gate : responsabilité cochée → Circuit A (admin
-              approvals/decide) → Policy Guard / RoE. Pas de Pragma Sign ni
-              Paradise. Hors RoE ({ROE_SCOPE_LABEL}) → REJECT.
-            </p>
-          </div>
-        ) : (
-          <p className="muted">
-            Par défaut : parcours FICTIF (mock owner-auth + A_SKIPPED_DEMO).
-          </p>
-        )}
-        <button
-          type="button"
-          className="cta-scanner"
-          disabled={
-            busy ||
-            !readiness.ready ||
-            (missionMode === "real" && !testResponsibilityAccepted)
-          }
-          onClick={() => void runScanner()}
-        >
-          {busy
-            ? missionMode === "real"
-              ? "Préparation…"
-              : "Exécution…"
-            : missionMode === "real"
-              ? "Préparer le scan"
-              : "Scanner"}
-        </button>
-        {readiness.blockReason && (
-          <p className="block-reason" role="status">
-            {readiness.blockReason}
-          </p>
-        )}
-        {missions.some(
-          (m) =>
-            !m.synthetic &&
-            (m.status === "A_APPROVAL_PENDING" || canClientExecute(m.status)),
-        ) && (
-          <ul className="circuit-a-queue" aria-label="Missions réelles">
-            {missions
-              .filter(
-                (m) =>
-                  !m.synthetic &&
-                  (m.status === "A_APPROVAL_PENDING" ||
-                    canClientExecute(m.status)),
-              )
-              .map((m) => (
-                <li key={m.id}>
-                  <span>
-                    {m.title} — <code>{m.status}</code>
-                  </span>
-                  {m.status === "A_APPROVAL_PENDING" ? (
-                    <span className="muted">
-                      {" "}
-                      En attente Circuit A (admin)
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={busy}
-                      onClick={() => void executeMission(m.id)}
-                    >
-                      Exécuter
-                    </button>
-                  )}
-                </li>
-              ))}
-          </ul>
-        )}
-      </section>
 
       {!token ? (
-        <section>
-          <h2>Connexion</h2>
+        <section id="session" aria-label="Session">
           <label>Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
           <label>Mot de passe</label>
@@ -702,226 +530,90 @@ export function App() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button type="button" onClick={() => void login()}>
+          <button type="button" className="cta-scanner" onClick={() => void login()}>
             Entrer
           </button>
-          <p className="muted">Compte seed : owner@demo.atlas.local / atlas-demo</p>
+          <p className="muted">owner@demo.atlas.local / atlas-demo</p>
         </section>
       ) : (
-        <>
-          <section aria-labelledby="results-title">
-            <h2 id="results-title">Résultats</h2>
-            <p className="muted">
-              Services (contrôles) et findings ensemble — pas de silo par
-              connecteur. Remédiation sur chaque finding.
+        <section id="scanner" className="scanner-hero" aria-label="Scanner">
+          <label
+            className="mode-toggle responsibility-gate"
+            htmlFor="test-responsibility"
+          >
+            <input
+              id="test-responsibility"
+              type="checkbox"
+              checked={testResponsibilityAccepted}
+              onChange={(e) => setTestResponsibilityAccepted(e.target.checked)}
+            />{" "}
+            {TEST_RESPONSIBILITY_LABEL}
+          </label>
+          <label htmlFor="real-target">URL / FQDN</label>
+          <input
+            id="real-target"
+            value={realTargetHost}
+            onChange={(e) => setRealTargetHost(e.target.value)}
+            placeholder={DEFAULT_REAL_TARGET}
+            autoComplete="off"
+            disabled={!testResponsibilityAccepted}
+          />
+          <button
+            type="button"
+            className="cta-scanner"
+            disabled={busy || !readiness.ready || !testResponsibilityAccepted}
+            onClick={() => void runScanner()}
+          >
+            {busy ? "…" : "Scan"}
+          </button>
+          {readiness.blockReason && (
+            <p className="block-reason" role="status">
+              {readiness.blockReason}
             </p>
-            {unified.length === 0 ? (
-              <p className="muted">Aucun résultat pour l&apos;instant.</p>
-            ) : (
-              <ul className="results-list">
-                {unified.map((row) => {
-                  const finding =
-                    row.kind === "finding"
-                      ? findings.find((f) => `finding:${f.id}` === row.id)
-                      : undefined;
-                  return (
-                    <li key={row.id} className="result-row">
-                      <span className={`kind kind-${row.kind}`}>
-                        {KIND_LABEL[row.kind]}
-                      </span>
-                      <strong>
-                        {row.title}{" "}
-                        {row.synthetic && (
-                          <span className="muted">[FICTIF]</span>
-                        )}
-                      </strong>
-                      {row.severity && (
-                        <div className="muted">Sévérité : {row.severity}</div>
-                      )}
-                      <div className="muted">{row.detail}</div>
-                      {row.kind === "report" &&
-                        row.missionId &&
-                        row.reportId && (
-                          <div
-                            className="export-actions"
-                            role="group"
-                            aria-label={`Exporter le bilan ${row.reportId}`}
-                          >
-                            {REPORT_EXPORT_FORMATS.map((fmt) => {
-                              const busyKey = `${row.reportId}:${fmt}`;
-                              return (
-                                <button
-                                  key={fmt}
-                                  type="button"
-                                  className="ghost export-btn"
-                                  disabled={
-                                    busy || exportBusyKey === busyKey
-                                  }
-                                  onClick={() =>
-                                    void downloadReportExport(
-                                      row.missionId!,
-                                      row.reportId!,
-                                      fmt,
-                                    )
-                                  }
-                                >
-                                  {exportBusyKey === busyKey
-                                    ? `… ${fmt.toUpperCase()}`
-                                    : fmt.toUpperCase()}
-                                </button>
-                              );
-                            })}
-                            {!row.synthetic && (
-                              <span className="muted export-hint">
-                                Rapport réel (non FICTIF)
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      {finding && (
-                        <>
-                          <label>Remédiation</label>
-                          <select
-                            value={finding.remediationStatus ?? "open"}
-                            onChange={(e) =>
-                              void updateRemediation(finding.id, e.target.value)
-                            }
-                          >
-                            {REMEDIATION_OPTIONS.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                        </>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {missions.some((m) => m.reports?.[0]?.technicalDetail) && (
-              <details>
-                <summary>Détail technique des bilans</summary>
-                {missions.map((m) =>
-                  m.reports?.map((r) => (
-                    <p key={r.id} className="muted">
-                      <strong>{m.title}</strong> — {r.technicalDetail}
-                    </p>
-                  )),
-                )}
-              </details>
-            )}
-          </section>
+          )}
+          {info && <p className="muted">{info}</p>}
+          {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
 
-          <details>
-            <summary>Options avancées (RoE, connecteurs, actifs)</summary>
-            <section>
-              <h3>Connecteurs</h3>
-              <ul>
-                {catalog
-                  .filter((c) => c.id === "web.passive.presence")
-                  .map((c) => {
-                    const grant = grants.find(
-                      (g) => g.connectorId === c.id && g.status === "active",
-                    );
-                    return (
-                      <li key={c.id} className="need">
-                        <strong>
-                          {c.label}{" "}
-                          {c.isStub && <span className="muted">[STUB]</span>}
-                        </strong>
-                        <div className="muted">{c.statusLabel}</div>
-                        {grant ? (
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={() => void revokeGrant(grant.id)}
-                          >
-                            Révoquer
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={() => void connectConnector(c.id)}
-                          >
-                            Connecter
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-              </ul>
-            </section>
-            <section>
-              <h3>Actifs</h3>
-              <ul>
-                {assets.map((a) => (
-                  <li key={a.id}>
-                    {a.value}{" "}
-                    {a.synthetic && <span className="muted">[FICTIF]</span>}
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void addAsset()}
-              >
-                Ajouter actif démo
-              </button>
-            </section>
-            {roe && roeMissionId && (
-              <section>
-                <h3>RoE</h3>
-                <pre>
-                  {JSON.stringify(
-                    {
-                      version: roe.version,
-                      exclusions: roe.exclusions,
-                      methods: roe.methods,
-                    },
-                    null,
-                    2,
+          <h2 id="results-title">Resultats</h2>
+          {recentResults.length === 0 ? (
+            <p className="muted">Aucun resultat.</p>
+          ) : (
+            <ul className="results-list">
+              {recentResults.map((row) => (
+                <li key={row.id} className="result-row">
+                  <strong>{row.title}</strong>
+                  {row.severity && (
+                    <div className="muted">{row.severity}</div>
                   )}
-                </pre>
-                <label>Exclusions</label>
-                <input
-                  value={roeExclusions}
-                  onChange={(e) => setRoeExclusions(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => void bumpRoe()}
-                >
-                  Publier nouvelle version RoE
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => void loadRoe(roeMissionId)}
-                >
-                  Recharger RoE
-                </button>
-              </section>
-            )}
-            {missions[0] && !roe && (
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void loadRoe(missions[0]!.id)}
-              >
-                Charger RoE mission récente
-              </button>
-            )}
-          </details>
-        </>
+                  <div className="muted">{row.detail}</div>
+                  {row.kind === "report" &&
+                    row.missionId &&
+                    row.reportId && (
+                      <button
+                        type="button"
+                        className="ghost export-btn"
+                        disabled={busy || exportBusyKey === `${row.reportId}:json`}
+                        onClick={() =>
+                          void downloadReportExport(
+                            row.missionId!,
+                            row.reportId!,
+                            "json",
+                          )
+                        }
+                      >
+                        JSON
+                      </button>
+                    )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
-      {info && <p className="muted">{info}</p>}
-      {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
+      {!token && error && (
+        <p style={{ color: "var(--alert)" }}>{error}</p>
+      )}
     </div>
   );
 }

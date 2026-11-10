@@ -22,22 +22,22 @@ describe("evaluateScannerReadiness", () => {
       selectedNeedId: "internal_network",
     });
     assert.equal(r.ready, false);
-    assert.match(r.blockReason ?? "", /présence web|Policy Guard/i);
+    assert.match(r.blockReason ?? "", /executable/i);
   });
 
   it("bloque sans cible", () => {
     const r = evaluateScannerReadiness({ ...readyBase, assetCount: 0 });
     assert.equal(r.ready, false);
-    assert.match(r.blockReason ?? "", /cible|actif/i);
+    assert.match(r.blockReason ?? "", /FQDN/i);
   });
 
-  it("bloque sans connecteur (Policy Guard)", () => {
+  it("bloque sans connecteur", () => {
     const r = evaluateScannerReadiness({
       ...readyBase,
       webConnectorActive: false,
     });
     assert.equal(r.ready, false);
-    assert.match(r.blockReason ?? "", /Connecteur|Policy Guard/i);
+    assert.match(r.blockReason ?? "", /Connecteur/i);
   });
 
   it("autorise quand auth + besoin + cible + connecteur", () => {

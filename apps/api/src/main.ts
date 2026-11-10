@@ -5,12 +5,14 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
 
-/** Default CORS: Vite client + admin on localhost and 127.0.0.1 (Atlas.exe uses IPv4). */
+/** Default CORS: Vite client + admin + Atlas.exe Scan shell (:17865) on localhost/127.0.0.1. */
 const DEFAULT_CORS_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3002",
+  "http://localhost:17865",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3002",
+  "http://127.0.0.1:17865",
 ].join(",");
 
 /**

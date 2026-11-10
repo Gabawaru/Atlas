@@ -61,18 +61,19 @@ describe("createMissionBody", () => {
     });
     assert.equal(body.synthetic, false);
     assert.deepEqual(body.exclusions, []);
-    assert.doesNotMatch(String(body.title), /FICTIF/);
+    assert.equal(body.title, "Presence web");
+    assert.doesNotMatch(String(body.title), /FICTIF|présence|réelle/i);
     assert.doesNotMatch(String(body.notes), /Sign attach/i);
   });
 });
 
 describe("Circuit A helpers", () => {
-  it("message documente l’admin sans Sign attach", () => {
+  it("message court Circuit A sans Sign", () => {
     const msg = circuitAPendingMessage("mid", "A_APPROVAL_PENDING");
     assert.match(msg, /Circuit A/);
-    assert.match(msg, /admin\/approvals/);
     assert.match(msg, /mid/);
     assert.doesNotMatch(msg, /Enveloppe Sign/i);
+    assert.doesNotMatch(msg, /PRAGMA_SIGN/i);
   });
 
   it("execute seulement après A_APPROVED / démo skip", () => {
