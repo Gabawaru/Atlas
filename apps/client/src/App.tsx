@@ -50,6 +50,7 @@ import {
   appendScanOutcome,
   appendScanStarted,
 } from "./sessionTraceLive";
+import type { TraceBridge } from "./sessionTraceBridge";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -191,6 +192,10 @@ export function App() {
 
   const unified = buildUnifiedResults(missions, findings);
   const [exportBusyKey, setExportBusyKey] = useState<string | null>(null);
+  /** Durable journal bridge — same token as Scanner session. */
+  const traceBridge: TraceBridge | null = token
+    ? { apiBase: API, token }
+    : null;
 
   async function downloadReportExport(
     missionId: string,
@@ -455,7 +460,7 @@ export function App() {
         return;
       }
 
-      appendScanStarted(validated.targetHost);
+      appendScanStarted(validated.targetHost, undefined, traceBridge);
 
       const asset = await ensureAsset(validated.targetHost, false);
       const mission = await fetch(`${API}/v1/missions`, {
@@ -483,7 +488,7 @@ export function App() {
             typeof mission?.message === "string"
               ? mission.message
               : "Création mission échouée",
-        });
+        }, undefined, traceBridge);
         return;
       }
 
@@ -513,7 +518,7 @@ export function App() {
             typeof authorized.message === "string"
               ? authorized.message
               : "Autorisation propriétaire échouée",
-        });
+        }, undefined, traceBridge);
         await refresh();
         return;
       }
@@ -534,7 +539,7 @@ export function App() {
             ok: false,
             detail: `${run.gate.code}: ${run.gate.reason}`,
             gateCode: String(run.gate.code ?? ""),
-          });
+          }, undefined, traceBridge);
         } else if (run.message && !run.id && !run.gate) {
           setError(
             typeof run.message === "string"
@@ -549,7 +554,7 @@ export function App() {
               typeof run.message === "string"
                 ? run.message
                 : JSON.stringify(run.message),
-          });
+          }, undefined, traceBridge);
         } else {
           setInfo("OK");
           appendScanOutcome({
@@ -557,7 +562,7 @@ export function App() {
             missionId,
             ok: true,
             detail: String(run.status ?? run.gate?.decision ?? "EXECUTED"),
-          });
+          }, undefined, traceBridge);
         }
       } else {
         setInfo(circuitAPendingMessage(missionId, status));
@@ -566,7 +571,7 @@ export function App() {
           missionId,
           ok: false,
           detail: circuitAPendingMessage(missionId, status),
-        });
+        }, undefined, traceBridge);
       }
       await refresh();
     } catch (e) {
@@ -576,7 +581,7 @@ export function App() {
         missionId: "error",
         ok: false,
         detail: e instanceof Error ? e.message : String(e),
-      });
+      }, undefined, traceBridge);
     } finally {
       setBusy(false);
     }
@@ -588,7 +593,7 @@ export function App() {
     setError(null);
     setInfo(null);
     try {
-      appendScanStarted(realTargetHost);
+      appendScanStarted(realTargetHost, undefined, traceBridge);
       const run = await fetch(`${API}/v1/missions/${missionId}/execute`, {
         method: "POST",
         headers,
@@ -607,7 +612,7 @@ export function App() {
             typeof run.message === "string"
               ? run.message
               : JSON.stringify(run.message),
-        });
+        }, undefined, traceBridge);
       } else if (run.gate?.decision === "REJECT") {
         setError(`${run.gate.code}: ${run.gate.reason}`);
         appendScanOutcome({
@@ -616,7 +621,7 @@ export function App() {
           ok: false,
           detail: `${run.gate.code}: ${run.gate.reason}`,
           gateCode: String(run.gate.code ?? ""),
-        });
+        }, undefined, traceBridge);
       } else {
         setInfo(`Exécution lancée pour ${missionId}.`);
         appendScanOutcome({
@@ -624,7 +629,7 @@ export function App() {
           missionId,
           ok: true,
           detail: String(run.status ?? "EXECUTED"),
-        });
+        }, undefined, traceBridge);
       }
       await refresh();
     } catch (e) {
@@ -634,7 +639,7 @@ export function App() {
         missionId,
         ok: false,
         detail: e instanceof Error ? e.message : String(e),
-      });
+      }, undefined, traceBridge);
     } finally {
       setBusy(false);
     }
@@ -750,7 +755,7 @@ export function App() {
       missionId: latestRiskMeta.missionId,
       reportId: latestRiskMeta.reportId,
       host: realTargetHost.trim() || undefined,
-    });
+    }, undefined, traceBridge);
   }, [token, latestRiskMeta.missionId, latestRiskMeta.reportId, realTargetHost]);
 
   return (
