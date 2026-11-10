@@ -28,6 +28,10 @@ import {
   isSubscriptionCommerciallyActive,
   type MissionStatus,
 } from "@atlas/shared";
+import {
+  aggregateRiskTable,
+  buildPresenceRiskTable,
+} from "../reports/risk-table";
 import { VulnService } from "../vuln/vuln.service";
 import { OpsService } from "../ops/ops.service";
 import { ConnectorsService } from "../connectors/connectors.service";
@@ -518,6 +522,10 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    const riskTable = aggregateRiskTable(
+      buildPresenceRiskTable(evidence as Parameters<typeof buildPresenceRiskTable>[0]),
+    );
+
     const exports = await generateReportExports({
       reportId: report.id,
       missionId: p.missionId,
@@ -534,6 +542,7 @@ export class ControlQueueService implements OnModuleInit, OnModuleDestroy {
         },
       ],
       evidence,
+      riskTable,
       scopeHash: p.scopeHash,
       moduleId: WEB_PASSIVE_MODULE_ID,
     });
