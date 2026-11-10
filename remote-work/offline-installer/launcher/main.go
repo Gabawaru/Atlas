@@ -1,24 +1,20 @@
-// AtlasLocal — Windows launcher for Gab workflow WITHOUT Cursor / agent worker.
+// AtlasLocal — cross-platform launcher for Atlas WITHOUT Cursor / agent worker.
 //
-// Cross-compile:
+// Build (from launcher/):
 //
 //	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/AtlasLocal.exe .
+//	CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/AtlasLocal .
 //
 // Commands:
 //
-//	AtlasLocal.exe install          — clone Atlas (if missing), ensure .env from example
-//	AtlasLocal.exe update           — git fetch + pull (preserves .env)
-//	AtlasLocal.exe start            — docker compose up -d + pnpm install + start api/client
-//	AtlasLocal.exe stop             — stop api/client + docker compose stop
-//	AtlasLocal.exe status           — show install dir, git HEAD, upstream, services
-//	AtlasLocal.exe watch [seconds]  — loop: fetch/compare → pull if ahead → rebuild → restart
-//	AtlasLocal.exe                  — same as status, then print help
+//	AtlasLocal install|update|start|stop|status|watch [seconds]
 //
 // Watch auto-update (Musk-minimal): fetch → compare HEAD vs origin/<branch> → pull → pnpm → restart.
 package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,32 +81,43 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println(`AtlasLocal — run Atlas on Windows without Cursor / "agent worker start"
+	bin := "AtlasLocal"
+	if runtime.GOOS == "windows" {
+		bin = "AtlasLocal.exe"
+	}
+	homeHint := "~/Atlas"
+	if runtime.GOOS == "windows" {
+		homeHint = `%USERPROFILE%\Atlas`
+	}
+	fmt.Printf(`AtlasLocal — run Atlas on %s/%s without Cursor / "agent worker start"
 
 Usage:
-  AtlasLocal.exe install | update | start | stop | status | watch [seconds]
+  %s install | update | start | stop | status | watch [seconds]
 
 Install dir (override with ATLAS_HOME):
-  %USERPROFILE%\Atlas
+  %s
 
-Auto-update (phone → git push → PC):
-  AtlasLocal.exe watch          # poll every ATLAS_WATCH_SECONDS (default 300)
-  AtlasLocal.exe watch 60       # poll every 60s (min 30)
-  or Task Scheduler: Register-AtlasWatchTask.ps1
+Auto-update (git push → machine):
+  %s watch          # poll every ATLAS_WATCH_SECONDS (default 300)
+  %s watch 60       # poll every 60s (min 30)
+  Windows Task Scheduler: Register-AtlasWatchTask.ps1
 
 Watch loop: fetch → compare → pull only if origin advanced → pnpm install → restart api+client.
 
 Env:
-  ATLAS_HOME            install root (default %USERPROFILE%\Atlas)
+  ATLAS_HOME            install root (default %s)
   ATLAS_REPO_URL        clone URL (default https://github.com/Gabawaru/Atlas.git)
   ATLAS_BRANCH          branch to track (default main)
   ATLAS_WATCH_SECONDS   watch poll interval when no [seconds] arg (default 300, min 30)
   ATLAS_SERVICES        comma list: api,client (default both). Empty = docker/pnpm only
 
-Prereqs on the PC (not bundled):
-  Git, Node.js ≥ 20, pnpm 9, Docker Desktop (Postgres 16 + Redis 7)
+Prereqs (not bundled):
+  Git, Node.js ≥ 20, pnpm 9, Postgres 16 + Redis 7
+  Preferred: Docker (Docker Desktop on Windows/macOS, Engine on Linux)
+  Fallback: native Postgres/Redis already listening on localhost (see scripts/unix/)
 
-Secrets: paste PRAGMA_SIGN_API_KEY / RESEND_API_KEY only into %USERPROFILE%\Atlas\.env`)
+Secrets: paste PRAGMA_SIGN_API_KEY / RESEND_API_KEY only into %s/.env
+`, runtime.GOOS, runtime.GOARCH, bin, homeHint, bin, bin, homeHint, homeHint)
 }
 
 func installRoot() (string, error) {
@@ -195,7 +202,7 @@ func doStart(root string, startSvcs bool) error {
 		return err
 	}
 	fmt.Println("Starting Postgres + Redis…")
-	if err := run(root, "docker", "compose", "up", "-d"); err != nil {
+	if err := ensureDataPlane(root); err != nil {
 		return err
 	}
 	fmt.Println("pnpm install…")
@@ -206,13 +213,15 @@ func doStart(root string, startSvcs bool) error {
 			return err2
 		}
 	}
+	_ = ensureAPIEnv(root)
+	_ = buildSharedPackages(root)
 	if startSvcs {
 		if err := restartServices(root); err != nil {
 			return err
 		}
 	} else {
 		fmt.Println()
-		fmt.Println("Stack deps ready. Start services with: AtlasLocal.exe start")
+		fmt.Println("Stack deps ready. Start services with: AtlasLocal start")
 		fmt.Printf("  or manually: cd %s && pnpm dev:api / pnpm dev:client\n", root)
 	}
 	fmt.Println("No Cursor. No \"agent worker start\". Keys stay in .env only.")
@@ -224,8 +233,79 @@ func doStop(root string) error {
 	if _, err := os.Stat(filepath.Join(root, "docker-compose.yml")); err != nil {
 		return fmt.Errorf("no docker-compose at %s", root)
 	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		fmt.Println("Docker not on PATH — left native Postgres/Redis alone.")
+		return nil
+	}
 	fmt.Println("Stopping docker compose…")
-	return run(root, "docker", "compose", "stop")
+	if err := run(root, "docker", "compose", "stop"); err != nil {
+		fmt.Printf("WARN: docker compose stop: %v\n", err)
+	}
+	return nil
+}
+
+// ensureDataPlane brings up Postgres+Redis via docker compose, or accepts a
+// native localhost data plane already listening (Linux/macOS without Docker).
+func ensureDataPlane(root string) error {
+	if _, err := exec.LookPath("docker"); err == nil {
+		if err := run(root, "docker", "compose", "up", "-d"); err == nil {
+			return nil
+		} else if localhostDataPlaneOK() {
+			fmt.Printf("WARN: docker compose failed (%v) — Postgres/Redis already reachable on localhost, continuing.\n", err)
+			return nil
+		} else {
+			return fmt.Errorf("docker compose up failed and localhost:5432/6379 unreachable: %w", err)
+		}
+	}
+	if localhostDataPlaneOK() {
+		fmt.Println("Docker not found — using native Postgres/Redis on localhost.")
+		return nil
+	}
+	return fmt.Errorf("need Docker (compose) or native Postgres:5432 + Redis:6379 — see scripts/unix/install-atlas-prereqs.sh or scripts/windows/")
+}
+
+func localhostDataPlaneOK() bool {
+	return tcpOpen("127.0.0.1:5432") && tcpOpen("127.0.0.1:6379")
+}
+
+func tcpOpen(addr string) bool {
+	c, err := net.DialTimeout("tcp", addr, 800*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+func ensureAPIEnv(root string) error {
+	src := filepath.Join(root, ".env")
+	if _, err := os.Stat(src); err != nil {
+		return err
+	}
+	apiEnv := filepath.Join(root, "apps", "api", ".env")
+	if _, err := os.Stat(apiEnv); err == nil {
+		return nil
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(apiEnv), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(apiEnv, data, 0o600); err != nil {
+		return err
+	}
+	fmt.Printf("Synced %s for Prisma CLI.\n", apiEnv)
+	return nil
+}
+
+func buildSharedPackages(root string) error {
+	fmt.Println("Building @atlas/shared + @atlas/policy-guard…")
+	_ = run(root, "pnpm", "--filter", "@atlas/shared", "build")
+	_ = run(root, "pnpm", "--filter", "@atlas/policy-guard", "build")
+	_ = run(root, "pnpm", "db:generate")
+	return nil
 }
 
 func doStatus(root string) error {
@@ -558,13 +638,23 @@ func checkPrereqs(strict bool) error {
 	if _, err := exec.LookPath("pnpm"); err != nil {
 		missing = append(missing, "pnpm (corepack prepare pnpm@9.15.0)")
 	}
+	// Docker is preferred but optional when native Postgres/Redis already listen.
+	if localhostDataPlaneOK() {
+		var kept []string
+		for _, m := range missing {
+			if m == "docker" {
+				continue
+			}
+			kept = append(kept, m)
+		}
+		missing = kept
+	}
 	if len(missing) == 0 {
 		return nil
 	}
-	msg := fmt.Sprintf("missing tools: %s — install Git, Node≥20, Docker Desktop, then: corepack enable && corepack prepare pnpm@9.15.0 --activate", strings.Join(missing, ", "))
-	if strict {
-		return fmt.Errorf("%s", msg)
-	}
+	_ = strict
+	hint := "scripts/unix/install-atlas-prereqs.sh (Linux/macOS) or scripts/windows/Install-AtlasPrereqs.ps1"
+	msg := fmt.Sprintf("missing tools: %s — install Git, Node≥20, pnpm 9, Docker or native Postgres/Redis; then %s", strings.Join(missing, ", "), hint)
 	return fmt.Errorf("%s", msg)
 }
 

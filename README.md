@@ -53,12 +53,29 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\Install-At
 
 Installs/verifies Node 20 + pnpm 9.15.0 + Docker compose (Postgres 16 / Redis 7), prints a pass/fail checklist, then launches `pnpm dev`. Does **not** start any Cursor/agent worker. Details: [`scripts/windows/README.md`](scripts/windows/README.md).
 
+### Linux / macOS (one-shot)
+
+```bash
+bash scripts/unix/install-atlas-prereqs.sh
+# checklist only:  bash scripts/unix/install-atlas-prereqs.sh --skip-launch
+```
+
+Same checklist idea as Windows: Node ≥ 20, pnpm 9, data plane via **Docker Compose** *or* native **Postgres 16 + Redis 7** on localhost, `.env`, `pnpm install`, shared builds. Details: [`scripts/unix/README.md`](scripts/unix/README.md).
+
+Optional Scan shell (same UI port as Windows `Atlas.exe`):
+
+```bash
+pnpm atlas:shell          # http://127.0.0.1:17865/  (builds Go binary if needed)
+```
+
 ## Checklist install (courte)
 
 ```bash
-docker compose up -d          # Postgres + Redis
+docker compose up -d          # Postgres + Redis (or native PG/Redis on :5432/:6379)
 cp -n .env.example .env
+# Local real-mission without Sign envelope: ATLAS_AUTHZ=signed
 pnpm install
+pnpm --filter @atlas/shared build && pnpm --filter @atlas/policy-guard build
 pnpm demo:smoke               # ~5 s à chaud (mesuré) ; docs/demo-smoke.md
 ```
 
@@ -70,7 +87,8 @@ CI : `pnpm test:unit` + `pnpm test:acceptance`. Exit **77** = infra absente.
 ```bash
 pnpm dev:api      # http://localhost:3001/v1/health
 pnpm dev:admin    # http://localhost:3000 — localhost / confiance uniquement (Next 14 advisories)
-pnpm dev:client   # http://localhost:3002
+pnpm dev:client   # http://localhost:3002  (Scanner web — Linux/macOS/Windows)
+pnpm atlas:shell  # http://127.0.0.1:17865/ (shell Scan desktop — multi-OS)
 ```
 
 Comptes seed (mot de passe `atlas-demo`) — **fictifs** :

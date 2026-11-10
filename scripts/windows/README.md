@@ -2,6 +2,8 @@
 
 One-shot setup for a **real Windows** machine: Node 20, pnpm 9.15.0, Docker Desktop + `docker compose` (Postgres 16 + Redis 7), then checklist + Atlas UI (`pnpm dev`).
 
+Linux / macOS twin: [`scripts/unix/install-atlas-prereqs.sh`](../unix/install-atlas-prereqs.sh) (Docker **or** native Postgres/Redis).
+
 Does **not** start any Cursor / agent worker.
 
 ## One-liner

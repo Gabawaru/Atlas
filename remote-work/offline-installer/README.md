@@ -1,6 +1,8 @@
-# Atlas — offline installer (Windows, zero Cursor)
+# Atlas — offline installer (Windows PE + native Linux/macOS launcher)
 
-Pack for Gabriel’s Windows PC so the Gab workflow runs **without Cursor** and without `agent worker start`.
+Pack so the Gab workflow runs **without Cursor** and without `agent worker start`.
+Windows keeps NSIS / `AtlasLocal.exe`; Linux/macOS use the native `AtlasLocal` binary
+(same commands). Data plane: Docker Compose **or** native Postgres/Redis on localhost.
 
 Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git pull`s** and restarts the local stack.
 
@@ -11,7 +13,8 @@ Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git
 | `bin/Atlas-Setup.exe` | **Ship download name** — GitHub Release asset for `/api/atlas/download` |
 | `bin/AtlasLocal-Setup.exe` | NSIS installer (Start Menu shortcuts) |
 | `bin/AtlasLocal-portable.zip` | Same bits, no installer |
-| `bin/AtlasLocal.exe` | CLI launcher alone |
+| `bin/AtlasLocal.exe` | CLI launcher (Windows) |
+| `bin/AtlasLocal` / `AtlasLocal-*` | CLI launcher (native + cross Linux/macOS) |
 
 (Uses `bin/` not `dist/` — root `.gitignore` ignores all `dist/`.)
 
