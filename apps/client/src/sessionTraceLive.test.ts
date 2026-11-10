@@ -1,0 +1,96 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { SESSION_TRACE_SEED } from "./sessionTrace";
+import {
+  LIVE_TRACE_STORAGE_KEY,
+  appendLiveTrace,
+  appendRedirectTrace,
+  appendReportAvailable,
+  appendScanOutcome,
+  appendScanStarted,
+  loadLiveTrace,
+  mergeSeedAndLive,
+} from "./sessionTraceLive";
+
+class MemStorage {
+  private map = new Map<string, string>();
+  getItem(k: string) {
+    return this.map.has(k) ? this.map.get(k)! : null;
+  }
+  setItem(k: string, v: string) {
+    this.map.set(k, v);
+  }
+  removeItem(k: string) {
+    this.map.delete(k);
+  }
+}
+
+describe("sessionTraceLive", () => {
+  it("append + load + dedupe by id", () => {
+    const s = new MemStorage() as unknown as Storage;
+    appendLiveTrace(
+      { id: "x1", role: "agent", text: "un", details: { done: ["a"] } },
+      s,
+    );
+    appendLiveTrace({ id: "x1", role: "agent", text: "dup", details: {} }, s);
+    const list = loadLiveTrace(s);
+    assert.equal(list.length, 1);
+    assert.equal(list[0]!.text, "un");
+    assert.ok(s.getItem(LIVE_TRACE_STORAGE_KEY)?.includes("x1"));
+  });
+
+  it("mergeSeedAndLive sorts and unions", () => {
+    const seed = SESSION_TRACE_SEED.slice(0, 1);
+    const live = [
+      {
+        id: "live-z",
+        role: "agent" as const,
+        text: "live",
+        at: "2099-01-01T00:00:00.000Z",
+        details: {},
+      },
+    ];
+    const merged = mergeSeedAndLive(seed, live);
+    assert.ok(merged.length >= 2);
+    assert.equal(merged[merged.length - 1]!.id, "live-z");
+  });
+
+  it("scan / report / redirect helpers shape ids", () => {
+    const start = appendScanStarted("example.com");
+    assert.equal(start.role, "prompt");
+    assert.match(start.text, /example.com/);
+
+    const ok = appendScanOutcome({
+      host: "example.com",
+      missionId: "m1",
+      ok: true,
+      detail: "EXECUTED",
+    });
+    assert.equal(ok.id, "scan-ok-m1");
+    assert.equal(ok.role, "agent");
+
+    const fail = appendScanOutcome({
+      host: "example.com",
+      missionId: "m2",
+      ok: false,
+      detail: "REJECT reason",
+      gateCode: "ROE",
+    });
+    assert.match(fail.text, /bloqué/);
+
+    const r = appendReportAvailable({
+      missionId: "cmw1",
+      reportId: "rep1",
+      host: "pragma-serve.com",
+    });
+    assert.equal(r.id, "report-rep1");
+
+    const d = appendRedirectTrace({
+      id: "redir-abc",
+      message: "Priorité scan",
+      api: "ok",
+    });
+    assert.equal(d.id, "redir-abc");
+    assert.equal(d.role, "prompt");
+  });
+});

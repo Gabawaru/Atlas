@@ -45,6 +45,11 @@ import {
   type SessionRoute,
 } from "./sessionRoute";
 import { SessionTracePage } from "./SessionTracePage";
+import {
+  appendReportAvailable,
+  appendScanOutcome,
+  appendScanStarted,
+} from "./sessionTraceLive";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -450,6 +455,8 @@ export function App() {
         return;
       }
 
+      appendScanStarted(validated.targetHost);
+
       const asset = await ensureAsset(validated.targetHost, false);
       const mission = await fetch(`${API}/v1/missions`, {
         method: "POST",
@@ -468,6 +475,15 @@ export function App() {
             ? mission.message
             : JSON.stringify(mission?.message ?? mission),
         );
+        appendScanOutcome({
+          host: validated.targetHost,
+          missionId: "none",
+          ok: false,
+          detail:
+            typeof mission?.message === "string"
+              ? mission.message
+              : "Création mission échouée",
+        });
         return;
       }
 
@@ -489,6 +505,15 @@ export function App() {
             ? authorized.message
             : JSON.stringify(authorized.message),
         );
+        appendScanOutcome({
+          host: validated.targetHost,
+          missionId: String(mission.id),
+          ok: false,
+          detail:
+            typeof authorized.message === "string"
+              ? authorized.message
+              : "Autorisation propriétaire échouée",
+        });
         await refresh();
         return;
       }
@@ -503,21 +528,55 @@ export function App() {
         }).then((r) => r.json());
         if (run.gate?.decision === "REJECT") {
           setError(`${run.gate.code}: ${run.gate.reason}`);
+          appendScanOutcome({
+            host: validated.targetHost,
+            missionId,
+            ok: false,
+            detail: `${run.gate.code}: ${run.gate.reason}`,
+            gateCode: String(run.gate.code ?? ""),
+          });
         } else if (run.message && !run.id && !run.gate) {
           setError(
             typeof run.message === "string"
               ? run.message
               : JSON.stringify(run.message),
           );
+          appendScanOutcome({
+            host: validated.targetHost,
+            missionId,
+            ok: false,
+            detail:
+              typeof run.message === "string"
+                ? run.message
+                : JSON.stringify(run.message),
+          });
         } else {
           setInfo("OK");
+          appendScanOutcome({
+            host: validated.targetHost,
+            missionId,
+            ok: true,
+            detail: String(run.status ?? run.gate?.decision ?? "EXECUTED"),
+          });
         }
       } else {
         setInfo(circuitAPendingMessage(missionId, status));
+        appendScanOutcome({
+          host: validated.targetHost,
+          missionId,
+          ok: false,
+          detail: circuitAPendingMessage(missionId, status),
+        });
       }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      appendScanOutcome({
+        host: realTargetHost,
+        missionId: "error",
+        ok: false,
+        detail: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusy(false);
     }
@@ -529,6 +588,7 @@ export function App() {
     setError(null);
     setInfo(null);
     try {
+      appendScanStarted(realTargetHost);
       const run = await fetch(`${API}/v1/missions/${missionId}/execute`, {
         method: "POST",
         headers,
@@ -539,14 +599,42 @@ export function App() {
             ? run.message
             : JSON.stringify(run.message),
         );
+        appendScanOutcome({
+          host: realTargetHost,
+          missionId,
+          ok: false,
+          detail:
+            typeof run.message === "string"
+              ? run.message
+              : JSON.stringify(run.message),
+        });
       } else if (run.gate?.decision === "REJECT") {
         setError(`${run.gate.code}: ${run.gate.reason}`);
+        appendScanOutcome({
+          host: realTargetHost,
+          missionId,
+          ok: false,
+          detail: `${run.gate.code}: ${run.gate.reason}`,
+          gateCode: String(run.gate.code ?? ""),
+        });
       } else {
         setInfo(`Exécution lancée pour ${missionId}.`);
+        appendScanOutcome({
+          host: realTargetHost,
+          missionId,
+          ok: true,
+          detail: String(run.status ?? "EXECUTED"),
+        });
       }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      appendScanOutcome({
+        host: realTargetHost,
+        missionId,
+        ok: false,
+        detail: e instanceof Error ? e.message : String(e),
+      });
     } finally {
       setBusy(false);
     }
@@ -654,6 +742,16 @@ export function App() {
     latestRiskMeta.reportId,
     latestRiskTable,
   ]);
+
+  /** Live journal — rapport prêt (dédup id report-*). */
+  useEffect(() => {
+    if (!token || !latestRiskMeta.reportId || !latestRiskMeta.missionId) return;
+    appendReportAvailable({
+      missionId: latestRiskMeta.missionId,
+      reportId: latestRiskMeta.reportId,
+      host: realTargetHost.trim() || undefined,
+    });
+  }, [token, latestRiskMeta.missionId, latestRiskMeta.reportId, realTargetHost]);
 
   return (
     <div className="shell">
