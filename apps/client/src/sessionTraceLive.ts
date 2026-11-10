@@ -1,8 +1,14 @@
 /**
  * Live Gabriel journal bridge — append real scan/redirect events to
  * localStorage so `#session/trace` is not seed-only.
+ * Optional TraceBridge pushes the same bubble to durable API storage.
  */
 import type { TraceMessage } from "./sessionTrace";
+import {
+  pullDurableTrace,
+  pushDurableTrace,
+  type TraceBridge,
+} from "./sessionTraceBridge";
 
 export const LIVE_TRACE_STORAGE_KEY = "atlas.gabriel.sessionTraceLive.v1";
 export const LIVE_TRACE_EVENT = "atlas:gabriel-session-trace";
@@ -40,7 +46,8 @@ function isTraceMessage(x: unknown): x is TraceMessage {
   );
 }
 
-function writeLive(
+/** Exported for durable hydrate merge → local cache. */
+export function writeLiveForBridge(
   items: TraceMessage[],
   storage: Storage | null = canStore() ? localStorage : null,
 ): void {
@@ -63,6 +70,7 @@ export function appendLiveTrace(
     at?: string;
   },
   storage: Storage | null = canStore() ? localStorage : null,
+  bridge?: TraceBridge | null,
 ): TraceMessage {
   const msg: TraceMessage = {
     id: input.id ?? `live-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -72,9 +80,13 @@ export function appendLiveTrace(
     details: input.details ?? {},
   };
   const prev = loadLiveTrace(storage);
-  if (prev.some((m) => m.id === msg.id)) return msg;
-  writeLive([...prev, msg], storage);
+  if (prev.some((m) => m.id === msg.id)) {
+    if (bridge?.token) void pushDurableTrace(msg, bridge);
+    return msg;
+  }
+  writeLiveForBridge([...prev, msg], storage);
   notify(msg);
+  if (bridge?.token) void pushDurableTrace(msg, bridge);
   return msg;
 }
 
@@ -92,6 +104,7 @@ export function mergeSeedAndLive(
 export function appendScanStarted(
   host: string,
   storage?: Storage | null,
+  bridge?: TraceBridge | null,
 ): TraceMessage {
   const h = host.trim() || "(cible)";
   return appendLiveTrace(
@@ -105,6 +118,7 @@ export function appendScanStarted(
       },
     },
     storage,
+    bridge,
   );
 }
 
@@ -117,6 +131,7 @@ export function appendScanOutcome(
     gateCode?: string;
   },
   storage?: Storage | null,
+  bridge?: TraceBridge | null,
 ): TraceMessage {
   const h = args.host.trim() || "(cible)";
   if (args.ok) {
@@ -132,6 +147,7 @@ export function appendScanOutcome(
         },
       },
       storage,
+      bridge,
     );
   }
   return appendLiveTrace(
@@ -147,6 +163,7 @@ export function appendScanOutcome(
       },
     },
     storage,
+    bridge,
   );
 }
 
@@ -158,6 +175,7 @@ export function appendReportAvailable(
     host?: string;
   },
   storage?: Storage | null,
+  bridge?: TraceBridge | null,
 ): TraceMessage {
   return appendLiveTrace(
     {
@@ -172,6 +190,7 @@ export function appendReportAvailable(
       },
     },
     storage,
+    bridge,
   );
 }
 
@@ -183,6 +202,7 @@ export function appendRedirectTrace(
     api: string;
   },
   storage?: Storage | null,
+  bridge?: TraceBridge | null,
 ): TraceMessage {
   return appendLiveTrace(
     {
@@ -195,5 +215,27 @@ export function appendRedirectTrace(
       },
     },
     storage,
+    bridge,
   );
+}
+
+/**
+ * Pull durable API journal → merge into localStorage.
+ * Best-effort; local-only if API down.
+ */
+export async function hydrateLiveFromDurable(
+  bridge: TraceBridge,
+  storage?: Storage | null,
+): Promise<{ messages: TraceMessage[]; bridge: "file" | "none" | "error"; detail?: string }> {
+  const pulled = await pullDurableTrace(bridge);
+  if (pulled.messages.length === 0) {
+    return { ...pulled, messages: loadLiveTrace(storage) };
+  }
+  const local = loadLiveTrace(storage);
+  const byId = new Map<string, TraceMessage>();
+  for (const m of local) byId.set(m.id, m);
+  for (const m of pulled.messages) byId.set(m.id, m);
+  const merged = [...byId.values()].sort((a, b) => a.at.localeCompare(b.at));
+  writeLiveForBridge(merged, storage);
+  return { ...pulled, messages: merged };
 }

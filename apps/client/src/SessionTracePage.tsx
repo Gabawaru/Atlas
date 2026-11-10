@@ -12,9 +12,11 @@ import {
 import {
   LIVE_TRACE_EVENT,
   appendRedirectTrace,
+  hydrateLiveFromDurable,
   loadLiveTrace,
   mergeSeedAndLive,
 } from "./sessionTraceLive";
+import type { TraceBridge } from "./sessionTraceBridge";
 
 type Props = {
   messages?: TraceMessage[];
@@ -140,6 +142,10 @@ export function SessionTracePage({
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [live, setLive] = useState<TraceMessage[]>(() => loadLiveTrace());
+  const [durableHint, setDurableHint] = useState<string | null>(null);
+
+  const bridge: TraceBridge | null =
+    token && apiBase ? { apiBase, token } : null;
 
   useEffect(() => {
     const refresh = () => setLive(loadLiveTrace());
@@ -151,6 +157,24 @@ export function SessionTracePage({
       window.removeEventListener("storage", refresh);
     };
   }, []);
+
+  /** Hydrate from durable file bridge when session token present. */
+  useEffect(() => {
+    if (!bridge) return;
+    let cancelled = false;
+    void hydrateLiveFromDurable(bridge).then((r) => {
+      if (cancelled) return;
+      setLive(r.messages);
+      if (r.bridge === "file") {
+        setDurableHint("Pont durable Atlas · API fichier");
+      } else if (r.bridge === "error") {
+        setDurableHint("Pont durable indisponible — cache local");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bridge?.apiBase, bridge?.token]);
 
   const seed = messages ?? SESSION_TRACE_SEED;
   const thread = useMemo(
@@ -174,21 +198,25 @@ export function SessionTracePage({
         apiBase,
         token,
       });
-      appendRedirectTrace({
-        id: result.queued.id,
-        message: draft.trim(),
-        api: result.api,
-      });
+      appendRedirectTrace(
+        {
+          id: result.queued.id,
+          message: draft.trim(),
+          api: result.api,
+        },
+        undefined,
+        bridge,
+      );
       setLive(loadLiveTrace());
       onRedirectQueued?.(draft.trim());
       setDraft("");
       if (result.api === "ok") {
-        setSendInfo("Message enfilé + /v1/conversation OK.");
+        setSendInfo("Message enfilé + /v1/conversation OK · journal durable.");
       } else if (result.api === "skipped") {
-        setSendInfo("Message enfilé (local). API ignorée — pas de jeton.");
+        setSendInfo("Message enfilé (local). API conversation ignorée — pas de jeton.");
       } else {
-        setSendInfo("Message enfilé (local).");
-        setSendError(result.apiDetail ?? "Bridge API en erreur.");
+        setSendInfo("Message enfilé (local + journal).");
+        setSendError(result.apiDetail ?? "Bridge conversation en erreur.");
       }
     } catch (err) {
       setSendError(err instanceof Error ? err.message : String(err));
@@ -225,6 +253,7 @@ export function SessionTracePage({
             <li key={b}>{b}</li>
           ))}
         </ul>
+        {durableHint && <p className="muted trace-durable-hint">{durableHint}</p>}
       </aside>
 
       <div className="trace-thread" role="log" aria-live="polite">
