@@ -31,6 +31,21 @@ import {
   riskTableFromReportExport,
   type RiskTableRow,
 } from "./riskTable";
+import { VulnTrackingView } from "./VulnTrackingView";
+import {
+  ingestRiskTableIntoTracking,
+  loadVulnTrackingStore,
+  saveVulnTrackingStore,
+  type VulnTrackingStore,
+} from "./vulnTracking";
+
+type AppView = "scanner" | "tracking";
+
+function viewFromHash(hash: string): AppView {
+  const h = hash.replace(/^#/, "").toLowerCase();
+  if (h === "suivi" || h === "tracking" || h === "archive") return "tracking";
+  return "scanner";
+}
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -138,6 +153,12 @@ export function App() {
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
   const [authorizedLaunch, setAuthorizedLaunch] =
     useState<AuthorizedLaunchIntent | null>(null);
+  const [view, setView] = useState<AppView>(() =>
+    typeof window !== "undefined" ? viewFromHash(window.location.hash) : "scanner",
+  );
+  const [vulnStore, setVulnStore] = useState<VulnTrackingStore>(() =>
+    loadVulnTrackingStore(),
+  );
 
   const headers = useMemo(
     () =>
@@ -285,6 +306,13 @@ export function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const onHash = () => setView(viewFromHash(window.location.hash));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const parsed = parseAuthorizedLaunch(window.location.search);
     if (!parsed.ok) {
       if (parsed.reason) setError(parsed.reason);
@@ -293,6 +321,25 @@ export function App() {
     setAuthorizedLaunch(parsed.intent);
     setRealTargetHost(parsed.intent.host);
   }, []);
+
+  function goTracking() {
+    setView("tracking");
+    if (typeof window !== "undefined") {
+      window.location.hash = "suivi";
+    }
+  }
+
+  function goScanner() {
+    setView("scanner");
+    if (typeof window !== "undefined") {
+      window.location.hash = "scanner";
+    }
+  }
+
+  function persistVulnStore(next: VulnTrackingStore) {
+    saveVulnTrackingStore(next);
+    setVulnStore(next);
+  }
 
   async function addAsset() {
     await fetch(`${API}/v1/assets`, {
@@ -523,12 +570,17 @@ export function App() {
   const recentResults = unified.filter((r) => !r.synthetic).slice(0, 12);
 
   /** Dernier bilan réel → tableau risque / compromission (un écran). */
-  const latestRiskTable: RiskTableRow[] = (() => {
+  const latestRiskMeta: {
+    table: RiskTableRow[];
+    missionId: string | null;
+    reportId: string | null;
+  } = (() => {
     const reports = missions
       .filter((m) => !m.synthetic)
       .flatMap((m) =>
         (m.reports ?? []).map((r) => ({
           ...r,
+          missionId: m.id,
           missionSynthetic: m.synthetic,
         })),
       )
@@ -538,10 +590,43 @@ export function App() {
       );
     for (const r of reports) {
       const table = riskTableFromReportExport(r.exportJson);
-      if (table.length) return table;
+      if (table.length) {
+        return {
+          table,
+          missionId: r.missionId,
+          reportId: r.id,
+        };
+      }
     }
-    return [];
+    return { table: [], missionId: null, reportId: null };
   })();
+  const latestRiskTable = latestRiskMeta.table;
+
+  const ingestSignature = latestRiskMeta.reportId
+    ? `${latestRiskMeta.reportId}:${latestRiskTable
+        .map((r) => `${r.control}|${r.url}|${r.riskCode}`)
+        .join(";")}`
+    : "";
+
+  /** Ingest cross-scan une fois par rapport (dédup via store.ingestedReportIds). */
+  useEffect(() => {
+    if (!token || !latestRiskMeta.reportId || latestRiskTable.length === 0) {
+      return;
+    }
+    const current = loadVulnTrackingStore();
+    if (current.ingestedReportIds?.includes(latestRiskMeta.reportId)) return;
+    const next = ingestRiskTableIntoTracking(current, latestRiskTable, {
+      missionId: latestRiskMeta.missionId,
+      reportId: latestRiskMeta.reportId,
+    });
+    if (next !== current) persistVulnStore(next);
+  }, [
+    token,
+    ingestSignature,
+    latestRiskMeta.missionId,
+    latestRiskMeta.reportId,
+    latestRiskTable,
+  ]);
 
   return (
     <div className="shell">
@@ -565,6 +650,12 @@ export function App() {
           </button>
           <p className="muted">owner@demo.atlas.local / atlas-demo</p>
         </section>
+      ) : view === "tracking" ? (
+        <VulnTrackingView
+          store={vulnStore}
+          onStoreChange={persistVulnStore}
+          onBack={goScanner}
+        />
       ) : (
         <section id="scanner" className="scanner-hero" aria-label="Scanner">
           <label
@@ -603,6 +694,15 @@ export function App() {
           )}
           {info && <p className="muted">{info}</p>}
           {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
+
+          <p className="tracking-nav-inline">
+            <button type="button" className="ghost" onClick={goTracking}>
+              Suivi &amp; archive
+            </button>
+            <span className="muted export-hint">
+              Tables résolues / non résolues / archive (hors écran principal)
+            </span>
+          </p>
 
           <h2 id="results-title">Resultats</h2>
           {latestRiskTable.length > 0 ? (
