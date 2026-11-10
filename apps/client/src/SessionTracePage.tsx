@@ -1,13 +1,20 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { sendAgentRedirect } from "./agentRedirect";
 import {
   AGENT_STATUS_LABEL,
   GABRIEL_AGENT_STATUS,
+  SESSION_TRACE_SEED,
   chronologicalTrace,
   summarizeTrace,
   type AgentRunStatus,
   type TraceMessage,
 } from "./sessionTrace";
+import {
+  LIVE_TRACE_EVENT,
+  appendRedirectTrace,
+  loadLiveTrace,
+  mergeSeedAndLive,
+} from "./sessionTraceLive";
 
 type Props = {
   messages?: TraceMessage[];
@@ -132,11 +139,23 @@ export function SessionTracePage({
   const [sendBusy, setSendBusy] = useState(false);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [extra, setExtra] = useState<TraceMessage[]>([]);
+  const [live, setLive] = useState<TraceMessage[]>(() => loadLiveTrace());
 
+  useEffect(() => {
+    const refresh = () => setLive(loadLiveTrace());
+    const onLive = () => refresh();
+    window.addEventListener(LIVE_TRACE_EVENT, onLive);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(LIVE_TRACE_EVENT, onLive);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
+  const seed = messages ?? SESSION_TRACE_SEED;
   const thread = useMemo(
-    () => chronologicalTrace([...(messages ?? []), ...extra]),
-    [messages, extra],
+    () => chronologicalTrace(mergeSeedAndLive(seed, live)),
+    [seed, live],
   );
   const summary = useMemo(
     () => summarizeTrace(thread, status),
@@ -155,20 +174,12 @@ export function SessionTracePage({
         apiBase,
         token,
       });
-      const now = new Date().toISOString();
-      setExtra((prev) => [
-        ...prev,
-        {
-          id: result.queued.id,
-          role: "prompt",
-          text: draft.trim(),
-          at: now,
-          details: {
-            reasons: ["Redirection agent sans redémarrage (session Gabriel)."],
-            communication: `File locale + bridge API = ${result.api}`,
-          },
-        },
-      ]);
+      appendRedirectTrace({
+        id: result.queued.id,
+        message: draft.trim(),
+        api: result.api,
+      });
+      setLive(loadLiveTrace());
       onRedirectQueued?.(draft.trim());
       setDraft("");
       if (result.api === "ok") {
