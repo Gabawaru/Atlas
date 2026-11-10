@@ -89,84 +89,111 @@ export function mergeSeedAndLive(
 }
 
 /** Scan CTA pressed — Gabriel intent. */
-export function appendScanStarted(host: string): TraceMessage {
+export function appendScanStarted(
+  host: string,
+  storage?: Storage | null,
+): TraceMessage {
   const h = host.trim() || "(cible)";
-  return appendLiveTrace({
-    role: "prompt",
-    text: `Scan demandé — ${h}`,
-    details: {
-      commands: ["POST /v1/missions", "owner-authorization", "execute"],
-      reasons: ["CTA Scanner · liability cochée"],
-      communication: "Session Gabriel → agent Scan",
+  return appendLiveTrace(
+    {
+      role: "prompt",
+      text: `Scan demandé — ${h}`,
+      details: {
+        commands: ["POST /v1/missions", "owner-authorization", "execute"],
+        reasons: ["CTA Scanner · liability cochée"],
+        communication: "Session Gabriel → agent Scan",
+      },
     },
-  });
+    storage,
+  );
 }
 
-export function appendScanOutcome(args: {
-  host: string;
-  missionId: string;
-  ok: boolean;
-  detail: string;
-  gateCode?: string;
-}): TraceMessage {
+export function appendScanOutcome(
+  args: {
+    host: string;
+    missionId: string;
+    ok: boolean;
+    detail: string;
+    gateCode?: string;
+  },
+  storage?: Storage | null,
+): TraceMessage {
   const h = args.host.trim() || "(cible)";
   if (args.ok) {
-    return appendLiveTrace({
-      id: `scan-ok-${args.missionId}`,
-      role: "agent",
-      text: `Scan OK — ${h}`,
-      details: {
-        done: [`Mission ${args.missionId}`, args.detail],
-        commands: [`POST /v1/missions/${args.missionId}/execute`],
-        communication: "Agent → Gabriel : résultats Scanner",
+    return appendLiveTrace(
+      {
+        id: `scan-ok-${args.missionId}`,
+        role: "agent",
+        text: `Scan OK — ${h}`,
+        details: {
+          done: [`Mission ${args.missionId}`, args.detail],
+          commands: [`POST /v1/missions/${args.missionId}/execute`],
+          communication: "Agent → Gabriel : résultats Scanner",
+        },
       },
-    });
+      storage,
+    );
   }
-  return appendLiveTrace({
-    id: `scan-fail-${args.missionId}-${Date.now().toString(36)}`,
-    role: "agent",
-    text: `Scan bloqué — ${h}`,
-    details: {
-      done: [`Mission ${args.missionId}`],
-      reasons: [args.detail],
-      commands: args.gateCode ? [`gate ${args.gateCode}`] : undefined,
-      communication: "Agent → Gabriel : échec / REJECT",
+  return appendLiveTrace(
+    {
+      id: `scan-fail-${args.missionId}-${Date.now().toString(36)}`,
+      role: "agent",
+      text: `Scan bloqué — ${h}`,
+      details: {
+        done: [`Mission ${args.missionId}`],
+        reasons: [args.detail],
+        commands: args.gateCode ? [`gate ${args.gateCode}`] : undefined,
+        communication: "Agent → Gabriel : échec / REJECT",
+      },
     },
-  });
+    storage,
+  );
 }
 
 /** Report ready after refresh — one bubble per report id. */
-export function appendReportAvailable(args: {
-  missionId: string;
-  reportId: string;
-  host?: string;
-}): TraceMessage {
-  return appendLiveTrace({
-    id: `report-${args.reportId}`,
-    role: "agent",
-    text: args.host
-      ? `Rapport prêt — ${args.host}`
-      : `Rapport prêt — mission ${args.missionId.slice(0, 8)}…`,
-    details: {
-      done: [`report ${args.reportId}`, `mission ${args.missionId}`],
-      communication: "Ingest Scanner → journal Gabriel",
+export function appendReportAvailable(
+  args: {
+    missionId: string;
+    reportId: string;
+    host?: string;
+  },
+  storage?: Storage | null,
+): TraceMessage {
+  return appendLiveTrace(
+    {
+      id: `report-${args.reportId}`,
+      role: "agent",
+      text: args.host
+        ? `Rapport prêt — ${args.host}`
+        : `Rapport prêt — mission ${args.missionId.slice(0, 8)}…`,
+      details: {
+        done: [`report ${args.reportId}`, `mission ${args.missionId}`],
+        communication: "Ingest Scanner → journal Gabriel",
+      },
     },
-  });
+    storage,
+  );
 }
 
 /** Persist redirect bubble (same id as queue item when provided). */
-export function appendRedirectTrace(args: {
-  id: string;
-  message: string;
-  api: string;
-}): TraceMessage {
-  return appendLiveTrace({
-    id: args.id,
-    role: "prompt",
-    text: args.message.trim(),
-    details: {
-      reasons: ["Redirection agent sans redémarrage (session Gabriel)."],
-      communication: `File locale + bridge API = ${args.api}`,
+export function appendRedirectTrace(
+  args: {
+    id: string;
+    message: string;
+    api: string;
+  },
+  storage?: Storage | null,
+): TraceMessage {
+  return appendLiveTrace(
+    {
+      id: args.id,
+      role: "prompt",
+      text: args.message.trim(),
+      details: {
+        reasons: ["Redirection agent sans redémarrage (session Gabriel)."],
+        communication: `File locale + bridge API = ${args.api}`,
+      },
     },
-  });
+    storage,
+  );
 }

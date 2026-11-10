@@ -47,16 +47,7 @@ func main() {
 		_, _ = w.Write(platformHTML)
 	})
 	mux.HandleFunc("/start-api", handleStartAPI(installDir))
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":      true,
-			"service": "atlas-shell",
-			"os":      runtime.GOOS,
-			"arch":    runtime.GOARCH,
-			"listen":  listenAddr,
-		})
-	})
+	mux.HandleFunc("/healthz", handleHealthz)
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
@@ -170,6 +161,18 @@ func findAtlasLocal(installDir string) string {
 		}
 	}
 	return ""
+}
+
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":      true,
+		"service": "atlas-shell",
+		"os":      runtime.GOOS,
+		"arch":    runtime.GOARCH,
+		"listen":  listenAddr,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

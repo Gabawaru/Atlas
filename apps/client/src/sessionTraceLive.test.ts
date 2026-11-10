@@ -56,41 +56,82 @@ describe("sessionTraceLive", () => {
   });
 
   it("scan / report / redirect helpers shape ids", () => {
-    const start = appendScanStarted("example.com");
+    const s = new MemStorage() as unknown as Storage;
+    const start = appendScanStarted("example.com", s);
     assert.equal(start.role, "prompt");
     assert.match(start.text, /example.com/);
 
-    const ok = appendScanOutcome({
-      host: "example.com",
-      missionId: "m1",
-      ok: true,
-      detail: "EXECUTED",
-    });
+    const ok = appendScanOutcome(
+      {
+        host: "example.com",
+        missionId: "m1",
+        ok: true,
+        detail: "EXECUTED",
+      },
+      s,
+    );
     assert.equal(ok.id, "scan-ok-m1");
     assert.equal(ok.role, "agent");
 
-    const fail = appendScanOutcome({
-      host: "example.com",
-      missionId: "m2",
-      ok: false,
-      detail: "REJECT reason",
-      gateCode: "ROE",
-    });
+    const fail = appendScanOutcome(
+      {
+        host: "example.com",
+        missionId: "m2",
+        ok: false,
+        detail: "REJECT reason",
+        gateCode: "ROE",
+      },
+      s,
+    );
     assert.match(fail.text, /bloqué/);
 
-    const r = appendReportAvailable({
-      missionId: "cmw1",
-      reportId: "rep1",
-      host: "pragma-serve.com",
-    });
+    const r = appendReportAvailable(
+      {
+        missionId: "cmw1",
+        reportId: "rep1",
+        host: "pragma-serve.com",
+      },
+      s,
+    );
     assert.equal(r.id, "report-rep1");
 
-    const d = appendRedirectTrace({
-      id: "redir-abc",
-      message: "Priorité scan",
-      api: "ok",
-    });
+    const d = appendRedirectTrace(
+      {
+        id: "redir-abc",
+        message: "Priorité scan",
+        api: "ok",
+      },
+      s,
+    );
     assert.equal(d.id, "redir-abc");
     assert.equal(d.role, "prompt");
+  });
+
+  it("smoke: scan flow lands in mergeSeedAndLive for journal", () => {
+    const s = new MemStorage() as unknown as Storage;
+    appendScanStarted("pragma-serve.com", s);
+    appendScanOutcome(
+      {
+        host: "pragma-serve.com",
+        missionId: "cmw-smoke",
+        ok: true,
+        detail: "EXECUTED",
+      },
+      s,
+    );
+    appendReportAvailable(
+      {
+        missionId: "cmw-smoke",
+        reportId: "rep-smoke",
+        host: "pragma-serve.com",
+      },
+      s,
+    );
+    const live = loadLiveTrace(s);
+    const merged = mergeSeedAndLive(SESSION_TRACE_SEED, live);
+    assert.ok(live.some((m) => m.text.includes("Scan demandé")));
+    assert.ok(live.some((m) => m.id === "scan-ok-cmw-smoke"));
+    assert.ok(live.some((m) => m.id === "report-rep-smoke"));
+    assert.ok(merged.length > SESSION_TRACE_SEED.length);
   });
 });
