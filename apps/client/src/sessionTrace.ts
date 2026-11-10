@@ -105,6 +105,38 @@ export const SESSION_TRACE_SEED: TraceMessage[] = [
   },
   {
     id: "t5",
+    role: "agent",
+    text: "Multi-OS + /healthz (#65) · suivi vulns CCV/PDF.md (#66) sur main.",
+    at: "2026-11-10T15:31:50.000Z",
+    details: {
+      done: [
+        "PR #65 mergée — shell Win/Linux/macOS + GET /healthz",
+        "PR #66 mergée — tables suivi hors hero Scanner",
+      ],
+      reasons: ["Gap Windows Atlas.exe /healthz 404 comblé via multi-OS."],
+      communication: "Ben-proxy → land CI verts.",
+    },
+  },
+  {
+    id: "t6",
+    role: "agent",
+    text: "Session locale #terminal ↔ :17865 (#67).",
+    at: "2026-11-10T15:36:33.000Z",
+    details: {
+      commands: [
+        "add apps/client/src/localShell.ts",
+        "add apps/client/src/SessionTerminalView.tsx",
+        "CORS shell localhost + atlas-secu.com",
+      ],
+      done: [
+        "Stubs healthz / start-api / api-health / launch-scan",
+        "PR #67 mergée",
+      ],
+      reasons: ["Bridge site session ↔ soft local — pas un 2ᵉ Scanner."],
+    },
+  },
+  {
+    id: "t7",
     role: "prompt",
     text: "Gabriel — bouton session : journal d’activité agent en fil SMS, page dédiée.",
     at: "2026-11-10T15:30:00.000Z",
@@ -118,31 +150,28 @@ export const SESSION_TRACE_SEED: TraceMessage[] = [
     },
   },
   {
-    id: "t6",
+    id: "t8",
     role: "agent",
-    text: "Route #session/trace + fil chat, status, résumé, message agent. Seed Gabriel.",
-    at: "2026-11-10T15:55:00.000Z",
+    text: "Journal SMS #session/trace livré et mergé (#68).",
+    at: "2026-11-10T15:45:43.000Z",
     details: {
       commands: [
         "add apps/client/src/sessionRoute.ts",
         "add apps/client/src/sessionTrace.ts",
         "add apps/client/src/agentRedirect.ts",
         "add apps/client/src/SessionTracePage.tsx",
-        "wire App.tsx hash → session / session-trace / scanner",
       ],
       done: [
-        "Bouton session Gabriel → #session/trace",
-        "Bulles prompt/agent chronologiques + chevrons",
-        "Indicateur working/paused/blocked",
-        "Composer message → file locale + POST /v1/conversation",
-        "Résumé auto en tête de fil",
+        "Hub #session Gabriel + fil chat",
+        "Status + résumé + redirect locale/API",
+        "PR #68 mergée (CI vert)",
       ],
       reasons: [
         "Store HTML atlas-traceability.html pas chargeable côté Vite → seed produit",
       ],
       reasoning:
         "Hash léger ; page dédiée ; redirect sans redémarrer via queue locale + bridge API.",
-      communication: "Piste Ben-proxy affichable en lecture seule — session = Gabriel.",
+      communication: "Piste Ben-proxy affichable — session = Gabriel.",
     },
   },
 ];
