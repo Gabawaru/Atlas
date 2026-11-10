@@ -32,6 +32,7 @@ import {
   type RiskTableRow,
 } from "./riskTable";
 import { VulnTrackingView } from "./VulnTrackingView";
+import { SessionTerminalView } from "./SessionTerminalView";
 import {
   ingestRiskTableIntoTracking,
   loadVulnTrackingStore,
@@ -39,11 +40,12 @@ import {
   type VulnTrackingStore,
 } from "./vulnTracking";
 
-type AppView = "scanner" | "tracking";
+type AppView = "scanner" | "tracking" | "terminal";
 
 function viewFromHash(hash: string): AppView {
   const h = hash.replace(/^#/, "").toLowerCase();
   if (h === "suivi" || h === "tracking" || h === "archive") return "tracking";
+  if (h === "terminal" || h === "session-term" || h === "local") return "terminal";
   return "scanner";
 }
 
@@ -326,6 +328,13 @@ export function App() {
     setView("tracking");
     if (typeof window !== "undefined") {
       window.location.hash = "suivi";
+    }
+  }
+
+  function goTerminal() {
+    setView("terminal");
+    if (typeof window !== "undefined") {
+      window.location.hash = "terminal";
     }
   }
 
@@ -656,6 +665,8 @@ export function App() {
           onStoreChange={persistVulnStore}
           onBack={goScanner}
         />
+      ) : view === "terminal" ? (
+        <SessionTerminalView onBack={goScanner} onLaunchScan={goScanner} />
       ) : (
         <section id="scanner" className="scanner-hero" aria-label="Scanner">
           <label
@@ -699,8 +710,11 @@ export function App() {
             <button type="button" className="ghost" onClick={goTracking}>
               Suivi &amp; archive
             </button>
+            <button type="button" className="ghost" onClick={goTerminal}>
+              Session locale
+            </button>
             <span className="muted export-hint">
-              Tables résolues / non résolues / archive (hors écran principal)
+              Hors hero — suivi vulns · terminal soft local (:17865)
             </span>
           </p>
 

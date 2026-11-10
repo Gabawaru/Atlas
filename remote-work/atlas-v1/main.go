@@ -65,7 +65,8 @@ func main() {
 		return
 	}
 
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	// Localhost CORS so Vite client (:3002) / site session can call shell stubs.
+	srv := &http.Server{Handler: withLocalCORS(mux), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
 
 	url := "http://" + listenAddr + "/"
@@ -174,6 +175,37 @@ func findAtlasLocal(installDir string) string {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func localCORSOrigin(origin string) bool {
+	switch origin {
+	case "http://localhost:3002",
+		"http://127.0.0.1:3002",
+		"http://localhost:17865",
+		"http://127.0.0.1:17865",
+		"https://atlas-secu.com",
+		"https://www.atlas-secu.com":
+		return true
+	default:
+		return false
+	}
+}
+
+func withLocalCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if localCORSOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func openBrowser(url string) error {

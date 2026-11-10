@@ -795,3 +795,75 @@ a {
   gap: 0.35rem;
   margin-top: 0.65rem;
 }
+
+/* —— Session terminal (bridge soft local, hors hero) —— */
+.session-term-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.85rem;
+}
+
+.session-term-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.session-term-log {
+  border-top: 1px solid rgba(200, 216, 222, 0.7);
+  padding-top: 0.65rem;
+}
+
+.session-term-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.session-term-entries li {
+  border: 1px solid rgba(200, 216, 222, 0.55);
+  border-radius: 6px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.session-term-entries li[data-ok="0"] {
+  border-color: rgba(180, 70, 60, 0.35);
+}
+
+.session-term-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.session-term-ok {
+  color: var(--teal-deep, #2f8f8a);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.session-term-fail {
+  color: var(--alert, #b5473c);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.session-term-entries pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--ink, #1a2422);
+}
