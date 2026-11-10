@@ -23,6 +23,17 @@ Local signed path: `ATLAS_AUTHZ=signed` **only when** no Sign envelope is attach
 
 Alternative without the shell: Vite client on `:3002` (`pnpm dev:client`) — same Scanner product path on Linux/macOS/Windows.
 
+## Health check
+
+Same on Windows `Atlas.exe` and Unix `atlas`:
+
+```bash
+curl -s http://127.0.0.1:17865/healthz
+# → {"ok":true,"service":"atlas-shell","os":"windows"|"linux"|…,"arch":"amd64",…}
+```
+
+If Gab’s installed PE still returns **404**, the Dev payload was stale — rebuild and replace `payload/Atlas.exe` (source route is shared; not Windows-specific).
+
 ## Rebuild
 
 ```bash
