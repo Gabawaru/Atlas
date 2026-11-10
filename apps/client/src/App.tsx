@@ -39,15 +39,12 @@ import {
   saveVulnTrackingStore,
   type VulnTrackingStore,
 } from "./vulnTracking";
-
-type AppView = "scanner" | "tracking" | "terminal";
-
-function viewFromHash(hash: string): AppView {
-  const h = hash.replace(/^#/, "").toLowerCase();
-  if (h === "suivi" || h === "tracking" || h === "archive") return "tracking";
-  if (h === "terminal" || h === "session-term" || h === "local") return "terminal";
-  return "scanner";
-}
+import {
+  hashForRoute,
+  parseSessionHash,
+  type SessionRoute,
+} from "./sessionRoute";
+import { SessionTracePage } from "./SessionTracePage";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -155,8 +152,10 @@ export function App() {
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
   const [authorizedLaunch, setAuthorizedLaunch] =
     useState<AuthorizedLaunchIntent | null>(null);
-  const [view, setView] = useState<AppView>(() =>
-    typeof window !== "undefined" ? viewFromHash(window.location.hash) : "scanner",
+  const [view, setView] = useState<SessionRoute>(() =>
+    typeof window !== "undefined"
+      ? parseSessionHash(window.location.hash)
+      : "session",
   );
   const [vulnStore, setVulnStore] = useState<VulnTrackingStore>(() =>
     loadVulnTrackingStore(),
@@ -308,7 +307,7 @@ export function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onHash = () => setView(viewFromHash(window.location.hash));
+    const onHash = () => setView(parseSessionHash(window.location.hash));
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -324,25 +323,44 @@ export function App() {
     setRealTargetHost(parsed.intent.host);
   }, []);
 
-  function goTracking() {
-    setView("tracking");
-    if (typeof window !== "undefined") {
-      window.location.hash = "suivi";
+  /** After login, land on Gabriel session hub unless a deep-link hash is set. */
+  useEffect(() => {
+    if (!token || typeof window === "undefined") return;
+    const route = parseSessionHash(window.location.hash);
+    const raw = window.location.hash.replace(/^#/, "").trim();
+    if (!raw) {
+      window.location.hash = "session";
+      setView("session");
+      return;
     }
+    setView(route);
+  }, [token]);
+
+  function goRoute(route: SessionRoute) {
+    setView(route);
+    if (typeof window !== "undefined") {
+      window.location.hash = hashForRoute(route).slice(1);
+    }
+  }
+
+  function goTracking() {
+    goRoute("tracking");
   }
 
   function goTerminal() {
-    setView("terminal");
-    if (typeof window !== "undefined") {
-      window.location.hash = "terminal";
-    }
+    goRoute("terminal");
   }
 
   function goScanner() {
-    setView("scanner");
-    if (typeof window !== "undefined") {
-      window.location.hash = "scanner";
-    }
+    goRoute("scanner");
+  }
+
+  function goSession() {
+    goRoute("session");
+  }
+
+  function goSessionTrace() {
+    goRoute("session-trace");
   }
 
   function persistVulnStore(next: VulnTrackingStore) {
@@ -645,7 +663,7 @@ export function App() {
       </div>
 
       {!token ? (
-        <section id="session" aria-label="Session">
+        <section id="session" aria-label="Connexion">
           <label>Email</label>
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
           <label>Mot de passe</label>
@@ -658,6 +676,34 @@ export function App() {
             Entrer
           </button>
           <p className="muted">owner@demo.atlas.local / atlas-demo</p>
+        </section>
+      ) : view === "session-trace" ? (
+        <SessionTracePage
+          apiBase={API}
+          token={token}
+          onBack={goSession}
+        />
+      ) : view === "session" ? (
+        <section id="session" className="gabriel-session" aria-label="Session Gabriel">
+          <p className="session-chip muted">Session Gabriel · stagiaire</p>
+          <button
+            type="button"
+            className="cta-scanner"
+            onClick={goSessionTrace}
+          >
+            Journal d&apos;activité
+          </button>
+          <p className="session-secondary">
+            <button type="button" className="ghost" onClick={goScanner}>
+              Scanner
+            </button>
+            <button type="button" className="ghost" onClick={goTerminal}>
+              Session locale
+            </button>
+            <button type="button" className="ghost" onClick={goTracking}>
+              Suivi &amp; archive
+            </button>
+          </p>
         </section>
       ) : view === "tracking" ? (
         <VulnTrackingView
@@ -707,6 +753,9 @@ export function App() {
           {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
 
           <p className="tracking-nav-inline">
+            <button type="button" className="ghost" onClick={goSession}>
+              Session Gabriel
+            </button>
             <button type="button" className="ghost" onClick={goTracking}>
               Suivi &amp; archive
             </button>
