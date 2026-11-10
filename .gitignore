@@ -15,3 +15,12 @@ apps/client/src-tauri/target/
 *.tsbuildinfo
 .vercel
 dump.rdb
+
+# Multi-OS shell / launcher build outputs (Windows PE may still be shipped under payload/)
+remote-work/atlas-v1/bin/
+remote-work/atlas-v1/payload/atlas
+remote-work/atlas-v1/payload/AtlasLocal
+remote-work/offline-installer/bin/AtlasLocal
+remote-work/offline-installer/bin/AtlasLocal-linux-*
+remote-work/offline-installer/bin/AtlasLocal-darwin-*
+apps/api/.env

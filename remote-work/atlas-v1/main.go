@@ -1,4 +1,5 @@
-// Atlas v1 desktop shell — opens local platform UI with Scan button.
+// Atlas desktop shell — opens local platform UI with Scan button.
+// Cross-platform: Windows (Atlas.exe), Linux/macOS (atlas binary).
 // Scan drives real mission flow via Atlas API (liability checkbox →
 // owner-authorization operator-responsibility → Circuit A → Policy Guard / RoE →
 // web.passive.presence.v1 + shortlist suite → report export).
@@ -14,9 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
-	"unsafe"
 
 	_ "embed"
 )
@@ -27,15 +26,11 @@ var platformHTML []byte
 const listenAddr = "127.0.0.1:17865"
 
 func main() {
-	appData := filepath.Join(os.Getenv("APPDATA"), "Atlas")
-	if os.Getenv("APPDATA") == "" {
-		home, _ := os.UserHomeDir()
-		appData = filepath.Join(home, ".atlas")
-	}
+	appData := atlasAppDataDir()
 	_ = os.MkdirAll(appData, 0o755)
 	marker := filepath.Join(appData, "installed.txt")
 	if _, err := os.Stat(marker); err != nil {
-		_ = os.WriteFile(marker, []byte("Atlas v1\n"), 0o644)
+		_ = os.WriteFile(marker, []byte("Atlas multi-os shell\n"), 0o644)
 	}
 	exe, _ := os.Executable()
 	installDir := filepath.Dir(exe)
@@ -52,11 +47,21 @@ func main() {
 		_, _ = w.Write(platformHTML)
 	})
 	mux.HandleFunc("/start-api", handleStartAPI(installDir))
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":      true,
+			"service": "atlas-shell",
+			"os":      runtime.GOOS,
+			"arch":    runtime.GOARCH,
+			"listen":  listenAddr,
+		})
+	})
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		_ = openBrowser("http://" + listenAddr + "/")
-		messageBox("Atlas", "Interface Scan déjà ouverte sur http://"+listenAddr+"/\n\nSi rien ne s'affiche, fermez l'autre instance Atlas.exe.")
+		messageBox("Atlas", alreadyOpenMessage(listenAddr))
 		return
 	}
 
@@ -67,11 +72,27 @@ func main() {
 	_ = openBrowser(url)
 
 	msg := fmt.Sprintf(
-		"Atlas v1 — plateforme Scan ouverte dans le navigateur.\n\nURL: %s\nInstall: %s\nAppData: %s\n\nDémarrer l’API lance AtlasLocal start (stack locale).\nScan : cocher responsabilité → Circuit A → Policy Guard → suite passive.\nFermer cette boîte ne coupe pas le serveur local.\n\nRoE: *.pragma-cloud.com, *.pragma-serve.com, *.pragma.mc",
-		url, installDir, appData,
+		"Atlas — plateforme Scan ouverte dans le navigateur.\n\nURL: %s\nInstall: %s\nData: %s\nOS: %s/%s\n\nDémarrer l’API lance AtlasLocal start (stack locale).\nScan : cocher responsabilité → Circuit A → Policy Guard → suite passive.\n\nRoE: *.pragma-cloud.com, *.pragma-serve.com, *.pragma.mc",
+		url, installDir, appData, runtime.GOOS, runtime.GOARCH,
 	)
 	go messageBox("Atlas", msg)
 	select {}
+}
+
+func atlasAppDataDir() string {
+	if runtime.GOOS == "windows" {
+		if app := os.Getenv("APPDATA"); app != "" {
+			return filepath.Join(app, "Atlas")
+		}
+	}
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, "atlas")
+	}
+	home, _ := os.UserHomeDir()
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support", "Atlas")
+	}
+	return filepath.Join(home, ".local", "share", "atlas")
 }
 
 func handleStartAPI(installDir string) http.HandlerFunc {
@@ -86,9 +107,9 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 		local := findAtlasLocal(installDir)
 		if local == "" {
 			writeJSON(w, http.StatusNotFound, map[string]any{
-				"ok":      false,
-				"error":   "AtlasLocal.exe introuvable à côté de Atlas.exe",
-				"hint":    "Réinstallez via Atlas-Setup.exe (embarque AtlasLocal).",
+				"ok":       false,
+				"error":    "AtlasLocal introuvable à côté du shell Atlas",
+				"hint":     startAPIHint(),
 				"lookedIn": installDir,
 			})
 			return
@@ -96,9 +117,7 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 
 		cmd := exec.Command(local, "start")
 		cmd.Dir = filepath.Dir(local)
-		if runtime.GOOS == "windows" {
-			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		}
+		hideWindow(cmd)
 		if err := cmd.Start(); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]any{
 				"ok":    false,
@@ -114,18 +133,35 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 			"ok":      true,
 			"path":    local,
 			"message": "AtlasLocal start lancé — attendez que l’API réponde sur :3001 (Tester), puis Scan.",
-			"hint":    "Si échec : une fois AtlasLocal.exe install (clone %USERPROFILE%\\Atlas + .env), puis Démarrer l’API.",
+			"hint":    startAPIHint(),
 		})
 	}
 }
 
 func findAtlasLocal(installDir string) string {
-	candidates := []string{
-		filepath.Join(installDir, "AtlasLocal.exe"),
-		filepath.Join(installDir, "tools", "AtlasLocal.exe"),
+	names := atlasLocalNames()
+	var candidates []string
+	for _, name := range names {
+		candidates = append(candidates,
+			filepath.Join(installDir, name),
+			filepath.Join(installDir, "tools", name),
+		)
 	}
 	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
-		candidates = append(candidates, filepath.Join(localApp, "AtlasLocal", "AtlasLocal.exe"))
+		for _, name := range names {
+			candidates = append(candidates, filepath.Join(localApp, "AtlasLocal", name))
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		for _, name := range names {
+			candidates = append(candidates,
+				filepath.Join(home, ".local", "bin", name),
+				filepath.Join(home, "bin", name),
+			)
+		}
+	}
+	if path, err := exec.LookPath("AtlasLocal"); err == nil {
+		candidates = append(candidates, path)
 	}
 	for _, p := range candidates {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
@@ -149,18 +185,4 @@ func openBrowser(url string) error {
 	default:
 		return exec.Command("xdg-open", url).Start()
 	}
-}
-
-func messageBox(title, text string) {
-	if runtime.GOOS != "windows" {
-		fmt.Fprintf(os.Stderr, "%s\n%s\n", title, text)
-		fmt.Fprintln(os.Stderr, "(press Enter to quit)")
-		_, _ = fmt.Scanln()
-		return
-	}
-	user32 := syscall.NewLazyDLL("user32.dll")
-	proc := user32.NewProc("MessageBoxW")
-	t, _ := syscall.UTF16PtrFromString(title)
-	b, _ := syscall.UTF16PtrFromString(text)
-	proc.Call(0, uintptr(unsafe.Pointer(b)), uintptr(unsafe.Pointer(t)), 0x40)
 }
