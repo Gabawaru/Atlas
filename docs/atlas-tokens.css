@@ -1,0 +1,28 @@
+/**
+ * Atlas design tokens — canonical palette / radii / type for atlas-secu.com
+ * and Atlas Scanner (apps/client + atlas-v1 Scan UI).
+ * Source: live :root on atlas-secu.com / pages index.html.
+ */
+:root {
+  --bg: #f4f8fa;
+  --bg-soft: #eaf3f5;
+  --paper: #ffffff;
+  --ink: #2a3d45;
+  --ink-soft: #4a6069;
+  --muted: #6b818a;
+  --line: #c8d8de;
+  --teal: #2f8f8a;
+  --teal-deep: #1f6f6b;
+  --teal-soft: rgba(47, 143, 138, 0.12);
+  --teal-mid: rgba(47, 143, 138, 0.28);
+  --accent: #b23a3a;
+  --accent-soft: rgba(178, 58, 58, 0.08);
+  --ok: #2d7a4f;
+  --ok-soft: rgba(45, 122, 79, 0.12);
+  --display: "Outfit", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 2px;
+  --radius-soft: 4px;
+  --ease: cubic-bezier(0.22, 0.9, 0.28, 1);
+  --shadow: 0 18px 50px rgba(42, 61, 69, 0.08);
+}
