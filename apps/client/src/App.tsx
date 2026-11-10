@@ -607,6 +607,7 @@ export function App() {
               <table className="risk-table" aria-label="Niveaux de risque et compromission">
                 <thead>
                   <tr>
+                    <th scope="col">URL</th>
                     <th scope="col">Contrôle</th>
                     <th scope="col">Risque</th>
                     <th scope="col">Compromission / exposition</th>
@@ -614,10 +615,21 @@ export function App() {
                 </thead>
                 <tbody>
                   {latestRiskTable.map((r, i) => (
-                    <tr key={`${r.control}-${r.host}-${i}`} data-risk={r.riskCode}>
+                    <tr
+                      key={`${r.control}-${r.url || r.host}-${i}`}
+                      data-risk={r.riskCode}
+                    >
+                      <td className="risk-url">
+                        {r.url ? (
+                          <a href={r.url} target="_blank" rel="noreferrer">
+                            {r.url}
+                          </a>
+                        ) : (
+                          <span className="muted">{r.host || "—"}</span>
+                        )}
+                      </td>
                       <td>
                         <strong>{r.control}</strong>
-                        <div className="muted risk-host">{r.host}</div>
                       </td>
                       <td>
                         <span className={`risk-badge risk-${r.riskCode}`}>

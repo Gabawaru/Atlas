@@ -47,7 +47,9 @@ function banner(synthetic: boolean): string {
 }
 
 export function resolveRiskTable(input: ReportExportInput): RiskTableRow[] {
-  if (input.riskTable?.length) return input.riskTable;
+  if (input.riskTable?.length) {
+    return aggregateRiskTable(input.riskTable);
+  }
   const evidence = Array.isArray(input.evidence)
     ? (input.evidence as Parameters<typeof buildPresenceRiskTable>[0])
     : [];
@@ -85,12 +87,14 @@ export function buildReportCsv(input: ReportExportInput): string {
       "risk",
       "compromise",
       "host",
+      "url",
       "synthetic",
     ],
     [
       "disclaimer",
       "",
       banner(input.synthetic),
+      "",
       "",
       "",
       "",
@@ -105,6 +109,7 @@ export function buildReportCsv(input: ReportExportInput): string {
       "",
       "",
       "",
+      "",
       String(input.synthetic),
     ],
     [
@@ -112,6 +117,7 @@ export function buildReportCsv(input: ReportExportInput): string {
       "",
       "Détail technique",
       input.technicalDetail.replace(/\n/g, " "),
+      "",
       "",
       "",
       "",
@@ -125,6 +131,7 @@ export function buildReportCsv(input: ReportExportInput): string {
       r.risk,
       r.compromise.replace(/\n/g, " "),
       r.host,
+      r.url,
       String(input.synthetic),
     ]),
     ...input.findings.map((f) => [
@@ -132,6 +139,7 @@ export function buildReportCsv(input: ReportExportInput): string {
       f.severity,
       f.title,
       f.summary.replace(/\n/g, " "),
+      "",
       "",
       "",
       "",
@@ -184,10 +192,14 @@ export async function buildReportPdf(
   doc.fontSize(14).text("Tableau risque / compromission");
   doc.moveDown(0.3);
   for (const r of riskTable) {
+    const target = r.url || r.host;
     doc
       .fontSize(11)
-      .text(`${r.control}  ·  risque ${r.risk}  ·  ${r.host}`);
+      .text(`${r.control}  ·  risque ${r.risk}  ·  ${target}`);
     doc.fontSize(10).text(r.compromise);
+    if (r.url && r.url !== r.host) {
+      doc.fontSize(9).fillColor("#333333").text(`URL : ${r.url}`);
+    }
     if (r.signal) doc.fontSize(9).fillColor("#444444").text(r.signal);
     doc.fillColor("#000000");
     doc.moveDown(0.35);

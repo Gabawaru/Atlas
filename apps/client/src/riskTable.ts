@@ -11,7 +11,10 @@ export type RiskLabelFr =
 
 export type RiskTableRow = {
   control: string;
+  /** Hôte concerné (un seul hôte — jamais agrégé) */
   host: string;
+  /** URL explicite de la cible (https://host/… quand connue) */
+  url: string;
   riskCode: RiskCode;
   risk: RiskLabelFr;
   compromise: string;
@@ -47,6 +50,7 @@ type EvidenceLike = {
   http?: {
     ok?: boolean;
     status?: number;
+    url?: string;
     error?: string;
     securityHeaders?: { missing?: string[] };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
@@ -85,6 +89,19 @@ const HEADER_META: Record<
   },
 };
 
+/** URL explicite pour une preuve : http.url sinon https://host/ */
+export function evidenceTargetUrl(
+  host: string,
+  httpUrl?: string | null,
+): string {
+  const fromHttp = httpUrl?.trim();
+  if (fromHttp) return fromHttp;
+  const h = host.trim();
+  if (!h || h === "(hôte inconnu)" || h === "—") return "";
+  if (/^https?:\/\//i.test(h)) return h.endsWith("/") ? h : `${h}/`;
+  return `https://${h}/`;
+}
+
 function row(
   partial: Omit<RiskTableRow, "risk"> & { riskCode: RiskCode },
 ): RiskTableRow {
@@ -95,23 +112,53 @@ function sortRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
   return [...rows].sort((a, b) => {
     const d = RISK_RANK[b.riskCode] - RISK_RANK[a.riskCode];
     if (d !== 0) return d;
-    return a.control.localeCompare(b.control, "fr") || a.host.localeCompare(b.host);
+    return (
+      a.control.localeCompare(b.control, "fr") ||
+      a.url.localeCompare(b.url) ||
+      a.host.localeCompare(b.host)
+    );
   });
 }
 
-export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
-  const map = new Map<string, RiskTableRow>();
+/** Éclate un ancien blob « api.x, www.x » en une ligne par hôte/URL. */
+export function expandRiskTableRows(rows: RiskTableRow[]): RiskTableRow[] {
+  const out: RiskTableRow[] = [];
   for (const r of rows) {
-    const key = `${r.control}|${r.riskCode}|${r.compromise}`;
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, { ...r });
+    const hosts = r.host
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    if (hosts.length <= 1) {
+      out.push({
+        ...r,
+        host: hosts[0] ?? r.host,
+        url: r.url || evidenceTargetUrl(hosts[0] ?? r.host),
+      });
       continue;
     }
-    const hosts = new Set(
-      existing.host.split(", ").concat(r.host.split(", ")).filter(Boolean),
-    );
-    existing.host = [...hosts].sort().join(", ");
+    for (const host of hosts) {
+      out.push({
+        ...r,
+        host,
+        url: evidenceTargetUrl(host),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Dédoublonne les lignes exactes — une ligne par URL hôte.
+ * Ne fusionne jamais les hôtes en blobs « api.x, www.x ».
+ */
+export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
+  const map = new Map<string, RiskTableRow>();
+  for (const r of expandRiskTableRows(rows)) {
+    const url = r.url || evidenceTargetUrl(r.host);
+    const key = `${r.control}|${r.riskCode}|${r.compromise}|${url}|${r.host}`;
+    if (!map.has(key)) {
+      map.set(key, { ...r, url });
+    }
   }
   return sortRiskTable([...map.values()]);
 }
@@ -124,11 +171,13 @@ export function buildPresenceRiskTable(
 
   for (const ev of evidence) {
     const host = ev.host?.trim() || "(hôte inconnu)";
+    const url = evidenceTargetUrl(host, ev.http?.url);
     if (ev.dns?.resolved === false) {
       out.push(
         row({
           control: "DNS — hôte non résolu",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — pas d'exposition HTTP publique détectée",
           signal: ev.dns.error ?? "NXDOMAIN / ENOTFOUND",
@@ -139,6 +188,7 @@ export function buildPresenceRiskTable(
         row({
           control: "DNS — résolution publique",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — surface DNS visible sur Internet",
           signal: (ev.dns.addresses ?? []).slice(0, 2).join(", ") || "résolu",
@@ -151,6 +201,7 @@ export function buildPresenceRiskTable(
         row({
           control: "HTTP — présence web",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — service joignable (empreinte passive)",
           signal: `status=${ev.http.status ?? "?"}`,
@@ -164,6 +215,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — sonde en échec",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — certificat non évaluable (hôte injoignable)",
           signal: tls.error,
@@ -174,6 +226,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — certificat non de confiance",
           host,
+          url,
           riskCode: "critical",
           compromise:
             "Compromission potentielle — chaîne de confiance rompue / MITM possible",
@@ -185,6 +238,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — certificat expiré",
           host,
+          url,
           riskCode: "critical",
           compromise:
             "Compromission potentielle — service HTTPS non fiable pour les clients",
@@ -196,6 +250,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — expiration imminente",
           host,
+          url,
           riskCode: "high",
           compromise:
             "Exposition élevée — interruption HTTPS / alerte navigateurs proche",
@@ -207,6 +262,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — renouvellement à planifier",
           host,
+          url,
           riskCode: "medium",
           compromise: "Exposition moyenne — certificat valide mais fenêtre courte",
           signal: `${tls.daysRemaining} j restants · ${tls.protocol ?? "?"}`,
@@ -217,6 +273,7 @@ export function buildPresenceRiskTable(
         row({
           control: "TLS — certificat valide",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — chaîne de confiance OK",
           signal: `${tls.protocol ?? "TLS"} · ${tls.daysRemaining ?? "?"} j`,
@@ -230,6 +287,7 @@ export function buildPresenceRiskTable(
         row({
           control: meta?.control ?? `Header ${name} absent`,
           host,
+          url,
           riskCode: meta?.riskCode ?? "low",
           compromise:
             meta?.compromise ??
@@ -244,6 +302,7 @@ export function buildPresenceRiskTable(
         row({
           control: ev.osint.ok ? "OSINT RDAP" : "OSINT RDAP indisponible",
           host,
+          url,
           riskCode: "info",
           compromise: ev.osint.ok
             ? "Observation — métadonnées domaine publiques"
@@ -267,7 +326,13 @@ export function riskTableFromReportExport(
     evidence?: EvidenceLike[];
   };
   if (Array.isArray(obj.riskTable) && obj.riskTable.length > 0) {
-    return obj.riskTable;
+    const needsRebuild = obj.riskTable.some(
+      (r) => !r.url || r.host.includes(","),
+    );
+    if (needsRebuild && Array.isArray(obj.evidence) && obj.evidence.length) {
+      return aggregateRiskTable(buildPresenceRiskTable(obj.evidence));
+    }
+    return aggregateRiskTable(obj.riskTable);
   }
   return aggregateRiskTable(buildPresenceRiskTable(obj.evidence));
 }

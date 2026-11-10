@@ -42,7 +42,7 @@ describe("report exports", () => {
     assert.match(csv, /FICTIF/);
   });
 
-  it("JSON/CSV exposent riskTable interprété depuis evidence", () => {
+  it("JSON/CSV exposent riskTable interprété depuis evidence avec url", () => {
     const withEvidence = {
       ...sample,
       evidence: [
@@ -52,8 +52,26 @@ describe("report exports", () => {
           http: {
             ok: true,
             status: 200,
+            url: "https://pragma-serve.com/",
             securityHeaders: {
               missing: ["strict-transport-security", "content-security-policy"],
+            },
+          },
+          tls: {
+            authorized: true,
+            protocol: "TLSv1.3",
+            daysRemaining: 45,
+          },
+        },
+        {
+          host: "api.pragma-serve.com",
+          dns: { resolved: true, addresses: ["1.2.3.5"] },
+          http: {
+            ok: true,
+            status: 200,
+            url: "https://api.pragma-serve.com/",
+            securityHeaders: {
+              missing: ["strict-transport-security"],
             },
           },
           tls: {
@@ -65,11 +83,24 @@ describe("report exports", () => {
       ],
     };
     const json = buildReportJson(withEvidence);
-    const table = json.riskTable as Array<{ risk: string; control: string }>;
+    const table = json.riskTable as Array<{
+      risk: string;
+      control: string;
+      url: string;
+      host: string;
+    }>;
     assert.ok(Array.isArray(table) && table.length > 0);
-    assert.ok(table.some((r) => r.control.includes("HSTS") && r.risk === "moyen"));
+    const hsts = table.filter(
+      (r) => r.control.includes("HSTS") && r.risk === "moyen",
+    );
+    assert.equal(hsts.length, 2);
+    assert.equal(hsts.every((r) => !r.host.includes(",")), true);
+    assert.ok(hsts.some((r) => r.url === "https://pragma-serve.com/"));
+    assert.ok(hsts.some((r) => r.url === "https://api.pragma-serve.com/"));
     const csv = buildReportCsv(withEvidence);
     assert.match(csv, /risk_row/);
+    assert.match(csv, /,url,/);
+    assert.match(csv, /https:\/\/pragma-serve\.com\//);
     assert.match(csv, /élevé|moyen|faible|info|critique/);
   });
 

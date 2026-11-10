@@ -16,8 +16,10 @@ export type RiskLabelFr =
 export type RiskTableRow = {
   /** Contrôle ou finding interprété */
   control: string;
-  /** Hôte concerné (agrégé si plusieurs) */
+  /** Hôte concerné (un seul hôte — jamais agrégé) */
   host: string;
+  /** URL explicite de la cible (https://host/… quand connue) */
+  url: string;
   /** Code machine (sévérité Atlas) */
   riskCode: RiskCode;
   /** Niveau de risque (FR) */
@@ -61,6 +63,7 @@ type EvidenceLike = {
   http?: {
     ok?: boolean;
     status?: number;
+    url?: string;
     error?: string;
     securityHeaders?: {
       missing?: string[];
@@ -78,6 +81,19 @@ type EvidenceLike = {
     source?: string;
   };
 };
+
+/** URL explicite pour une preuve : http.url sinon https://host/ */
+export function evidenceTargetUrl(
+  host: string,
+  httpUrl?: string | null,
+): string {
+  const fromHttp = httpUrl?.trim();
+  if (fromHttp) return fromHttp;
+  const h = host.trim();
+  if (!h || h === "(hôte inconnu)" || h === "—") return "";
+  if (/^https?:\/\//i.test(h)) return h.endsWith("/") ? h : `${h}/`;
+  return `https://${h}/`;
+}
 
 const HEADER_META: Record<
   string,
@@ -159,13 +175,19 @@ export function mapSeverityToRisk(severity: string): {
   };
 }
 
-function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]) {
+function pushTlsRows(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  tls: EvidenceLike["tls"],
+) {
   if (!tls) return;
   if (tls.error) {
     out.push(
       row({
         control: "TLS — sonde en échec",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — certificat non évaluable (hôte injoignable)",
         signal: tls.error,
@@ -178,6 +200,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
       row({
         control: "TLS — certificat non de confiance",
         host,
+        url,
         riskCode: "critical",
         compromise:
           "Compromission potentielle — chaîne de confiance rompue / MITM possible",
@@ -192,6 +215,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
       row({
         control: "TLS — certificat expiré",
         host,
+        url,
         riskCode: "critical",
         compromise:
           "Compromission potentielle — service HTTPS non fiable pour les clients",
@@ -203,6 +227,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
       row({
         control: "TLS — expiration imminente",
         host,
+        url,
         riskCode: "high",
         compromise:
           "Exposition élevée — interruption HTTPS / alerte navigateurs proche",
@@ -214,6 +239,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
       row({
         control: "TLS — renouvellement à planifier",
         host,
+        url,
         riskCode: "medium",
         compromise: "Exposition moyenne — certificat valide mais fenêtre courte",
         signal: `${days} j restants · ${tls.protocol ?? "?"}`,
@@ -224,6 +250,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
       row({
         control: "TLS — certificat valide",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — chaîne de confiance OK",
         signal: `${tls.protocol ?? "TLS"} · ${typeof days === "number" ? `${days} j` : "durée n/d"}`,
@@ -235,6 +262,7 @@ function pushTlsRows(out: RiskTableRow[], host: string, tls: EvidenceLike["tls"]
 function pushDnsHttpRows(
   out: RiskTableRow[],
   host: string,
+  url: string,
   ev: EvidenceLike,
 ) {
   if (ev.dns?.resolved === false) {
@@ -242,6 +270,7 @@ function pushDnsHttpRows(
       row({
         control: "DNS — hôte non résolu",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — pas d'exposition HTTP publique détectée",
         signal: ev.dns.error ?? "NXDOMAIN / ENOTFOUND",
@@ -255,6 +284,7 @@ function pushDnsHttpRows(
       row({
         control: "DNS — résolution publique",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — surface DNS visible sur Internet",
         signal: addrs || "résolu",
@@ -266,6 +296,7 @@ function pushDnsHttpRows(
       row({
         control: "HTTP — présence web",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — service joignable (empreinte passive)",
         signal: `status=${ev.http.status ?? "?"}`,
@@ -276,6 +307,7 @@ function pushDnsHttpRows(
       row({
         control: "HTTP — sonde en échec",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — pas de réponse HTTP exploitable",
         signal: ev.http.error,
@@ -287,6 +319,7 @@ function pushDnsHttpRows(
 function pushHeaderRows(
   out: RiskTableRow[],
   host: string,
+  url: string,
   missing: string[] | undefined,
 ) {
   if (!missing?.length) {
@@ -295,6 +328,7 @@ function pushHeaderRows(
         row({
           control: "Headers de sécurité",
           host,
+          url,
           riskCode: "info",
           compromise: "Observation — jeu de headers de base présent",
           signal: "aucun header critique manquant",
@@ -310,6 +344,7 @@ function pushHeaderRows(
         row({
           control: `Header ${name} absent`,
           host,
+          url,
           riskCode: "low",
           compromise: "Exposition faible — durcissement HTTP incomplet",
           signal: name,
@@ -321,6 +356,7 @@ function pushHeaderRows(
       row({
         control: meta.control,
         host,
+        url,
         riskCode: meta.riskCode,
         compromise: meta.compromise,
         signal: name,
@@ -332,6 +368,7 @@ function pushHeaderRows(
 function pushCookieRows(
   out: RiskTableRow[],
   host: string,
+  url: string,
   cookies: NonNullable<EvidenceLike["http"]>["cookies"],
 ) {
   if (!cookies?.length) return;
@@ -343,6 +380,7 @@ function pushCookieRows(
       row({
         control: `Cookie — flags manquants (${c.name ?? "?"})`,
         host,
+        url,
         riskCode: high ? "medium" : "low",
         compromise: high
           ? "Exposition moyenne — session potentiellement exposée"
@@ -353,13 +391,19 @@ function pushCookieRows(
   }
 }
 
-function pushOsintRow(out: RiskTableRow[], host: string, osint: EvidenceLike["osint"]) {
+function pushOsintRow(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  osint: EvidenceLike["osint"],
+) {
   if (!osint) return;
   if (osint.ok) {
     out.push(
       row({
         control: "OSINT RDAP",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — métadonnées domaine publiques",
         signal: osint.source ?? "rdap",
@@ -370,6 +414,7 @@ function pushOsintRow(out: RiskTableRow[], host: string, osint: EvidenceLike["os
       row({
         control: "OSINT RDAP indisponible",
         host,
+        url,
         riskCode: "info",
         compromise: "Observation — pas d'enrichissement WHOIS passif",
         signal: osint.error ?? "échec",
@@ -387,11 +432,12 @@ export function buildPresenceRiskTable(
 
   for (const ev of evidence) {
     const host = ev.host?.trim() || "(hôte inconnu)";
-    pushDnsHttpRows(out, host, ev);
-    pushTlsRows(out, host, ev.tls);
-    pushHeaderRows(out, host, ev.http?.securityHeaders?.missing);
-    pushCookieRows(out, host, ev.http?.cookies);
-    pushOsintRow(out, host, ev.osint);
+    const url = evidenceTargetUrl(host, ev.http?.url);
+    pushDnsHttpRows(out, host, url, ev);
+    pushTlsRows(out, host, url, ev.tls);
+    pushHeaderRows(out, host, url, ev.http?.securityHeaders?.missing);
+    pushCookieRows(out, host, url, ev.http?.cookies);
+    pushOsintRow(out, host, url, ev.osint);
   }
 
   return sortRiskTable(out);
@@ -406,6 +452,7 @@ export function rowsFromFindings(
     return row({
       control: f.title,
       host: "—",
+      url: "",
       riskCode: mapped.riskCode,
       compromise: mapped.compromise,
       signal: (f.summary ?? "").slice(0, 160),
@@ -417,28 +464,52 @@ export function sortRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
   return [...rows].sort((a, b) => {
     const d = RISK_RANK[b.riskCode] - RISK_RANK[a.riskCode];
     if (d !== 0) return d;
-    return a.control.localeCompare(b.control, "fr") || a.host.localeCompare(b.host);
+    return (
+      a.control.localeCompare(b.control, "fr") ||
+      a.url.localeCompare(b.url) ||
+      a.host.localeCompare(b.host)
+    );
   });
 }
 
-/** Agrège hôtes identiques pour un même contrôle (vue Scanner compacte). */
-export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
-  const map = new Map<string, RiskTableRow>();
+/** Éclate un ancien blob « api.x, www.x » en une ligne par hôte/URL. */
+export function expandRiskTableRows(rows: RiskTableRow[]): RiskTableRow[] {
+  const out: RiskTableRow[] = [];
   for (const r of rows) {
-    const key = `${r.control}|${r.riskCode}|${r.compromise}`;
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, { ...r });
+    const hosts = r.host
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    if (hosts.length <= 1) {
+      out.push({
+        ...r,
+        host: hosts[0] ?? r.host,
+        url: r.url || evidenceTargetUrl(hosts[0] ?? r.host),
+      });
       continue;
     }
-    const hosts = new Set(
-      existing.host.split(", ").concat(r.host.split(", ")).filter(Boolean),
-    );
-    existing.host = [...hosts].sort().join(", ");
-    if (RISK_RANK[r.riskCode] > RISK_RANK[existing.riskCode]) {
-      existing.riskCode = r.riskCode;
-      existing.risk = r.risk;
-      existing.signal = r.signal;
+    for (const host of hosts) {
+      out.push({
+        ...r,
+        host,
+        url: evidenceTargetUrl(host),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Dédoublonne les lignes exactes — une ligne par URL hôte.
+ * Ne fusionne jamais les hôtes en blobs « api.x, www.x ».
+ */
+export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
+  const map = new Map<string, RiskTableRow>();
+  for (const r of expandRiskTableRows(rows)) {
+    const url = r.url || evidenceTargetUrl(r.host);
+    const key = `${r.control}|${r.riskCode}|${r.compromise}|${url}|${r.host}`;
+    if (!map.has(key)) {
+      map.set(key, { ...r, url });
     }
   }
   return sortRiskTable([...map.values()]);
