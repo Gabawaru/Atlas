@@ -1,11 +1,33 @@
+/* Atlas Scanner — tokens aligned with atlas-secu.com / atlas-secu-pages */
 :root {
-  --ink: #14201c;
-  --paper: #f3efe6;
-  --moss: #2f6b4f;
-  --sand: #d9cbb3;
-  --alert: #8a4b2a;
-  --font-display: "Fraunces", Georgia, serif;
-  --font-body: "Source Sans 3", "Segoe UI", sans-serif;
+  --bg: #f4f8fa;
+  --bg-soft: #eaf3f5;
+  --paper: #ffffff;
+  --ink: #2a3d45;
+  --ink-soft: #4a6069;
+  --muted: #6b818a;
+  --line: #c8d8de;
+  --teal: #2f8f8a;
+  --teal-deep: #1f6f6b;
+  --teal-soft: rgba(47, 143, 138, 0.12);
+  --teal-mid: rgba(47, 143, 138, 0.28);
+  --accent: #b23a3a;
+  --accent-soft: rgba(178, 58, 58, 0.08);
+  --ok: #2d7a4f;
+  --ok-soft: rgba(45, 122, 79, 0.12);
+  --display: "Outfit", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 2px;
+  --radius-soft: 4px;
+  --ease: cubic-bezier(0.22, 0.9, 0.28, 1);
+  --shadow: 0 18px 50px rgba(42, 61, 69, 0.08);
+
+  /* Compat aliases (pre-teal Scanner names) */
+  --moss: var(--teal);
+  --sand: var(--line);
+  --alert: var(--accent);
+  --font-display: var(--display);
+  --font-body: var(--display);
 }
 
 * {
@@ -15,41 +37,103 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: var(--font-body);
+  font-family: var(--display);
   color: var(--ink);
+  line-height: 1.55;
   background:
-    linear-gradient(160deg, #e8f0ea 0%, var(--paper) 45%, #e4d8c4 100%);
+    radial-gradient(1100px 520px at 12% -8%, rgba(47, 143, 138, 0.16), transparent 60%),
+    radial-gradient(900px 480px at 92% 8%, rgba(120, 170, 190, 0.18), transparent 55%),
+    linear-gradient(180deg, #fbfefe 0%, var(--bg) 45%, var(--bg-soft) 100%);
 }
 
 .shell {
+  position: relative;
   max-width: 920px;
   margin: 0 auto;
   padding: 2rem 1.25rem 4rem;
 }
 
+.brand-lockup {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 0.35rem;
+}
+
+.hero-orb {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95), transparent 55%),
+    radial-gradient(circle at 70% 70%, rgba(47, 143, 138, 0.18), transparent 60%);
+  border: 1px solid rgba(47, 143, 138, 0.18);
+  animation: orb-breathe 6.5s ease-in-out infinite;
+}
+
+.hero-orb::after {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px dashed rgba(47, 143, 138, 0.22);
+  animation: orb-spin 28s linear infinite;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.035);
+  }
+}
+
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .brand {
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  position: relative;
+  z-index: 1;
+  font-family: var(--display);
+  font-size: clamp(2.2rem, 5.5vw, 3.1rem);
+  font-weight: 800;
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
 }
 
 .tagline {
   margin: 0.4rem 0 1.2rem;
   max-width: 36rem;
   font-size: 1.05rem;
+  color: var(--muted);
 }
 
 .banner {
-  background: #fff6e8;
-  border-left: 4px solid var(--alert);
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius-soft) var(--radius-soft) 0;
   padding: 0.75rem 1rem;
   margin-bottom: 1.25rem;
 }
 
 .banner-real {
-  background: #e8f4ec;
-  border-left-color: var(--moss);
+  background: var(--ok-soft);
+  border-left-color: var(--ok);
 }
 
 .export-actions {
@@ -86,15 +170,19 @@ section {
 }
 
 h2 {
-  font-family: var(--font-display);
+  font-family: var(--display);
   font-size: 1.35rem;
+  font-weight: 700;
   margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
 label {
   display: block;
   font-size: 0.85rem;
   margin: 0.4rem 0 0.2rem;
+  color: var(--ink-soft);
 }
 
 input,
@@ -107,31 +195,65 @@ select {
 input,
 textarea {
   width: 100%;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid #b7c0b4;
-  background: rgba(255, 255, 255, 0.7);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfefe;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-soft);
 }
 
 button {
   margin-top: 0.6rem;
   margin-right: 0.4rem;
-  padding: 0.55rem 0.95rem;
-  background: var(--moss);
-  color: #f5fff8;
-  border: none;
+  padding: 0.65rem 1.1rem;
+  background: var(--teal);
+  color: #fff;
+  border: 1.5px solid var(--teal-deep);
+  border-radius: var(--radius);
   cursor: pointer;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  box-shadow: 0 8px 24px rgba(47, 143, 138, 0.22);
+  transition: transform 0.2s var(--ease), background 0.2s, box-shadow 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--teal-deep);
+  transform: translateY(-2px);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 button.ghost {
   background: transparent;
-  color: var(--ink);
-  border: 1px solid #8a9a8c;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+button.ghost:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal-deep);
+  background: var(--teal-soft);
+  transform: none;
 }
 
 .need {
   padding: 0.75rem 0;
-  border-top: 1px solid #c9d2c6;
+  border-top: 1px solid var(--line);
 }
 
 .need.disabled {
@@ -139,32 +261,38 @@ button.ghost {
 }
 
 .muted {
-  color: #4d5c54;
+  color: var(--muted);
   font-size: 0.92rem;
 }
 
 pre {
-  background: #1b2621;
-  color: #d7ebe0;
+  background: var(--bg-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
   padding: 0.75rem;
   overflow: auto;
+  font-family: var(--mono);
   font-size: 0.8rem;
 }
 
 .report {
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.92);
   padding: 1rem;
-  border: 1px solid var(--sand);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  box-shadow: var(--shadow);
 }
 
 .scanner-hero {
+  position: relative;
   padding: 1.1rem 0 0.5rem;
-  border-bottom: 1px solid #c9d2c6;
+  border-bottom: 1px solid rgba(200, 216, 222, 0.7);
   margin-bottom: 0.5rem;
 }
 
 .cta-scanner {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   padding: 0.75rem 1.4rem;
   min-width: 10rem;
 }
@@ -176,7 +304,7 @@ pre {
 
 .block-reason {
   margin: 0.65rem 0 0;
-  color: var(--alert);
+  color: var(--accent);
   font-size: 0.95rem;
   max-width: 36rem;
 }
@@ -188,6 +316,7 @@ pre {
   margin: 0.75rem 0 0.35rem;
   font-size: 0.95rem;
   cursor: pointer;
+  color: var(--ink);
 }
 
 .mode-toggle input {
@@ -218,7 +347,7 @@ pre {
 
 .circuit-a-queue li {
   padding: 0.45rem 0;
-  border-top: 1px solid #c9d2c6;
+  border-top: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -226,7 +355,12 @@ pre {
 }
 
 .circuit-a-queue code {
+  font-family: var(--mono);
   font-size: 0.85em;
+  background: var(--teal-soft);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  color: var(--teal-deep);
 }
 
 .results-list {
@@ -237,30 +371,36 @@ pre {
 
 .result-row {
   padding: 0.7rem 0;
-  border-top: 1px solid #c9d2c6;
+  border-top: 1px solid var(--line);
 }
 
 .kind {
   display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   margin-right: 0.45rem;
-  color: var(--moss);
+  color: var(--teal);
 }
 
 .kind-finding {
-  color: var(--alert);
+  color: var(--accent);
 }
 
 .kind-report {
-  color: #3a4a42;
+  color: var(--ink-soft);
 }
 
 .risk-table-wrap {
   margin-top: 0.55rem;
   overflow-x: auto;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  box-shadow: var(--shadow);
+  padding: 0.35rem 0.55rem;
 }
 
 .risk-table {
@@ -274,20 +414,22 @@ pre {
   text-align: left;
   vertical-align: top;
   padding: 0.55rem 0.45rem;
-  border-top: 1px solid #c9d2c6;
+  border-top: 1px solid var(--line);
 }
 
 .risk-table th {
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #4d5c54;
+  color: var(--muted);
   border-top: none;
 }
 
 .risk-host {
   margin-top: 0.15rem;
   font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .risk-url {
@@ -297,7 +439,7 @@ pre {
 }
 
 .risk-url a {
-  color: var(--ink, #1a2420);
+  color: var(--teal-deep);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -310,11 +452,11 @@ pre {
 }
 
 .risk-critical {
-  color: #8b1e1e;
+  color: var(--accent);
 }
 
 .risk-high {
-  color: var(--alert);
+  color: #9a4a2a;
 }
 
 .risk-medium {
@@ -322,13 +464,17 @@ pre {
 }
 
 .risk-low {
-  color: var(--moss);
+  color: var(--ok);
 }
 
 .risk-info {
-  color: #4d5c54;
+  color: var(--muted);
 }
 
 .results-compact {
   margin-top: 0.85rem;
+}
+
+a {
+  color: var(--teal-deep);
 }
