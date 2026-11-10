@@ -174,6 +174,42 @@ export const SESSION_TRACE_SEED: TraceMessage[] = [
       communication: "Piste Ben-proxy affichable — session = Gabriel.",
     },
   },
+  {
+    id: "t9",
+    role: "prompt",
+    text: "Gabriel — journal live au-delà de localStorage (reload / machines).",
+    at: "2026-11-10T19:50:00.000Z",
+    details: {
+      reasons: [
+        "Cache navigateur ≠ mémoire session Atlas",
+        "Scan / rapport / redirect doivent survivre dans la limite du même API",
+      ],
+      communication: "Scope : pont durable Musk-minimal · marque Atlas · pas mobile.",
+    },
+  },
+  {
+    id: "t10",
+    role: "agent",
+    text: "Pont durable #session/trace livré — live #70 + file API #72 sur main.",
+    at: "2026-11-10T19:57:28.000Z",
+    details: {
+      commands: [
+        "add apps/api/src/session-trace/*",
+        "add apps/client/src/sessionTraceBridge.ts",
+        "wire App scan/report + SessionTracePage hydrate/redirect",
+      ],
+      done: [
+        "PR #70 mergée — live localStorage scan/report/redirect",
+        "PR #72 mergée — GET|POST /v1/session/trace (fichier par tenant)",
+      ],
+      reasons: [
+        "Pas de Prisma : storage/session-trace/{tenantId}.json suffit",
+      ],
+      reasoning:
+        "localStorage = cache ; API fichier = pont reload/devices qui partagent l’API Atlas.",
+      communication: "Agent → Gabriel : CI vert · gh pr merge 72.",
+    },
+  },
 ];
 
 export function chronologicalTrace(
