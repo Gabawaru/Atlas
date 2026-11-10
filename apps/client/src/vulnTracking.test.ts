@@ -60,18 +60,34 @@ describe("vulnTracking fingerprint + CCV", () => {
     store = ingestRiskTableIntoTracking(store, [r], {
       seenAt: "2026-11-01T10:00:00.000Z",
       missionId: "m1",
+      reportId: "rep-1",
     });
     assert.equal(store.entries.length, 1);
     const first = store.entries[0]!;
     store = ingestRiskTableIntoTracking(store, [r], {
       seenAt: "2026-11-10T12:00:00.000Z",
       missionId: "m2",
+      reportId: "rep-2",
     });
     assert.equal(store.entries.length, 1);
     assert.equal(store.entries[0]!.fingerprint, first.fingerprint);
     assert.equal(store.entries[0]!.shortId, first.shortId);
     assert.equal(store.entries[0]!.seenCount, 2);
     assert.equal(store.entries[0]!.lastSeenAt, "2026-11-10T12:00:00.000Z");
+  });
+
+  it("même reportId n'incrémente pas seenCount", () => {
+    const r = row({ control: "Header CSP absent" });
+    let store = ingestRiskTableIntoTracking(emptyVulnTrackingStore(), [r], {
+      reportId: "rep-dup",
+      seenAt: "2026-11-01T10:00:00.000Z",
+    });
+    assert.equal(store.entries[0]!.seenCount, 1);
+    store = ingestRiskTableIntoTracking(store, [r], {
+      reportId: "rep-dup",
+      seenAt: "2026-11-01T11:00:00.000Z",
+    });
+    assert.equal(store.entries[0]!.seenCount, 1);
   });
 
   it("ignore les lignes info", () => {

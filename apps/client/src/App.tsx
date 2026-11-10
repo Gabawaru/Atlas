@@ -608,31 +608,18 @@ export function App() {
         .join(";")}`
     : "";
 
-  /** Ingest cross-scan une fois par rapport (identité stable hors UI Scanner). */
+  /** Ingest cross-scan une fois par rapport (dédup via store.ingestedReportIds). */
   useEffect(() => {
     if (!token || !latestRiskMeta.reportId || latestRiskTable.length === 0) {
       return;
     }
-    const markerKey = `atlas.vuln-ingested.${ingestSignature}`;
-    try {
-      if (sessionStorage.getItem(markerKey) === "1") return;
-    } catch {
-      /* sessionStorage indisponible — on continue */
-    }
-    const next = ingestRiskTableIntoTracking(
-      loadVulnTrackingStore(),
-      latestRiskTable,
-      {
-        missionId: latestRiskMeta.missionId,
-        reportId: latestRiskMeta.reportId,
-      },
-    );
-    persistVulnStore(next);
-    try {
-      sessionStorage.setItem(markerKey, "1");
-    } catch {
-      /* ignore */
-    }
+    const current = loadVulnTrackingStore();
+    if (current.ingestedReportIds?.includes(latestRiskMeta.reportId)) return;
+    const next = ingestRiskTableIntoTracking(current, latestRiskTable, {
+      missionId: latestRiskMeta.missionId,
+      reportId: latestRiskMeta.reportId,
+    });
+    if (next !== current) persistVulnStore(next);
   }, [
     token,
     ingestSignature,

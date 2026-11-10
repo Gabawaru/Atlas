@@ -47,6 +47,8 @@ export type VulnTrackingStore = {
   version: 1;
   updatedAt: string;
   entries: VulnTrackEntry[];
+  /** Rapports déjà ingérés — évite de recompter seenCount au rechargement */
+  ingestedReportIds?: string[];
 };
 
 export type ResolveVulnInput = {
@@ -122,6 +124,7 @@ export function emptyVulnTrackingStore(now = new Date()): VulnTrackingStore {
     version: 1,
     updatedAt: now.toISOString(),
     entries: [],
+    ingestedReportIds: [],
   };
 }
 
@@ -138,6 +141,9 @@ export function parseVulnTrackingStore(raw: unknown): VulnTrackingStore {
         ? obj.updatedAt
         : new Date().toISOString(),
     entries: obj.entries.filter(isValidEntry).map(ensureShortId),
+    ingestedReportIds: Array.isArray(obj.ingestedReportIds)
+      ? obj.ingestedReportIds.filter((id): id is string => typeof id === "string")
+      : [],
   };
 }
 
@@ -209,6 +215,11 @@ export function ingestRiskTableIntoTracking(
   } = {},
 ): VulnTrackingStore {
   const seenAt = meta.seenAt ?? new Date().toISOString();
+  const ingested = new Set(store.ingestedReportIds ?? []);
+  if (meta.reportId && ingested.has(meta.reportId)) {
+    return store;
+  }
+
   const byFp = new Map(
     store.entries.map((e) => [e.fingerprint, ensureShortId({ ...e })]),
   );
@@ -267,10 +278,13 @@ export function ingestRiskTableIntoTracking(
     });
   }
 
+  if (meta.reportId) ingested.add(meta.reportId);
+
   return {
     version: 1,
     updatedAt: seenAt,
     entries: [...byFp.values()].sort(compareEntries),
+    ingestedReportIds: [...ingested].slice(-200),
   };
 }
 
@@ -301,6 +315,7 @@ export function markVulnResolved(
     version: 1,
     updatedAt: resolvedAt,
     entries: entries.sort(compareEntries),
+    ingestedReportIds: store.ingestedReportIds ?? [],
   };
 }
 
@@ -323,6 +338,7 @@ export function reopenVuln(
           : e,
       )
       .sort(compareEntries),
+    ingestedReportIds: store.ingestedReportIds ?? [],
   };
 }
 
