@@ -35,7 +35,7 @@ export function SessionTerminalView({ onBack, onLaunchScan }: Props) {
     <section className="tracking-view session-terminal" aria-label="Session locale">
       <header className="tracking-header">
         <button type="button" className="ghost" onClick={onBack}>
-          ← Scanner
+          ← Session
         </button>
         <div className="tracking-header-text">
           <h2>Session · terminal local</h2>

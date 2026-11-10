@@ -712,7 +712,7 @@ export function App() {
           onBack={goScanner}
         />
       ) : view === "terminal" ? (
-        <SessionTerminalView onBack={goScanner} onLaunchScan={goScanner} />
+        <SessionTerminalView onBack={goSession} onLaunchScan={goScanner} />
       ) : (
         <section id="scanner" className="scanner-hero" aria-label="Scanner">
           <label
