@@ -4,40 +4,79 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    /* Tokens aligned with atlas-secu.com / atlas-secu-pages */
     :root {
-      --bg0: #0f1419;
-      --bg1: #1a222c;
-      --ink: #e8eef4;
-      --muted: #9aabbc;
-      --accent: #3d9cf0;
-      --accent2: #1f6fbf;
-      --ok: #3cb371;
-      --alert: #e26d5a;
-      --line: #2a3542;
+      --bg: #f4f8fa;
+      --bg-soft: #eaf3f5;
+      --paper: #ffffff;
+      --ink: #2a3d45;
+      --ink-soft: #4a6069;
+      --muted: #6b818a;
+      --line: #c8d8de;
+      --teal: #2f8f8a;
+      --teal-deep: #1f6f6b;
+      --teal-soft: rgba(47, 143, 138, 0.12);
+      --teal-mid: rgba(47, 143, 138, 0.28);
+      --accent: #b23a3a;
+      --ok: #2d7a4f;
+      --display: "Outfit", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --radius: 2px;
+      --radius-soft: 4px;
+      --ease: cubic-bezier(0.22, 0.9, 0.28, 1);
+      --shadow: 0 18px 50px rgba(42, 61, 69, 0.08);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+      font-family: var(--display);
       color: var(--ink);
+      line-height: 1.55;
       background:
-        radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #2a4a3a 0%, transparent 50%),
-        linear-gradient(165deg, var(--bg0), var(--bg1));
+        radial-gradient(1100px 520px at 12% -8%, rgba(47, 143, 138, 0.16), transparent 60%),
+        radial-gradient(900px 480px at 92% 8%, rgba(120, 170, 190, 0.18), transparent 55%),
+        linear-gradient(180deg, #fbfefe 0%, var(--bg) 45%, var(--bg-soft) 100%);
     }
     .shell {
       max-width: 720px;
       margin: 0 auto;
       padding: 48px 24px 64px;
     }
-    .brand {
-      font-size: 2.75rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
+    .brand-lockup {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
       margin: 0 0 8px;
+    }
+    .hero-orb {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      left: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 50%;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95), transparent 55%),
+        radial-gradient(circle at 70% 70%, rgba(47, 143, 138, 0.18), transparent 60%);
+      border: 1px solid rgba(47, 143, 138, 0.18);
+    }
+    .brand {
+      position: relative;
+      z-index: 1;
+      font-size: clamp(2.2rem, 5vw, 2.75rem);
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin: 0;
       line-height: 1.05;
+      color: var(--ink);
     }
     .tagline {
       color: var(--muted);
@@ -45,68 +84,96 @@
       font-size: 1.05rem;
     }
     .card {
-      background: rgba(255,255,255,0.04);
+      background: rgba(255, 255, 255, 0.92);
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: var(--radius-soft);
+      box-shadow: var(--shadow);
       padding: 20px;
       margin-bottom: 16px;
     }
     label {
       display: block;
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--ink-soft);
       margin: 12px 0 6px;
     }
     input, textarea {
       width: 100%;
-      background: #0c1117;
+      background: #fbfefe;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       color: var(--ink);
       padding: 10px 12px;
       font: inherit;
+      outline: none;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px var(--teal-soft);
     }
     textarea { resize: vertical; min-height: 72px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
     .cta {
       appearance: none;
-      border: 0;
-      border-radius: 10px;
+      border: 1.5px solid var(--teal-deep);
+      border-radius: var(--radius);
       padding: 14px 28px;
       font-size: 1.1rem;
-      font-weight: 650;
+      font-weight: 600;
+      letter-spacing: 0.03em;
       cursor: pointer;
       color: #fff;
-      background: linear-gradient(180deg, var(--accent), var(--accent2));
-      box-shadow: 0 8px 24px rgba(31, 111, 191, 0.35);
+      background: var(--teal);
+      box-shadow: 0 8px 24px rgba(47, 143, 138, 0.22);
       margin-top: 18px;
+      transition: transform 0.2s var(--ease), background 0.2s;
+    }
+    .cta:hover:not(:disabled) {
+      background: var(--teal-deep);
+      transform: translateY(-2px);
     }
     .cta:disabled {
       opacity: 0.45;
       cursor: not-allowed;
       box-shadow: none;
+      transform: none;
     }
     .ghost {
       background: transparent;
       border: 1px solid var(--line);
-      color: var(--ink);
-      border-radius: 8px;
+      color: var(--ink-soft);
+      border-radius: var(--radius);
       padding: 8px 12px;
       cursor: pointer;
       font: inherit;
     }
+    .ghost:hover {
+      border-color: var(--teal);
+      color: var(--teal-deep);
+      background: var(--teal-soft);
+    }
     .muted { color: var(--muted); font-size: 0.92rem; }
     .status { margin-top: 14px; white-space: pre-wrap; }
     .ok { color: var(--ok); }
-    .err { color: var(--alert); }
+    .err { color: var(--accent); }
     .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    code { font-size: 0.85em; }
-    a { color: var(--accent); }
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--teal-soft);
+      color: var(--teal-deep);
+      padding: 2px 6px;
+      border-radius: var(--radius);
+    }
+    a { color: var(--teal-deep); }
   </style>
 </head>
 <body>
   <div class="shell">
-    <h1 class="brand">Atlas</h1>
+    <div class="brand-lockup">
+      <span class="hero-orb" aria-hidden="true"></span>
+      <h1 class="brand">Atlas</h1>
+    </div>
     <p class="tagline">Scan passif</p>
 
     <div class="card">

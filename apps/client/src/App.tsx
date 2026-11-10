@@ -545,7 +545,10 @@ export function App() {
 
   return (
     <div className="shell">
-      <p className="brand">Atlas</p>
+      <div className="brand-lockup">
+        <span className="hero-orb" aria-hidden="true" />
+        <p className="brand">Atlas</p>
+      </div>
 
       {!token ? (
         <section id="session" aria-label="Session">
