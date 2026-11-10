@@ -27,6 +27,10 @@ import {
   parseAuthorizedLaunch,
   type AuthorizedLaunchIntent,
 } from "./authorizedLaunch";
+import {
+  riskTableFromReportExport,
+  type RiskTableRow,
+} from "./riskTable";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -80,6 +84,8 @@ type Mission = {
     executiveSummary: string;
     technicalDetail: string;
     synthetic: boolean;
+    exportJson?: unknown;
+    createdAt?: string;
   }[];
 };
 
@@ -516,6 +522,27 @@ export function App() {
 
   const recentResults = unified.filter((r) => !r.synthetic).slice(0, 12);
 
+  /** Dernier bilan réel → tableau risque / compromission (un écran). */
+  const latestRiskTable: RiskTableRow[] = (() => {
+    const reports = missions
+      .filter((m) => !m.synthetic)
+      .flatMap((m) =>
+        (m.reports ?? []).map((r) => ({
+          ...r,
+          missionSynthetic: m.synthetic,
+        })),
+      )
+      .filter((r) => !r.synthetic)
+      .sort((a, b) =>
+        String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")),
+      );
+    for (const r of reports) {
+      const table = riskTableFromReportExport(r.exportJson);
+      if (table.length) return table;
+    }
+    return [];
+  })();
+
   return (
     <div className="shell">
       <p className="brand">Atlas</p>
@@ -575,37 +602,71 @@ export function App() {
           {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
 
           <h2 id="results-title">Resultats</h2>
-          {recentResults.length === 0 ? (
+          {latestRiskTable.length > 0 ? (
+            <div className="risk-table-wrap">
+              <table className="risk-table" aria-label="Niveaux de risque et compromission">
+                <thead>
+                  <tr>
+                    <th scope="col">Contrôle</th>
+                    <th scope="col">Risque</th>
+                    <th scope="col">Compromission / exposition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestRiskTable.map((r, i) => (
+                    <tr key={`${r.control}-${r.host}-${i}`} data-risk={r.riskCode}>
+                      <td>
+                        <strong>{r.control}</strong>
+                        <div className="muted risk-host">{r.host}</div>
+                      </td>
+                      <td>
+                        <span className={`risk-badge risk-${r.riskCode}`}>
+                          {r.risk}
+                        </span>
+                      </td>
+                      <td>{r.compromise}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : recentResults.length === 0 ? (
             <p className="muted">Aucun resultat.</p>
-          ) : (
-            <ul className="results-list">
-              {recentResults.map((row) => (
-                <li key={row.id} className="result-row">
-                  <strong>{row.title}</strong>
-                  {row.severity && (
-                    <div className="muted">{row.severity}</div>
-                  )}
-                  <div className="muted">{row.detail}</div>
-                  {row.kind === "report" &&
-                    row.missionId &&
-                    row.reportId && (
-                      <button
-                        type="button"
-                        className="ghost export-btn"
-                        disabled={busy || exportBusyKey === `${row.reportId}:json`}
-                        onClick={() =>
-                          void downloadReportExport(
-                            row.missionId!,
-                            row.reportId!,
-                            "json",
-                          )
-                        }
-                      >
-                        JSON
-                      </button>
+          ) : null}
+          {recentResults.length > 0 && (
+            <ul className="results-list results-compact">
+              {recentResults
+                .filter((r) => r.kind === "report")
+                .slice(0, 3)
+                .map((row) => (
+                  <li key={row.id} className="result-row">
+                    <strong>{row.title}</strong>
+                    <div className="muted">{row.detail}</div>
+                    {row.missionId && row.reportId && (
+                      <div className="export-actions">
+                        {REPORT_EXPORT_FORMATS.map((format) => (
+                          <button
+                            key={format}
+                            type="button"
+                            className="ghost export-btn"
+                            disabled={
+                              busy || exportBusyKey === `${row.reportId}:${format}`
+                            }
+                            onClick={() =>
+                              void downloadReportExport(
+                                row.missionId!,
+                                row.reportId!,
+                                format,
+                              )
+                            }
+                          >
+                            {format.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
                     )}
-                </li>
-              ))}
+                  </li>
+                ))}
             </ul>
           )}
         </section>

@@ -6,6 +6,11 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import PDFDocument from "pdfkit";
+import {
+  aggregateRiskTable,
+  buildPresenceRiskTable,
+  type RiskTableRow,
+} from "./risk-table";
 
 export interface ReportExportInput {
   reportId: string;
@@ -21,6 +26,8 @@ export interface ReportExportInput {
     technical?: string | null;
   }>;
   evidence?: unknown;
+  /** Tableau interprété Contrôle → risque → compromission (sinon dérivé de evidence). */
+  riskTable?: RiskTableRow[];
   scopeHash?: string;
   moduleId?: string;
 }
@@ -39,7 +46,16 @@ function banner(synthetic: boolean): string {
     : "Rapport Atlas — contrôles déterministes ; ne constitue pas un avis juridique";
 }
 
+export function resolveRiskTable(input: ReportExportInput): RiskTableRow[] {
+  if (input.riskTable?.length) return input.riskTable;
+  const evidence = Array.isArray(input.evidence)
+    ? (input.evidence as Parameters<typeof buildPresenceRiskTable>[0])
+    : [];
+  return aggregateRiskTable(buildPresenceRiskTable(evidence));
+}
+
 export function buildReportJson(input: ReportExportInput): Record<string, unknown> {
+  const riskTable = resolveRiskTable(input);
   return {
     format: "atlas.report.v1",
     generatedAt: new Date().toISOString(),
@@ -53,17 +69,31 @@ export function buildReportJson(input: ReportExportInput): Record<string, unknow
     bilanDecideur: input.executiveSummary,
     detailTechnique: input.technicalDetail,
     findings: input.findings,
+    riskTable,
     evidence: input.evidence ?? null,
   };
 }
 
 export function buildReportCsv(input: ReportExportInput): string {
+  const riskTable = resolveRiskTable(input);
   const rows: string[][] = [
-    ["section", "severity", "title", "summary", "synthetic"],
+    [
+      "section",
+      "severity",
+      "title",
+      "summary",
+      "risk",
+      "compromise",
+      "host",
+      "synthetic",
+    ],
     [
       "disclaimer",
       "",
       banner(input.synthetic),
+      "",
+      "",
+      "",
       "",
       String(input.synthetic),
     ],
@@ -72,6 +102,9 @@ export function buildReportCsv(input: ReportExportInput): string {
       "",
       "Bilan décideur",
       input.executiveSummary.replace(/\n/g, " "),
+      "",
+      "",
+      "",
       String(input.synthetic),
     ],
     [
@@ -79,13 +112,29 @@ export function buildReportCsv(input: ReportExportInput): string {
       "",
       "Détail technique",
       input.technicalDetail.replace(/\n/g, " "),
+      "",
+      "",
+      "",
       String(input.synthetic),
     ],
+    ...riskTable.map((r) => [
+      "risk_row",
+      r.riskCode,
+      r.control,
+      r.signal.replace(/\n/g, " "),
+      r.risk,
+      r.compromise.replace(/\n/g, " "),
+      r.host,
+      String(input.synthetic),
+    ]),
     ...input.findings.map((f) => [
       "finding",
       f.severity,
       f.title,
       f.summary.replace(/\n/g, " "),
+      "",
+      "",
+      "",
       String(input.synthetic),
     ]),
   ];
@@ -131,6 +180,19 @@ export async function buildReportPdf(
   doc.fontSize(14).text("Détail technique");
   doc.fontSize(11).text(input.technicalDetail, { align: "justify" });
   doc.moveDown();
+  const riskTable = resolveRiskTable(input);
+  doc.fontSize(14).text("Tableau risque / compromission");
+  doc.moveDown(0.3);
+  for (const r of riskTable) {
+    doc
+      .fontSize(11)
+      .text(`${r.control}  ·  risque ${r.risk}  ·  ${r.host}`);
+    doc.fontSize(10).text(r.compromise);
+    if (r.signal) doc.fontSize(9).fillColor("#444444").text(r.signal);
+    doc.fillColor("#000000");
+    doc.moveDown(0.35);
+  }
+  doc.moveDown(0.4);
   doc.fontSize(14).text("Findings");
   for (const f of input.findings) {
     doc.fontSize(11).text(`[${f.severity}] ${f.title}`);

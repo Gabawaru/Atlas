@@ -42,6 +42,37 @@ describe("report exports", () => {
     assert.match(csv, /FICTIF/);
   });
 
+  it("JSON/CSV exposent riskTable interprété depuis evidence", () => {
+    const withEvidence = {
+      ...sample,
+      evidence: [
+        {
+          host: "pragma-serve.com",
+          dns: { resolved: true, addresses: ["1.2.3.4"] },
+          http: {
+            ok: true,
+            status: 200,
+            securityHeaders: {
+              missing: ["strict-transport-security", "content-security-policy"],
+            },
+          },
+          tls: {
+            authorized: true,
+            protocol: "TLSv1.3",
+            daysRemaining: 45,
+          },
+        },
+      ],
+    };
+    const json = buildReportJson(withEvidence);
+    const table = json.riskTable as Array<{ risk: string; control: string }>;
+    assert.ok(Array.isArray(table) && table.length > 0);
+    assert.ok(table.some((r) => r.control.includes("HSTS") && r.risk === "moyen"));
+    const csv = buildReportCsv(withEvidence);
+    assert.match(csv, /risk_row/);
+    assert.match(csv, /élevé|moyen|faible|info|critique/);
+  });
+
   it("génère JSON + CSV + PDF sur disque", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "atlas-report-"));
     const result = await generateReportExports(sample, dir);
