@@ -87,6 +87,11 @@ const HEADER_META: Record<
     riskCode: "low",
     compromise: "Exposition faible — fuite d'URL référentes",
   },
+  "permissions-policy": {
+    control: "Header Permissions-Policy absent",
+    riskCode: "low",
+    compromise: "Exposition faible — API navigateur non restreintes",
+  },
 };
 
 /** URL explicite pour une preuve : http.url sinon https://host/ */

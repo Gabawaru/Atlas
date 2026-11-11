@@ -23,6 +23,7 @@ const sampleEvidence = [
           "x-frame-options",
           "x-content-type-options",
           "referrer-policy",
+          "permissions-policy",
         ],
       },
     },
@@ -65,12 +66,15 @@ describe("risk-table", () => {
 
   it("buildPresenceRiskTable — headers + TLS + DNS + url", () => {
     const rows = buildPresenceRiskTable(sampleEvidence);
-    assert.ok(rows.length >= 5);
+    assert.ok(rows.length >= 6);
     const hsts = rows.find((r) => r.control.includes("HSTS"));
     assert.ok(hsts);
     assert.equal(hsts!.risk, "moyen");
     assert.equal(hsts!.url, "https://pragma-serve.com/");
     assert.match(hsts!.compromise, /Exposition moyenne/);
+    const pp = rows.find((r) => r.control.includes("Permissions-Policy"));
+    assert.ok(pp, "Permissions-Policy missing must surface in riskTable");
+    assert.equal(pp!.risk, "faible");
     const tls = rows.find((r) => r.control.includes("renouvellement"));
     assert.ok(tls);
     assert.equal(tls!.risk, "moyen");
