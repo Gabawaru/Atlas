@@ -16,7 +16,10 @@ import {
   loadLiveTrace,
   mergeSeedAndLive,
 } from "./sessionTraceLive";
-import type { TraceBridge } from "./sessionTraceBridge";
+import {
+  formatDurableBridgeHint,
+  type TraceBridge,
+} from "./sessionTraceBridge";
 
 type Props = {
   messages?: TraceMessage[];
@@ -165,11 +168,7 @@ export function SessionTracePage({
     void hydrateLiveFromDurable(bridge).then((r) => {
       if (cancelled) return;
       setLive(r.messages);
-      if (r.bridge === "file") {
-        setDurableHint("Pont durable Atlas · API fichier");
-      } else if (r.bridge === "error") {
-        setDurableHint("Pont durable indisponible — cache local");
-      }
+      setDurableHint(formatDurableBridgeHint(r.bridge, r.detail));
     });
     return () => {
       cancelled = true;
