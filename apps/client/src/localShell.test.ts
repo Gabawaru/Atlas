@@ -98,6 +98,19 @@ describe("localShell stubs", () => {
     assert.match(r.body, /Démarrer l'API/);
   });
 
+  it("api-health HTTP !ok appends AtlasLocal recovery hint", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify({ ok: false }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    const r = await runLocalShellCommand("api-health", { fetchImpl });
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 503);
+    assert.match(r.body, /Démarrer l'API/);
+    assert.match(r.body, /AtlasLocal/);
+  });
+
   it("non-network errors stay raw", () => {
     assert.equal(
       formatLocalBridgeNetworkFailure("boom", "healthz"),
