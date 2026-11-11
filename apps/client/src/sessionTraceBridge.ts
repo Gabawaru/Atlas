@@ -3,6 +3,7 @@
  * localStorage (sessionTraceLive) stays the offline/same-tab cache;
  * this survives reload + devices that share the same Atlas API.
  */
+import { formatLocalBridgeNetworkFailure } from "./localShell";
 import type { TraceMessage } from "./sessionTrace";
 
 export type TraceBridge = {
@@ -60,10 +61,13 @@ export async function pullDurableTrace(
     const messages = Array.isArray(body.messages) ? body.messages : [];
     return { messages, bridge: "file" };
   } catch (e) {
+    // API/:3001 down — parity Envoyer/login (#115/#111); Journal hydrate must
+    // surface Démarrer l'API inside durable hint detail (not bare Failed to fetch).
+    const raw = e instanceof Error ? e.message : String(e);
     return {
       messages: [],
       bridge: "error",
-      detail: e instanceof Error ? e.message : String(e),
+      detail: formatLocalBridgeNetworkFailure(raw, "api-health"),
     };
   }
 }
