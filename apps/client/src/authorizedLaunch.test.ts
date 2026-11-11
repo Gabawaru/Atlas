@@ -16,6 +16,12 @@ describe("isAuthorizedRoeHost", () => {
     assert.equal(isAuthorizedRoeHost("pragma-serve.com.evil.com"), false);
     assert.equal(isAuthorizedRoeHost("notpragma-cloud.com"), false);
   });
+
+  it("refuses bare pragma-cloud.com / pragma.mc (Policy Guard parity)", () => {
+    // policy-guard isRoeInScopeHost("pragma-cloud.com") === false — apex non listé
+    assert.equal(isAuthorizedRoeHost("pragma-cloud.com"), false);
+    assert.equal(isAuthorizedRoeHost("pragma.mc"), false);
+  });
 });
 
 describe("parseAuthorizedLaunch", () => {
