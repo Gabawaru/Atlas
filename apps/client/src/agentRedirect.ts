@@ -8,6 +8,8 @@
  * Full Cloud Agent mid-run redirect is out of band; this is the product hook.
  */
 
+import { formatLocalBridgeNetworkFailure } from "./localShell";
+
 export const AGENT_REDIRECT_STORAGE_KEY = "atlas.gabriel.agentRedirectQueue";
 export const AGENT_REDIRECT_EVENT = "atlas:gabriel-agent-redirect";
 
@@ -98,10 +100,12 @@ export async function sendAgentRedirect(args: {
     }
     return { queued: payload, api: "ok" };
   } catch (e) {
+    // API/:3001 down — parity login/Scan/export (#111–#114); Envoyer must not dump bare Failed to fetch.
+    const raw = e instanceof Error ? e.message : String(e);
     return {
       queued: payload,
       api: "error",
-      apiDetail: e instanceof Error ? e.message : String(e),
+      apiDetail: formatLocalBridgeNetworkFailure(raw, "api-health"),
     };
   }
 }
