@@ -28,6 +28,16 @@ jobs:
       - name: Atlas shell go test
         working-directory: remote-work/atlas-v1
         run: go test ./...
+      - name: AtlasLocal launcher go test
+        working-directory: remote-work/offline-installer/launcher
+        run: go test ./...
+      - name: Cross-compile Mac Atlas shell + AtlasLocal
+        working-directory: remote-work/atlas-v1
+        run: |
+          set -euo pipefail
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /tmp/atlas-darwin-arm64 .
+          (cd ../offline-installer/launcher && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /tmp/AtlasLocal-darwin-arm64 .)
+          file /tmp/atlas-darwin-arm64 /tmp/AtlasLocal-darwin-arm64
 
   test:
     name: unit + acceptance
