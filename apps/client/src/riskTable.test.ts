@@ -48,6 +48,25 @@ describe("client riskTable", () => {
     assert.match(tls!.signal ?? "", /issuer=Evil CA/);
   });
 
+  it("dérive TLS expiration imminente + protocol (parity API pushTlsRows)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "soon.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: { ok: true, status: 200, url: "https://soon.test/" },
+        tls: {
+          authorized: true,
+          protocol: "TLSv1.3",
+          daysRemaining: 7,
+        },
+      },
+    ]);
+    const tls = rows.find((r) => r.control.includes("expiration imminente"));
+    assert.ok(tls);
+    assert.equal(tls!.risk, "élevé");
+    assert.match(tls!.signal ?? "", /7 j restants · TLSv1\.3/);
+  });
+
   it("dérive cookie flags manquants (parity API pushCookieRows)", () => {
     const rows = buildPresenceRiskTable([
       {

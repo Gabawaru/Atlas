@@ -260,7 +260,9 @@ export function buildPresenceRiskTable(
           riskCode: "high",
           compromise:
             "Exposition élevée — interruption HTTPS / alerte navigateurs proche",
-          signal: `${tls.daysRemaining} j restants`,
+          // API pushTlsRows parity — protocol typed on EvidenceLike but was dropped
+          // on ≤14 while medium (≤45) already keeps it.
+          signal: `${tls.daysRemaining} j restants · ${tls.protocol ?? "?"}`,
         }),
       );
     } else if (typeof tls?.daysRemaining === "number" && tls.daysRemaining <= 45) {
