@@ -274,31 +274,38 @@ export function App() {
 
   async function refresh() {
     if (!token) return;
-    let [a, m, c, g, f] = await Promise.all([
-      fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
-      fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
-      fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
-      fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
-      fetch(`${API}/v1/findings`, { headers }).then((r) => r.json()),
-    ]);
-    const grantsList = Array.isArray(g) ? g : [];
-    const webActive = grantsList.some(
-      (x: ConnectorGrant) =>
-        x.connectorId === "web.passive.presence" && x.status === "active",
-    );
-    if (!webActive) {
-      await fetch(`${API}/v1/connectors/connect`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ connectorId: "web.passive.presence" }),
-      });
-      g = await fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json());
+    try {
+      let [a, m, c, g, f] = await Promise.all([
+        fetch(`${API}/v1/assets`, { headers }).then((r) => r.json()),
+        fetch(`${API}/v1/missions`, { headers }).then((r) => r.json()),
+        fetch(`${API}/v1/connectors/catalog`, { headers }).then((r) => r.json()),
+        fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json()),
+        fetch(`${API}/v1/findings`, { headers }).then((r) => r.json()),
+      ]);
+      const grantsList = Array.isArray(g) ? g : [];
+      const webActive = grantsList.some(
+        (x: ConnectorGrant) =>
+          x.connectorId === "web.passive.presence" && x.status === "active",
+      );
+      if (!webActive) {
+        await fetch(`${API}/v1/connectors/connect`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ connectorId: "web.passive.presence" }),
+        });
+        g = await fetch(`${API}/v1/connectors`, { headers }).then((r) => r.json());
+      }
+      setAssets(a);
+      setMissions(m);
+      setCatalog(Array.isArray(c) ? c : []);
+      setGrants(Array.isArray(g) ? g : []);
+      setFindings(Array.isArray(f) ? f : []);
+    } catch (e) {
+      // Post-login / mid-session API death — void refresh() must not leave only
+      // « Connecteur inactif — reconnexion… » without Démarrer (parity #111–#115).
+      const raw = e instanceof Error ? e.message : String(e);
+      setError(formatLocalBridgeNetworkFailure(raw, "api-health"));
     }
-    setAssets(a);
-    setMissions(m);
-    setCatalog(Array.isArray(c) ? c : []);
-    setGrants(Array.isArray(g) ? g : []);
-    setFindings(Array.isArray(f) ? f : []);
   }
 
   async function updateRemediation(findingId: string, status: string) {
