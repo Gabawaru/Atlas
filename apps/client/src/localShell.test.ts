@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   apiHealthUrl,
+  formatLocalBridgeNetworkFailure,
   formatStartApiFailureBody,
   LOCAL_SHELL_COMMANDS,
   runLocalShellCommand,
@@ -76,5 +77,31 @@ describe("localShell stubs", () => {
     const r = await runLocalShellCommand("healthz", { fetchImpl });
     assert.equal(r.ok, false);
     assert.match(r.body, /Failed to fetch/);
+    assert.match(r.body, /pnpm atlas:shell/);
+    assert.match(r.body, /17865/);
+  });
+
+  it("network fail api-health hints AtlasLocal start", async () => {
+    const formatted = formatLocalBridgeNetworkFailure(
+      "Failed to fetch",
+      "api-health",
+    );
+    assert.match(formatted, /Failed to fetch/);
+    assert.match(formatted, /Démarrer l'API/);
+    assert.doesNotMatch(formatted, /atlas:shell/);
+
+    const fetchImpl: typeof fetch = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    const r = await runLocalShellCommand("api-health", { fetchImpl });
+    assert.equal(r.ok, false);
+    assert.match(r.body, /Démarrer l'API/);
+  });
+
+  it("non-network errors stay raw", () => {
+    assert.equal(
+      formatLocalBridgeNetworkFailure("boom", "healthz"),
+      "boom",
+    );
   });
 });
