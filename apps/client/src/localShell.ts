@@ -74,6 +74,42 @@ async function readBody(res: Response): Promise<string> {
   }
 }
 
+/**
+ * Parité platform.html #77 : surface error + hint + lookedIn
+ * instead of dumping raw JSON in Session terminal.
+ */
+export function formatStartApiFailureBody(raw: string, httpStatus: number): string {
+  try {
+    const data = JSON.parse(raw) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      hint?: string;
+      lookedIn?: unknown;
+    };
+    const err =
+      (typeof data.error === "string" && data.error) ||
+      (typeof data.message === "string" && data.message) ||
+      `HTTP ${httpStatus}`;
+    const hint = typeof data.hint === "string" ? data.hint.trim() : "";
+    let looked = "";
+    if (Array.isArray(data.lookedIn)) {
+      looked = data.lookedIn
+        .slice(0, 6)
+        .map((x) => String(x))
+        .join(" · ");
+    } else if (typeof data.lookedIn === "string") {
+      looked = data.lookedIn;
+    }
+    const lines = [err];
+    if (hint) lines.push(hint);
+    if (looked) lines.push(`Cherché : ${looked}`);
+    return lines.join("\n");
+  } catch {
+    return raw || `(empty ${httpStatus})`;
+  }
+}
+
 /** Execute a local-bridge stub. `launch-scan` is UI-only (caller switches view). */
 export async function runLocalShellCommand(
   id: LocalShellCommandId,
@@ -110,11 +146,23 @@ export async function runLocalShellCommand(
         method: "POST",
         cache: "no-store",
       });
+      const ok = res.ok || res.status === 202;
+      const raw = await res.text();
+      let body: string;
+      if (ok) {
+        try {
+          body = JSON.stringify(JSON.parse(raw), null, 2);
+        } catch {
+          body = raw || `(empty ${res.status})`;
+        }
+      } else {
+        body = formatStartApiFailureBody(raw, res.status);
+      }
       return {
-        ok: res.ok || res.status === 202,
+        ok,
         commandId: id,
         status: res.status,
-        body: await readBody(res),
+        body,
         at,
       };
     }
