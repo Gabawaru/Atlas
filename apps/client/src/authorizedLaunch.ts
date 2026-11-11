@@ -122,6 +122,13 @@ export function parseAuthorizedLaunch(
   };
 }
 
+/** Banner / status line when Pages deep-link prefills Scanner (parity shell). */
+export function formatAuthorizedLaunchBanner(
+  intent: AuthorizedLaunchIntent,
+): string {
+  return `Deep-link « ${intent.label} » · ${intent.host}`;
+}
+
 /**
  * Build local client deep-link used by atlas-secu.com capability CTAs.
  * Default origin is `http://localhost:3002`. Vite `server.host: true` also

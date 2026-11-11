@@ -24,6 +24,7 @@ import {
   type ScannerMissionMode,
 } from "./scannerMissionPath";
 import {
+  formatAuthorizedLaunchBanner,
   parseAuthorizedLaunch,
   type AuthorizedLaunchIntent,
 } from "./authorizedLaunch";
@@ -332,6 +333,7 @@ export function App() {
     }
     setAuthorizedLaunch(parsed.intent);
     setRealTargetHost(parsed.intent.host);
+    setInfo(formatAuthorizedLaunchBanner(parsed.intent));
   }, []);
 
   /** After login, land on Gabriel session hub unless a deep-link hash is set. */
@@ -691,7 +693,6 @@ export function App() {
 
   void missionMode;
   void catalog;
-  void authorizedLaunch;
 
   const recentResults = unified.filter((r) => !r.synthetic).slice(0, 12);
 
@@ -836,6 +837,11 @@ export function App() {
             />{" "}
             {TEST_RESPONSIBILITY_LABEL}
           </label>
+          {authorizedLaunch && (
+            <p className="muted" role="status" data-testid="authorized-launch-banner">
+              {formatAuthorizedLaunchBanner(authorizedLaunch)}
+            </p>
+          )}
           <label htmlFor="real-target">URL / FQDN</label>
           <input
             id="real-target"
