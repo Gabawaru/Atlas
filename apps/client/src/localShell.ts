@@ -189,11 +189,20 @@ export async function runLocalShellCommand(
         method: "GET",
         cache: "no-store",
       });
+      let body = await readBody(res);
+      // Parity network-fail path: HTTP !ok still needs AtlasLocal recovery line.
+      if (!res.ok) {
+        const hint =
+          "API hors ligne — Démarrer l'API (AtlasLocal) puis réessayez.";
+        if (!body.includes("Démarrer l'API")) {
+          body = body ? `${body}\n${hint}` : hint;
+        }
+      }
       return {
         ok: res.ok,
         commandId: id,
         status: res.status,
-        body: await readBody(res),
+        body,
         at,
       };
     }
