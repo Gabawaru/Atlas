@@ -74,6 +74,16 @@ describe("refresh offline recovery", () => {
     assert.match(trace, /role="status"/);
   });
 
+  it("tracking (Suivi) renders error banner (parity Journal #125)", () => {
+    const start = appSrc.indexOf('view === "tracking"');
+    assert.ok(start >= 0);
+    const end = appSrc.indexOf('view === "terminal"', start);
+    const tracking = appSrc.slice(start, end > start ? end : undefined);
+    assert.match(tracking, /VulnTrackingView/);
+    assert.match(tracking, /\{error &&/);
+    assert.match(tracking, /role="status"/);
+  });
+
   it("goSession re-calls refresh when token present (clear stale hub Demarrer)", () => {
     const start = appSrc.indexOf("function goSession()");
     assert.ok(start >= 0);
