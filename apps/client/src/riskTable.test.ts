@@ -29,6 +29,25 @@ describe("client riskTable", () => {
     assert.match(hsts!.compromise, /Exposition moyenne/);
   });
 
+  it("dérive headers all-clear when missing=[] (parity API pushHeaderRows)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "ok.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://ok.test/",
+          securityHeaders: { missing: [] },
+        },
+      },
+    ]);
+    const clear = rows.find((r) => r.control === "Headers de sécurité");
+    assert.ok(clear, "empty missing[] must surface all-clear on rebuild");
+    assert.equal(clear!.risk, "info");
+    assert.match(clear!.signal ?? "", /aucun header critique manquant/);
+  });
+
   it("dérive HTTP sonde en échec (parity API pushDnsHttpRows)", () => {
     const rows = buildPresenceRiskTable([
       {
