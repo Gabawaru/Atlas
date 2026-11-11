@@ -110,6 +110,24 @@ export function formatStartApiFailureBody(raw: string, httpStatus: number): stri
   }
 }
 
+/** Browser "Failed to fetch" when :17865 / :3001 is down — recovery line for Session terminal. */
+export function formatLocalBridgeNetworkFailure(
+  message: string,
+  id: LocalShellCommandId,
+): string {
+  const err = message.trim() || "Failed to fetch";
+  if (!/failed to fetch|networkerror|load failed|network request failed/i.test(err)) {
+    return err;
+  }
+  if (id === "api-health") {
+    return `${err}\nAPI hors ligne — Démarrer l'API (AtlasLocal) puis réessayez.`;
+  }
+  if (id === "healthz" || id === "start-api") {
+    return `${err}\nShell hors ligne — lancez \`pnpm atlas:shell\` (http://127.0.0.1:17865).`;
+  }
+  return err;
+}
+
 /** Execute a local-bridge stub. `launch-scan` is UI-only (caller switches view). */
 export async function runLocalShellCommand(
   id: LocalShellCommandId,
@@ -180,10 +198,11 @@ export async function runLocalShellCommand(
       };
     }
   } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
     return {
       ok: false,
       commandId: id,
-      body: e instanceof Error ? e.message : String(e),
+      body: formatLocalBridgeNetworkFailure(raw, id),
       at,
     };
   }
