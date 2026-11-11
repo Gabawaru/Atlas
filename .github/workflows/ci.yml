@@ -23,6 +23,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Gate STAGE.md / docs/stage / convention personal
         run: bash scripts/check-no-stage-personal.sh
+      - name: Unix install Darwin PATH self-test
+        run: bash scripts/unix/install-atlas-prereqs.sh --self-test
 
   test:
     name: unit + acceptance
