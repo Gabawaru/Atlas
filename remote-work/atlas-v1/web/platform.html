@@ -221,11 +221,8 @@
       "*.pragma-cloud.com",
       "*.pragma.mc",
     ];
-    const ROE_EXPLICIT_APEXES = [
-      "pragma-serve.com",
-      "pragma-cloud.com",
-      "pragma.mc",
-    ];
+    /* Apexes in RoE §3 not covered by *.apex — policy-guard rejects bare cloud/mc. */
+    const ROE_EXPLICIT_APEXES = ["pragma-serve.com"];
     /** Parité apps/client authorizedLaunch — deep-link actions only. */
     const AUTHORIZED_ACTIONS = ["recon", "scan", "vuln", "osint"];
     let token = null;
