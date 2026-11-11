@@ -89,3 +89,30 @@ func TestPlatformHTMLActionAllowlist(t *testing.T) {
 		t.Fatalf("isAuthorizedAction must gate before target prefill (action=%d host=%d)", actionIdx, hostIdx)
 	}
 }
+
+// Success / prompt deep-link status must use French labels (parity Vite formatAuthorizedLaunchBanner).
+func TestPlatformHTMLDeepLinkActionLabels(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		"AUTHORIZED_ACTION_LABELS",
+		`recon: "Reconnaissance"`,
+		`scan: "Scan"`,
+		`vuln: "Évaluation de vulnérabilités"`,
+		`osint: "OSINT"`,
+		`actionLabel = AUTHORIZED_ACTION_LABELS[action] || action`,
+		`Deep-link « " + actionLabel + " » · `,
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing deep-link label marker %q", n)
+		}
+	}
+	// Must not keep raw action id in the success banner (Vite uses label).
+	if strings.Contains(html, `Deep-link « " + action + " » · `) {
+		t.Fatalf("success Deep-link banner must use actionLabel, not raw action id")
+	}
+}

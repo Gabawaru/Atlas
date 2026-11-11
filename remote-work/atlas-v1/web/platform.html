@@ -225,6 +225,12 @@
     const ROE_EXPLICIT_APEXES = ["pragma-serve.com"];
     /** Parité apps/client authorizedLaunch — deep-link actions only. */
     const AUTHORIZED_ACTIONS = ["recon", "scan", "vuln", "osint"];
+    const AUTHORIZED_ACTION_LABELS = {
+      recon: "Reconnaissance",
+      scan: "Scan",
+      vuln: "Évaluation de vulnérabilités",
+      osint: "OSINT",
+    };
     let token = null;
     let lastMissionId = null;
 
@@ -281,9 +287,10 @@
         );
         return;
       }
+      const actionLabel = AUTHORIZED_ACTION_LABELS[action] || action;
       if (!hostRaw) {
         setStatus(
-          "Deep-link : action « " + action + " » — renseignez un FQDN RoE.",
+          "Deep-link : action « " + actionLabel + " » — renseignez un FQDN RoE.",
           "muted",
         );
         return;
@@ -298,7 +305,7 @@
       }
       $("target").value = host;
       setStatus(
-        (action ? "Deep-link « " + action + " » · " : "Deep-link · ") + host,
+        (action ? "Deep-link « " + actionLabel + " » · " : "Deep-link · ") + host,
         "muted",
       );
     }
