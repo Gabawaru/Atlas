@@ -132,6 +132,27 @@ func TestPlatformHTMLDemarrerAccent(t *testing.T) {
 	}
 }
 
+// Start Menu / desktop shortcut names must match platform Démarrer (#97) accents.
+func TestNsisDemarrerAccent(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("installer", "Atlas.nsi"))
+	if err != nil {
+		t.Fatalf("read Atlas.nsi: %v", err)
+	}
+	nsi := string(raw)
+	if !strings.Contains(nsi, `Démarrer l'API.lnk`) {
+		t.Fatalf("Atlas.nsi missing accented Démarrer l'API.lnk")
+	}
+	if strings.Contains(nsi, `Demarrer l'API.lnk`) {
+		t.Fatalf("Atlas.nsi still has unaccented Demarrer l'API.lnk")
+	}
+	if !strings.Contains(nsi, `Désinstaller Atlas.lnk`) {
+		t.Fatalf("Atlas.nsi missing accented Désinstaller Atlas.lnk")
+	}
+	if strings.Contains(nsi, `Desinstaller Atlas.lnk`) {
+		t.Fatalf("Atlas.nsi still has unaccented Desinstaller Atlas.lnk")
+	}
+}
+
 // Progress setStatus lines must keep FR accents (Démarrage / Exécution / Responsabilité).
 func TestPlatformHTMLStatusAccents(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))

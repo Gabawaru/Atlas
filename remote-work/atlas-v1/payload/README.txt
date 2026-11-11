@@ -13,8 +13,8 @@ Health:
   Si 404 : PE obsolete — rebuild via remote-work/atlas-v1/build.sh et relancer Atlas.exe.
 
 Workflow Scan:
-  1. (Une fois) Menu Demarrer → Atlas → Installer le stack (+ coller .env dans %USERPROFILE%\Atlas)
-  2. Lancer Atlas.exe → bouton Démarrer l’API (ou raccourci Demarrer l'API)
+  1. (Une fois) Menu Démarrer → Atlas → Installer le stack (+ coller .env dans %USERPROFILE%\Atlas)
+  2. Lancer Atlas.exe → bouton Démarrer l’API (ou raccourci Démarrer l'API)
   3. Attendre Tester = OK sur :3001
   4. Cible RoE (ex. pragma-serve.com) → Scan (pas de jeton Paradise)
   5. Circuit A (admin) → Reprendre après Circuit A (meme mission)

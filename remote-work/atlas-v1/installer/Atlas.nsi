@@ -51,9 +51,9 @@ Section "Atlas" SecMain
 
   CreateDirectory "$SMPROGRAMS\Atlas"
   CreateShortCut "$SMPROGRAMS\Atlas\Atlas.lnk" "$INSTDIR\Atlas.exe"
-  CreateShortCut "$SMPROGRAMS\Atlas\Demarrer l'API.lnk" "$INSTDIR\AtlasLocal.exe" "start"
+  CreateShortCut "$SMPROGRAMS\Atlas\Démarrer l'API.lnk" "$INSTDIR\AtlasLocal.exe" "start"
   CreateShortCut "$SMPROGRAMS\Atlas\Installer le stack.lnk" "$INSTDIR\AtlasLocal.exe" "install"
-  CreateShortCut "$SMPROGRAMS\Atlas\Desinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortCut "$SMPROGRAMS\Atlas\Désinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
   CreateShortCut "$DESKTOP\Atlas.lnk" "$INSTDIR\Atlas.exe"
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -69,7 +69,7 @@ Section "Atlas" SecMain
   WriteRegDWORD HKLM "${PRODUCT_UNINST_KEY}" "NoRepair" 1
 
   MessageBox MB_YESNO|MB_ICONQUESTION "Voulez-vous créer une icône pour le désinstalleur ?" IDNO skipUninstDesktop
-  CreateShortCut "$DESKTOP\Desinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortCut "$DESKTOP\Désinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
   skipUninstDesktop:
 SectionEnd
 
@@ -83,11 +83,11 @@ Section "Uninstall"
   RMDir "$INSTDIR\tools"
   RMDir "$INSTDIR"
   Delete "$DESKTOP\Atlas.lnk"
-  Delete "$DESKTOP\Desinstaller Atlas.lnk"
+  Delete "$DESKTOP\Désinstaller Atlas.lnk"
   Delete "$SMPROGRAMS\Atlas\Atlas.lnk"
-  Delete "$SMPROGRAMS\Atlas\Demarrer l'API.lnk"
+  Delete "$SMPROGRAMS\Atlas\Démarrer l'API.lnk"
   Delete "$SMPROGRAMS\Atlas\Installer le stack.lnk"
-  Delete "$SMPROGRAMS\Atlas\Desinstaller Atlas.lnk"
+  Delete "$SMPROGRAMS\Atlas\Désinstaller Atlas.lnk"
   RMDir "$SMPROGRAMS\Atlas"
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
