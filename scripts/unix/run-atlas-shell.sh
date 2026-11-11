@@ -21,6 +21,20 @@ fi
 # Prefer AtlasLocal next to the shell binary for /start-api.
 cp -f "$LOCAL" "$(dirname "$BIN")/AtlasLocal" 2>/dev/null || true
 
+# Homebrew node@20 is keg-only — same class as install-atlas-prereqs.sh (#74).
+# Prepend so AtlasLocal start (child of /start-api) sees node/pnpm/corepack.
+if command -v brew >/dev/null 2>&1; then
+  for formula in node@20 node; do
+    prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+    if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
+      case ":$PATH:" in
+        *":$prefix/bin:"*) ;;
+        *) PATH="$prefix/bin:$PATH"; export PATH ;;
+      esac
+    fi
+  done
+fi
+
 echo "Atlas Scan shell → http://127.0.0.1:17865/"
 echo "API expected at   → http://127.0.0.1:3001/v1/health"
 exec "$BIN"

@@ -58,6 +58,9 @@ func main() {
 		fatal("%v", err)
 	}
 
+	// Darwin/Linuxbrew: keg-only node@20 often off PATH for GUI /start-api children.
+	prependHomebrewNodePath()
+
 	switch cmd {
 	case "install":
 		must(doInstall(root))
