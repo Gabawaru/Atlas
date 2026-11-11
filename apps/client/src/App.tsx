@@ -596,12 +596,15 @@ export function App() {
       }
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // API/:3001 down mid-Scan — parity login (#111) / platform runScan (#112).
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = formatLocalBridgeNetworkFailure(raw, "api-health");
+      setError(msg);
       appendScanOutcome({
         host: realTargetHost,
         missionId: "error",
         ok: false,
-        detail: e instanceof Error ? e.message : String(e),
+        detail: msg,
       }, undefined, traceBridge);
     } finally {
       setBusy(false);
@@ -654,12 +657,14 @@ export function App() {
       }
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = formatLocalBridgeNetworkFailure(raw, "api-health");
+      setError(msg);
       appendScanOutcome({
         host: realTargetHost,
         missionId,
         ok: false,
-        detail: e instanceof Error ? e.message : String(e),
+        detail: msg,
       }, undefined, traceBridge);
     } finally {
       setBusy(false);
