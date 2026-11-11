@@ -97,13 +97,13 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 
-		local := findAtlasLocal(installDir)
+		local, looked := findAtlasLocal(installDir)
 		if local == "" {
 			writeJSON(w, http.StatusNotFound, map[string]any{
 				"ok":       false,
-				"error":    "AtlasLocal introuvable à côté du shell Atlas",
+				"error":    "AtlasLocal introuvable (shell, ~/Atlas, ATLAS_HOME, PATH)",
 				"hint":     startAPIHint(),
-				"lookedIn": installDir,
+				"lookedIn": looked,
 			})
 			return
 		}
@@ -131,9 +131,20 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 	}
 }
 
-func findAtlasLocal(installDir string) string {
+// findAtlasLocal returns the launcher path and the root dirs searched (for /start-api UX).
+func findAtlasLocal(installDir string) (string, []string) {
 	names := atlasLocalNames()
 	var candidates []string
+	var looked []string
+	seenRoot := map[string]bool{}
+	noteRoot := func(dir string) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" || seenRoot[dir] {
+			return
+		}
+		seenRoot[dir] = true
+		looked = append(looked, dir)
+	}
 	addFiles := func(paths ...string) {
 		candidates = append(candidates, paths...)
 	}
@@ -143,6 +154,7 @@ func findAtlasLocal(installDir string) string {
 		if dir == "" {
 			return
 		}
+		noteRoot(dir)
 		for _, name := range names {
 			addFiles(
 				filepath.Join(dir, name),
@@ -170,6 +182,8 @@ func findAtlasLocal(installDir string) string {
 		addInstallLayout(filepath.Join(atlasHome, "remote-work", "atlas-v1", "payload"))
 		addInstallLayout(filepath.Join(atlasHome, "remote-work", "atlas-v1", "bin"))
 		addInstallLayout(filepath.Join(atlasHome, "remote-work", "offline-installer", "bin"))
+		noteRoot(filepath.Join(home, ".local", "bin"))
+		noteRoot(filepath.Join(home, "bin"))
 		for _, name := range names {
 			addFiles(
 				filepath.Join(home, ".local", "bin", name),
@@ -187,17 +201,19 @@ func findAtlasLocal(installDir string) string {
 
 	if path, err := exec.LookPath("AtlasLocal"); err == nil {
 		addFiles(path)
+		noteRoot("PATH")
 	}
 	if path, err := exec.LookPath("AtlasLocal.exe"); err == nil {
 		addFiles(path)
+		noteRoot("PATH")
 	}
 
 	for _, p := range candidates {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return p
+			return p, looked
 		}
 	}
-	return ""
+	return "", looked
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {

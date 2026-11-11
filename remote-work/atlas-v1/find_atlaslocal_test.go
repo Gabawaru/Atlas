@@ -21,7 +21,7 @@ func TestFindAtlasLocalBesideInstall(t *testing.T) {
 	dir := t.TempDir()
 	want := filepath.Join(dir, "AtlasLocal")
 	writeFakeBin(t, want)
-	got := findAtlasLocal(dir)
+	got, _ := findAtlasLocal(dir)
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -42,7 +42,7 @@ func TestFindAtlasLocalHomeAtlasUnix(t *testing.T) {
 	want := filepath.Join(home, "Atlas", "bin", "AtlasLocal")
 	writeFakeBin(t, want)
 
-	got := findAtlasLocal(filepath.Join(home, "empty-shell-dir"))
+	got, _ := findAtlasLocal(filepath.Join(home, "empty-shell-dir"))
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -60,7 +60,7 @@ func TestFindAtlasLocalATLAS_HOME(t *testing.T) {
 	want := filepath.Join(atlasHome, "AtlasLocal")
 	writeFakeBin(t, want)
 
-	got := findAtlasLocal(filepath.Join(home, "no-sibling"))
+	got, _ := findAtlasLocal(filepath.Join(home, "no-sibling"))
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -91,7 +91,7 @@ func TestFindAtlasLocalAppDataInstallPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := findAtlasLocal(filepath.Join(home, "current-empty"))
+	got, _ := findAtlasLocal(filepath.Join(home, "current-empty"))
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -105,7 +105,7 @@ func TestFindAtlasLocalMissing(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", "")
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	got := findAtlasLocal(filepath.Join(home, "empty"))
+	got, _ := findAtlasLocal(filepath.Join(home, "empty"))
 	if got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}

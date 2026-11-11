@@ -268,10 +268,15 @@
         const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.ok === false) {
-          setStatus(
-            (data && (data.error || data.message)) || ("HTTP " + res.status),
-            "err",
-          );
+          const err = (data && (data.error || data.message)) || ("HTTP " + res.status);
+          const hint = data && data.hint ? String(data.hint) : "";
+          const looked = Array.isArray(data && data.lookedIn)
+            ? data.lookedIn.slice(0, 6).join(" · ")
+            : (data && data.lookedIn ? String(data.lookedIn) : "");
+          let line = String(err);
+          if (hint) line += "\n" + hint;
+          if (looked) line += "\nCherché : " + looked;
+          setStatus(line, "err");
           return;
         }
         setStatus("Attente health…");
