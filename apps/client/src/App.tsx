@@ -343,9 +343,13 @@ export function App() {
     const onHash = () => {
       const next = parseSessionHash(window.location.hash);
       setView(next);
-      // #120/#121 twin: browser-back / typed #scanner|#session after Demarrer
-      // must re-hydrate (and clear stale hub Demarrer via successful refresh).
-      if ((next === "scanner" || next === "session") && token) void refresh();
+      // #120/#121/#124 twin: browser-back / typed #scanner|#session|#session-trace
+      // after Demarrer must re-hydrate (clear stale Journal Demarrer via refresh).
+      if (
+        (next === "scanner" || next === "session" || next === "session-trace") &&
+        token
+      )
+        void refresh();
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -410,6 +414,9 @@ export function App() {
 
   function goSessionTrace() {
     goRoute("session-trace");
+    // After #125 Journal shows Demarrer, hub → Journal after AtlasLocal start
+    // must re-hydrate so successful recovery clears the stale banner (#124 twin).
+    if (token) void refresh();
   }
 
   function persistVulnStore(next: VulnTrackingStore) {
