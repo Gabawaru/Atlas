@@ -477,17 +477,26 @@
         btn.className = "ghost";
         btn.textContent = fmt.toUpperCase();
         btn.onclick = async () => {
-          const res = await fetch(
-            api() + "/v1/missions/" + missionId + "/reports/" + report.id + "/export?format=" + fmt,
-            { headers: { Authorization: "Bearer " + token } },
-          );
-          if (!res.ok) throw new Error("Export " + fmt + " échoué (" + res.status + ")");
-          const blob = await res.blob();
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "atlas-report-" + report.id + "." + fmt;
-          a.click();
-          URL.revokeObjectURL(a.href);
+          // API died after Scan OK — parity Vite #114 downloadReportExport + runScan catch.
+          try {
+            const res = await fetch(
+              api() + "/v1/missions/" + missionId + "/reports/" + report.id + "/export?format=" + fmt,
+              { headers: { Authorization: "Bearer " + token } },
+            );
+            if (!res.ok) throw new Error("Export " + fmt + " échoué (" + res.status + ")");
+            const blob = await res.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "atlas-report-" + report.id + "." + fmt;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          } catch (e) {
+            let msg = e instanceof Error ? e.message : String(e);
+            if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+              msg += "\nAPI hors ligne — Démarrer l'API.";
+            }
+            setStatus(msg, "err");
+          }
         };
         exportsEl.appendChild(btn);
       }
