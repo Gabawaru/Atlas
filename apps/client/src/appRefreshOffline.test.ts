@@ -45,4 +45,12 @@ describe("refresh offline recovery", () => {
     assert.match(go, /goRoute\("scanner"\)/);
     assert.match(go, /if \(token\) void refresh\(\)/);
   });
+
+  it("hashchange to #scanner re-calls refresh when token present", () => {
+    assert.match(
+      appSrc,
+      /parseSessionHash\(window\.location\.hash\)[\s\S]*next === "scanner" && token\) void refresh\(\)/,
+    );
+    assert.match(appSrc, /addEventListener\("hashchange"[\s\S]*\}, \[token\]\)/);
+  });
 });
