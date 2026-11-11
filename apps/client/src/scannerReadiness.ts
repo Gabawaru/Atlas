@@ -26,7 +26,7 @@ export function evaluateScannerReadiness(
     return { ready: false, blockReason: "Connexion requise." };
   }
   if (input.selectedNeedId !== EXECUTABLE_NEED) {
-    return { ready: false, blockReason: "Besoin non executable." };
+    return { ready: false, blockReason: "Besoin non exécutable." };
   }
   if (input.assetCount < 1) {
     return { ready: false, blockReason: "FQDN requis." };

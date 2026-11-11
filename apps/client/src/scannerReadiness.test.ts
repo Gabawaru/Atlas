@@ -22,7 +22,8 @@ describe("evaluateScannerReadiness", () => {
       selectedNeedId: "internal_network",
     });
     assert.equal(r.ready, false);
-    assert.match(r.blockReason ?? "", /executable/i);
+    assert.equal(r.blockReason, "Besoin non exécutable.");
+    assert.doesNotMatch(r.blockReason ?? "", /Besoin non executable\./);
   });
 
   it("bloque sans cible", () => {
