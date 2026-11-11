@@ -301,7 +301,21 @@ export function buildPresenceRiskTable(
       );
     }
 
-    for (const name of ev.http?.securityHeaders?.missing ?? []) {
+    // API pushHeaderRows parity — empty missing[] is an observed all-clear, not silence.
+    const missingHeaders = ev.http?.securityHeaders?.missing;
+    if (missingHeaders && !missingHeaders.length) {
+      out.push(
+        row({
+          control: "Headers de sécurité",
+          host,
+          url,
+          riskCode: "info",
+          compromise: "Observation — jeu de headers de base présent",
+          signal: "aucun header critique manquant",
+        }),
+      );
+    }
+    for (const name of missingHeaders ?? []) {
       const meta = HEADER_META[name.toLowerCase()];
       out.push(
         row({
