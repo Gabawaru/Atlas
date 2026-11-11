@@ -858,6 +858,12 @@ export function App() {
               Suivi &amp; archive
             </button>
           </p>
+          {/* #118 Demarrer recovery must surface on default post-login hub (parity login/Scanner). */}
+          {error && (
+            <p style={{ color: "var(--alert)" }} role="status">
+              {error}
+            </p>
+          )}
         </section>
       ) : view === "tracking" ? (
         <VulnTrackingView

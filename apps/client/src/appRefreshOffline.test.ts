@@ -53,4 +53,14 @@ describe("refresh offline recovery", () => {
     );
     assert.match(appSrc, /addEventListener\("hashchange"[\s\S]*\}, \[token\]\)/);
   });
+
+  it("Session Gabriel hub renders error banner (parity login/Scanner)", () => {
+    const start = appSrc.indexOf('view === "session"');
+    assert.ok(start >= 0);
+    const end = appSrc.indexOf('view === "tracking"', start);
+    const hub = appSrc.slice(start, end > start ? end : undefined);
+    assert.match(hub, /gabriel-session/);
+    assert.match(hub, /\{error &&/);
+    assert.match(hub, /role="status"/);
+  });
 });
