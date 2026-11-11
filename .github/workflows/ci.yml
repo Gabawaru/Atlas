@@ -25,6 +25,8 @@ jobs:
         run: bash scripts/check-no-stage-personal.sh
       - name: Unix install Darwin PATH self-test
         run: bash scripts/unix/install-atlas-prereqs.sh --self-test
+      - name: Unix Scan shell Darwin PATH self-test
+        run: bash scripts/unix/run-atlas-shell.sh --self-test
       - name: Atlas shell go test
         working-directory: remote-work/atlas-v1
         run: go test ./...
