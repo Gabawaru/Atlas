@@ -34,6 +34,8 @@ curl -s http://127.0.0.1:17865/healthz
 
 If Gab’s installed PE still returns **404**, the Dev payload was stale — rebuild and replace `payload/Atlas.exe` (source route is shared; not Windows-specific).
 
+**Démarrer l’API** resolves `AtlasLocal` beside the shell, then Windows `%LOCALAPPDATA%\AtlasLocal`, then Unix/macOS `ATLAS_HOME` / `~/Atlas` (+ payload/bin layouts), app-support `install-path.txt`, and `PATH`.
+
 ## Rebuild
 
 ```bash
