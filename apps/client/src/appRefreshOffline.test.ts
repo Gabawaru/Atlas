@@ -49,7 +49,7 @@ describe("refresh offline recovery", () => {
   it("hashchange to #scanner re-calls refresh when token present", () => {
     assert.match(
       appSrc,
-      /parseSessionHash\(window\.location\.hash\)[\s\S]*\(next === "scanner" \|\| next === "session"\) && token\) void refresh\(\)/,
+      /parseSessionHash\(window\.location\.hash\)[\s\S]*next === "scanner"/,
     );
     assert.match(appSrc, /addEventListener\("hashchange"[\s\S]*\}, \[token\]\)/);
   });
@@ -83,10 +83,23 @@ describe("refresh offline recovery", () => {
     assert.match(go, /if \(token\) void refresh\(\)/);
   });
 
-  it("hashchange to #session re-calls refresh when token present", () => {
+  it("hashchange to #session / #session-trace re-calls refresh when token present", () => {
     assert.match(
       appSrc,
-      /\(next === "scanner" \|\| next === "session"\) && token\) void refresh\(\)/,
+      /next === "scanner" \|\| next === "session" \|\| next === "session-trace"/,
     );
+    assert.match(
+      appSrc,
+      /\(next === "scanner" \|\| next === "session" \|\| next === "session-trace"\)[\s\S]*&&\s*token[\s\S]*void refresh\(\)/,
+    );
+  });
+
+  it("goSessionTrace re-calls refresh when token present (clear stale Journal Demarrer)", () => {
+    const start = appSrc.indexOf("function goSessionTrace()");
+    assert.ok(start >= 0);
+    const end = appSrc.indexOf("function persistVulnStore", start);
+    const go = appSrc.slice(start, end > start ? end : undefined);
+    assert.match(go, /goRoute\("session-trace"\)/);
+    assert.match(go, /if \(token\) void refresh\(\)/);
   });
 });
