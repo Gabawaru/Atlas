@@ -205,6 +205,32 @@ func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
 	}
 }
 
+// runScan network catch must append API recovery (parity pre-scan hors-ligne + Vite api-health).
+func TestPlatformHTMLRunScanNetworkCatchHint(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	startIdx := strings.Index(html, `async function runScan`)
+	if startIdx < 0 {
+		t.Fatal("runScan function missing")
+	}
+	snippet := html[startIdx:]
+	needles := []string{
+		`failed to fetch|networkerror|load failed|network request failed`,
+		`API hors ligne — Démarrer l'API.`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(snippet, n) {
+			t.Fatalf("runScan missing network catch marker %q", n)
+		}
+	}
+	if strings.Contains(snippet, `setStatus(e instanceof Error ? e.message : String(e), "err");`) {
+		t.Fatalf("runScan catch still dumps bare e.message without API recovery")
+	}
+}
+
 // startApi network catch must append shell recovery (parity Vite Session #92).
 func TestPlatformHTMLStartApiNetworkCatchHint(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
