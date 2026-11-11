@@ -212,6 +212,19 @@ export function appendReportAvailable(
   );
 }
 
+/** SessionTrace status after enqueue — never claim journal when conversation failed. */
+export function formatRedirectEnqueueInfo(
+  api: "ok" | "skipped" | "error",
+): string {
+  if (api === "ok") {
+    return "Message enfilé + /v1/conversation OK · journal durable.";
+  }
+  if (api === "skipped") {
+    return "Message enfilé (local). API conversation ignorée — pas de jeton.";
+  }
+  return "Message enfilé (local).";
+}
+
 /** Persist redirect bubble (same id as queue item when provided). */
 export function appendRedirectTrace(
   args: {

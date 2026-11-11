@@ -5,6 +5,7 @@ import {
   LIVE_TRACE_STORAGE_KEY,
   appendLiveTrace,
   appendRedirectTrace,
+  formatRedirectEnqueueInfo,
   appendReportAvailable,
   appendScanOutcome,
   appendScanStarted,
@@ -121,6 +122,13 @@ describe("sessionTraceLive", () => {
     );
     assert.equal(d.id, "redir-abc");
     assert.equal(d.role, "prompt");
+  });
+
+  it("formatRedirectEnqueueInfo — error path never claims journal", () => {
+    assert.match(formatRedirectEnqueueInfo("ok"), /journal durable/);
+    assert.match(formatRedirectEnqueueInfo("skipped"), /pas de jeton/);
+    assert.equal(formatRedirectEnqueueInfo("error"), "Message enfilé (local).");
+    assert.doesNotMatch(formatRedirectEnqueueInfo("error"), /journal/);
   });
 
   it("smoke: scan flow lands in mergeSeedAndLive for journal", () => {
