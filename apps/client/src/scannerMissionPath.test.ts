@@ -50,6 +50,17 @@ describe("validateRealMissionInput", () => {
     if (!r.ok) assert.match(r.reason, /hors RoE/i);
   });
 
+  it("refuse apex pragma-cloud.com / pragma.mc (Policy Guard parity)", () => {
+    for (const host of ["pragma-cloud.com", "pragma.mc"] as const) {
+      const r = validateRealMissionInput({
+        targetHost: host,
+        testResponsibilityAccepted: true,
+      });
+      assert.equal(r.ok, false, host);
+      if (!r.ok) assert.match(r.reason, /hors RoE/i);
+    }
+  });
+
   it("accepte sous-domaine RoE", () => {
     const r = validateRealMissionInput({
       targetHost: "api.pragma-serve.com",

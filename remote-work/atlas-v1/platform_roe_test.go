@@ -33,6 +33,13 @@ func TestPlatformHTMLHasRoePrecheck(t *testing.T) {
 	if roeIdx < 0 || assetIdx < 0 || roeIdx > assetIdx {
 		t.Fatalf("isAuthorizedRoeHost must gate before ensureAsset (roe=%d asset=%d)", roeIdx, assetIdx)
 	}
+	// Policy Guard: only pragma-serve.com apex is §3-listed; bare cloud/mc REJECT.
+	if !strings.Contains(html, `ROE_EXPLICIT_APEXES = ["pragma-serve.com"]`) {
+		t.Fatalf("ROE_EXPLICIT_APEXES must be pragma-serve.com only (Policy Guard parity)")
+	}
+	if strings.Contains(html, `"pragma-cloud.com"`) || strings.Contains(html, `"pragma.mc"`) {
+		t.Fatalf("platform.html must not list bare pragma-cloud.com / pragma.mc as explicit apexes")
+	}
 }
 
 // Pages → shell deep-link (?action=&host=) must prefill RoE host (parity with Vite client).

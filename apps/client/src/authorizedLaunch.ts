@@ -30,11 +30,10 @@ export const ROE_SCOPE_PATTERNS = [
   "*.pragma.mc",
 ] as const;
 
-const ROE_EXPLICIT_APEXES = [
-  "pragma-serve.com",
-  "pragma-cloud.com",
-  "pragma.mc",
-] as const;
+/** Apexes listed in RoE §3 that `*.apex` wildcards do not cover.
+ *  Only pragma-serve.com — policy-guard rejects bare pragma-cloud.com / pragma.mc.
+ */
+const ROE_EXPLICIT_APEXES = ["pragma-serve.com"] as const;
 
 export type AuthorizedLaunchIntent = {
   action: AuthorizedAction;
