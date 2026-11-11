@@ -50,20 +50,36 @@ echo "NOTE: Does not start Cursor/agent workers."
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Override in --self-test only (prod = real Homebrew keg layouts).
+: "${ATLAS_INSTALL_KEG_CANDIDATES:=/opt/homebrew/opt/node@20/bin:/opt/homebrew/opt/node/bin:/usr/local/opt/node@20/bin:/usr/local/opt/node/bin}"
+
 # Homebrew node@20 is keg-only — install can succeed while `node` stays off PATH
 # (mirrors Windows Refresh-PathFromMachine after winget).
+# When brew is missing entirely, fall through to well-known keg bins
+# (parity with AtlasLocal brew_path.go / run-atlas-shell.sh).
 prepend_brew_node_path() {
-  local formula prefix
-  have brew || return 0
-  for formula in node@20 node; do
-    prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
-    if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
-      case ":$PATH:" in
-        *":$prefix/bin:"*) ;;
-        *) PATH="$prefix/bin:$PATH"; export PATH ;;
-      esac
-    fi
-  done
+  local formula prefix keg
+  if have brew; then
+    for formula in node@20 node; do
+      prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+      if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
+        case ":$PATH:" in
+          *":$prefix/bin:"*) ;;
+          *) PATH="$prefix/bin:$PATH"; export PATH ;;
+        esac
+      fi
+    done
+  else
+    IFS=':' read -r -a _keg_cands <<< "$ATLAS_INSTALL_KEG_CANDIDATES"
+    for keg in "${_keg_cands[@]}"; do
+      if [[ -d "$keg" ]]; then
+        case ":$PATH:" in
+          *":$keg:"*) ;;
+          *) PATH="$keg:$PATH"; export PATH ;;
+        esac
+      fi
+    done
+  fi
   hash -r 2>/dev/null || true
 }
 
@@ -88,8 +104,9 @@ ensure_node() {
   if node_major_ok; then
     return 0
   fi
-  # Darwin: keg already installed but shell PATH never saw it.
-  if [[ "$OS" == "Darwin" ]] && have brew; then
+  # Darwin: keg already installed but shell PATH never saw it
+  # (brew on PATH, or keg-direct when brew binary is absent).
+  if [[ "$OS" == "Darwin" ]]; then
     prepend_brew_node_path
     if node_major_ok; then
       return 0
@@ -228,11 +245,47 @@ EOS
   PATH="$bare"
   export PATH
   hash -r 2>/dev/null || true
+  # Point keg candidates at missing dirs so fail-closed is not masked by host Homebrew.
+  ATLAS_INSTALL_KEG_CANDIDATES="$tmp/missing-keg-a:$tmp/missing-keg-b"
+  export ATLAS_INSTALL_KEG_CANDIDATES
   if ensure_node; then
     fail "ensure_node must fail-closed without node and without brew prefix"
     return 1
   fi
   pass "ensure_node fail-closed when brew stub useless and no node"
+
+  step "self-test: no brew → keg-direct fallback"
+  mkdir -p "$tmp/emptybin" "$tmp/opt/node@20/bin"
+  cp -f "$bin/node" "$tmp/opt/node@20/bin/node"
+  chmod +x "$tmp/opt/node@20/bin/node"
+  PATH="$tmp/emptybin:/usr/bin:/bin"
+  export PATH
+  hash -r 2>/dev/null || true
+  ATLAS_INSTALL_KEG_CANDIDATES="$tmp/opt/node@20/bin"
+  export ATLAS_INSTALL_KEG_CANDIDATES
+  if have brew; then
+    fail "brew must be absent for keg-direct case"
+    return 1
+  fi
+  if node_major_ok; then
+    fail "node must be absent before keg-direct"
+    return 1
+  fi
+  prepend_brew_node_path
+  if ! node_major_ok; then
+    fail "keg-direct fallback must expose node"
+    return 1
+  fi
+  pass "keg-direct prepend → $(node -v)"
+  PATH="$tmp/emptybin:/usr/bin:/bin"
+  export PATH
+  hash -r 2>/dev/null || true
+  if ! ensure_node; then
+    fail "ensure_node must recover via keg-direct without brew"
+    return 1
+  fi
+  pass "ensure_node recovers via keg-direct — $(node -v)"
+  unset ATLAS_INSTALL_KEG_CANDIDATES
 
   OS="$saved_os"
   PATH="$saved_path"
