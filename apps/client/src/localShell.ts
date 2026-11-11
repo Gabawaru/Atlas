@@ -28,7 +28,8 @@ export const LOCAL_SHELL_COMMANDS: LocalShellCommand[] = [
   },
   {
     id: "start-api",
-    label: "Démarrer API",
+    // Parity platform / recovery copy — Démarrer l'API (not bare « Démarrer API »).
+    label: "Démarrer l'API",
     hint: "POST /start-api → AtlasLocal start",
   },
   {
