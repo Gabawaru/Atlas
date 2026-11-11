@@ -64,6 +64,16 @@ describe("refresh offline recovery", () => {
     assert.match(hub, /role="status"/);
   });
 
+  it("session-trace (Journal) renders error banner (parity hub #123)", () => {
+    const start = appSrc.indexOf('view === "session-trace"');
+    assert.ok(start >= 0);
+    const end = appSrc.indexOf('view === "session"', start);
+    const trace = appSrc.slice(start, end > start ? end : undefined);
+    assert.match(trace, /SessionTracePage/);
+    assert.match(trace, /\{error &&/);
+    assert.match(trace, /role="status"/);
+  });
+
   it("goSession re-calls refresh when token present (clear stale hub Demarrer)", () => {
     const start = appSrc.indexOf("function goSession()");
     assert.ok(start >= 0);
