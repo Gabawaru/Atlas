@@ -4,6 +4,8 @@
  * No Pragma Sign envelope paste on the real path.
  */
 
+import { isAuthorizedRoeHost } from "./authorizedLaunch.js";
+
 export type ScannerMissionMode = "fictif" | "real";
 
 export const DEFAULT_REAL_TARGET = "pragma-serve.com";
@@ -51,6 +53,12 @@ export function validateRealMissionInput(
     return {
       ok: false,
       reason: `Cible FQDN requise (${ROE_SCOPE_LABEL}).`,
+    };
+  }
+  if (!isAuthorizedRoeHost(targetHost)) {
+    return {
+      ok: false,
+      reason: `Cible hors RoE (${ROE_SCOPE_LABEL}).`,
     };
   }
   return {

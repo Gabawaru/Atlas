@@ -40,6 +40,24 @@ describe("validateRealMissionInput", () => {
       assert.equal(r.testResponsibilityAccepted, true);
     }
   });
+
+  it("refuse hors RoE avant POST mission", () => {
+    const r = validateRealMissionInput({
+      targetHost: "evil.com",
+      testResponsibilityAccepted: true,
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.match(r.reason, /hors RoE/i);
+  });
+
+  it("accepte sous-domaine RoE", () => {
+    const r = validateRealMissionInput({
+      targetHost: "api.pragma-serve.com",
+      testResponsibilityAccepted: true,
+    });
+    assert.equal(r.ok, true);
+    if (r.ok) assert.equal(r.targetHost, "api.pragma-serve.com");
+  });
 });
 
 describe("createMissionBody", () => {
