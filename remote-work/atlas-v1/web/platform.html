@@ -360,9 +360,9 @@
       try {
         const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
         const data = await res.json().catch(() => ({}));
+        const hint = data && data.hint ? String(data.hint) : "";
         if (!res.ok || data.ok === false) {
           const err = (data && (data.error || data.message)) || ("HTTP " + res.status);
-          const hint = data && data.hint ? String(data.hint) : "";
           const looked = Array.isArray(data && data.lookedIn)
             ? data.lookedIn.slice(0, 6).join(" · ")
             : (data && data.lookedIn ? String(data.lookedIn) : "");
@@ -381,7 +381,11 @@
           }
           setStatus("Demarrage… " + (i + 1) + "/30");
         }
-        setStatus("API toujours hors ligne.", "err");
+        // 202 accepted AtlasLocal start but :3001 never came up — keep recovery hint.
+        setStatus(
+          "API toujours hors ligne." + (hint ? "\n" + hint : ""),
+          "err",
+        );
       } catch (e) {
         setStatus(e instanceof Error ? e.message : String(e), "err");
       } finally {
