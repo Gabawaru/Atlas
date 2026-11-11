@@ -116,6 +116,7 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 				"ok":    false,
 				"error": err.Error(),
 				"path":  local,
+				"hint":  startAPIHint(),
 			})
 			return
 		}
