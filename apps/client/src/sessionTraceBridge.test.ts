@@ -6,7 +6,11 @@ import {
   hydrateLiveFromDurable,
   loadLiveTrace,
 } from "./sessionTraceLive";
-import { pushDurableTrace, type TraceBridge } from "./sessionTraceBridge";
+import {
+  formatDurableBridgeHint,
+  pushDurableTrace,
+  type TraceBridge,
+} from "./sessionTraceBridge";
 
 class MemStorage {
   private map = new Map<string, string>();
@@ -22,6 +26,46 @@ class MemStorage {
 }
 
 describe("sessionTraceBridge", () => {
+  it("formatDurableBridgeHint keeps error detail", () => {
+    assert.equal(
+      formatDurableBridgeHint("file"),
+      "Pont durable Atlas · API fichier",
+    );
+    assert.equal(
+      formatDurableBridgeHint("error", "HTTP 401"),
+      "Pont durable indisponible — cache local (HTTP 401)",
+    );
+    assert.equal(
+      formatDurableBridgeHint("error", "Failed to fetch"),
+      "Pont durable indisponible — cache local (Failed to fetch)",
+    );
+    assert.equal(
+      formatDurableBridgeHint("error"),
+      "Pont durable indisponible — cache local",
+    );
+    assert.equal(formatDurableBridgeHint("none"), null);
+  });
+
+  it("hydrate error surfaces detail for Session hint", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response("nope", { status: 503 })) as typeof fetch;
+    try {
+      const r = await hydrateLiveFromDurable({
+        apiBase: "http://localhost:3001",
+        token: "tok",
+      });
+      assert.equal(r.bridge, "error");
+      assert.equal(r.detail, "HTTP 503");
+      assert.match(
+        formatDurableBridgeHint(r.bridge, r.detail) ?? "",
+        /HTTP 503/,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("pushDurableTrace skips without token", async () => {
     const msg = {
       id: "x",

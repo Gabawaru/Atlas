@@ -16,6 +16,25 @@ export type DurablePullResult = {
   detail?: string;
 };
 
+/**
+ * Session journal status line for durable hydrate.
+ * Error path must keep pullDurableTrace `detail` (HTTP / Failed to fetch) —
+ * otherwise Gab only sees a generic « cache local » with no diagnosis.
+ */
+export function formatDurableBridgeHint(
+  bridge: DurablePullResult["bridge"],
+  detail?: string,
+): string | null {
+  if (bridge === "file") return "Pont durable Atlas · API fichier";
+  if (bridge === "error") {
+    const d = detail?.trim();
+    return d
+      ? `Pont durable indisponible — cache local (${d})`
+      : "Pont durable indisponible — cache local";
+  }
+  return null;
+}
+
 function baseUrl(apiBase: string): string {
   return `${apiBase.replace(/\/$/, "")}/v1/session/trace`;
 }
