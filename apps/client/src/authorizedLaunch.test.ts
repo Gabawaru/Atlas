@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   authorizedLaunchHref,
+  formatAuthorizedLaunchBanner,
   isAuthorizedRoeHost,
   parseAuthorizedLaunch,
 } from "./authorizedLaunch.js";
@@ -59,6 +60,19 @@ describe("authorizedLaunchHref", () => {
     assert.equal(
       authorizedLaunchHref("recon"),
       "http://localhost:3002/?action=recon&host=pragma-serve.com#scanner",
+    );
+  });
+});
+
+describe("formatAuthorizedLaunchBanner", () => {
+  it("mirror shell Deep-link status line", () => {
+    assert.equal(
+      formatAuthorizedLaunchBanner({
+        action: "scan",
+        host: "api.pragma-serve.com",
+        label: "Scan",
+      }),
+      "Deep-link « Scan » · api.pragma-serve.com",
     );
   });
 });
