@@ -29,6 +29,24 @@ describe("client riskTable", () => {
     assert.match(hsts!.compromise, /Exposition moyenne/);
   });
 
+  it("dérive HTTP sonde en échec (parity API pushDnsHttpRows)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "down.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: false,
+          url: "https://down.test/",
+          error: "fetch failed",
+        },
+      },
+    ]);
+    const http = rows.find((r) => r.control.includes("HTTP — sonde"));
+    assert.ok(http, "http.error must reach client riskTable rebuild");
+    assert.equal(http!.risk, "info");
+    assert.match(http!.signal ?? "", /fetch failed/);
+  });
+
   it("dérive TLS unauthorized + issuerCN (parity API pushTlsRows)", () => {
     const rows = buildPresenceRiskTable([
       {

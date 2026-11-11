@@ -212,6 +212,18 @@ export function buildPresenceRiskTable(
           signal: `status=${ev.http.status ?? "?"}`,
         }),
       );
+    } else if (ev.http?.error) {
+      // API pushDnsHttpRows parity — http.error typed but was dropped on rebuild.
+      out.push(
+        row({
+          control: "HTTP — sonde en échec",
+          host,
+          url,
+          riskCode: "info",
+          compromise: "Observation — pas de réponse HTTP exploitable",
+          signal: ev.http.error,
+        }),
+      );
     }
 
     const tls = ev.tls;
