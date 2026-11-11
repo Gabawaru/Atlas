@@ -366,11 +366,15 @@
       $("apiBase").textContent = api();
       try {
         const res = await fetch(api() + "/v1/health");
-        $("apiHealth").textContent = res.ok ? "OK" : "HTTP " + res.status;
+        // HTTP !ok — parity Vite api-health (#101) appends Démarrer recovery.
+        $("apiHealth").textContent = res.ok
+          ? "OK"
+          : "HTTP " + res.status + " — Démarrer l'API.";
         $("apiHealth").className = res.ok ? "ok" : "err";
         return res.ok;
       } catch (e) {
-        $("apiHealth").textContent = "hors ligne";
+        // Network throw — was bare « hors ligne »; Demarrer twin of runScan pre-gate.
+        $("apiHealth").textContent = "hors ligne — Démarrer l'API.";
         $("apiHealth").className = "err";
         return false;
       }
