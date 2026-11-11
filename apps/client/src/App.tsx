@@ -835,11 +835,19 @@ export function App() {
           {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
         </section>
       ) : view === "session-trace" ? (
-        <SessionTracePage
-          apiBase={API}
-          token={token}
-          onBack={goSession}
-        />
+        <>
+          {/* Hub primary CTA — keep #118 Demarrer visible on Journal (parity #123 hub). */}
+          {error && (
+            <p style={{ color: "var(--alert)" }} role="status">
+              {error}
+            </p>
+          )}
+          <SessionTracePage
+            apiBase={API}
+            token={token}
+            onBack={goSession}
+          />
+        </>
       ) : view === "session" ? (
         <section id="session" className="gabriel-session" aria-label="Session Gabriel">
           <p className="session-chip muted">Session Gabriel · stagiaire</p>
