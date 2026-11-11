@@ -66,6 +66,27 @@ describe("sessionTraceBridge", () => {
     }
   });
 
+  it("hydrate network catch appends Démarrer l'API (parity #111–#115)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+    try {
+      const r = await hydrateLiveFromDurable({
+        apiBase: "http://localhost:3001",
+        token: "tok",
+      });
+      assert.equal(r.bridge, "error");
+      assert.match(r.detail ?? "", /Failed to fetch/);
+      assert.match(r.detail ?? "", /Démarrer l'API/);
+      const hint = formatDurableBridgeHint(r.bridge, r.detail) ?? "";
+      assert.match(hint, /Pont durable indisponible/);
+      assert.match(hint, /Démarrer l'API/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("pushDurableTrace skips without token", async () => {
     const msg = {
       id: "x",
