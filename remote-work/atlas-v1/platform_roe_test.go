@@ -58,3 +58,27 @@ func TestPlatformHTMLAppliesLaunchQuery(t *testing.T) {
 		t.Fatalf("platform.html boot must call applyLaunchFromQuery before ping")
 	}
 }
+
+// Deep-link action must be allowlisted (parity with Vite isAuthorizedAction).
+func TestPlatformHTMLActionAllowlist(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		`AUTHORIZED_ACTIONS = ["recon", "scan", "vuln", "osint"]`,
+		"function isAuthorizedAction",
+		"Action « \" + action + \" » non autorisée",
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing action allowlist marker %q", n)
+		}
+	}
+	actionIdx := strings.Index(html, "isAuthorizedAction(action)")
+	hostIdx := strings.Index(html, `$("target").value = host`)
+	if actionIdx < 0 || hostIdx < 0 || actionIdx > hostIdx {
+		t.Fatalf("isAuthorizedAction must gate before target prefill (action=%d host=%d)", actionIdx, hostIdx)
+	}
+}
