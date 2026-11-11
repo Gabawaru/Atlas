@@ -302,6 +302,25 @@ export function buildPresenceRiskTable(
       );
     }
 
+    // API risk-table pushCookieRows parity — evidence rebuild must not drop cookies.
+    for (const c of ev.http?.cookies ?? []) {
+      const missing = c.missingFlags ?? [];
+      if (!missing.length) continue;
+      const high = missing.includes("Secure") || missing.includes("HttpOnly");
+      out.push(
+        row({
+          control: `Cookie — flags manquants (${c.name ?? "?"})`,
+          host,
+          url,
+          riskCode: high ? "medium" : "low",
+          compromise: high
+            ? "Exposition moyenne — session potentiellement exposée"
+            : "Exposition faible — durcissement cookie incomplet",
+          signal: missing.join(", "),
+        }),
+      );
+    }
+
     if (ev.osint) {
       out.push(
         row({
