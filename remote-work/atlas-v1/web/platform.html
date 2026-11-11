@@ -356,7 +356,7 @@
 
     async function startApi() {
       $("startApiBtn").disabled = true;
-      setStatus("Demarrage API…");
+      setStatus("Démarrage API…");
       try {
         const res = await fetch("http://127.0.0.1:17865/start-api", { method: "POST" });
         const data = await res.json().catch(() => ({}));
@@ -379,7 +379,7 @@
             setStatus("API OK", "ok");
             return;
           }
-          setStatus("Demarrage… " + (i + 1) + "/30");
+          setStatus("Démarrage… " + (i + 1) + "/30");
         }
         // 202 accepted AtlasLocal start but :3001 never came up — keep recovery hint.
         setStatus(
@@ -489,7 +489,7 @@
     }
 
     async function executeAndExport(missionId) {
-      setStatus("Execution…");
+      setStatus("Exécution…");
       const run = await apiJson("/v1/missions/" + missionId + "/execute", { method: "POST" });
       if (run.gate && run.gate.decision === "REJECT") {
         setStatus(run.gate.code + ": " + run.gate.reason, "err");
@@ -553,7 +553,7 @@
         });
         lastMissionId = mission.id;
 
-        setStatus("Responsabilite…");
+        setStatus("Responsabilité…");
         const attached = await apiJson(
           "/v1/missions/" + mission.id + "/owner-authorization",
           {

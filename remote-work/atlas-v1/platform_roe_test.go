@@ -132,6 +132,36 @@ func TestPlatformHTMLDemarrerAccent(t *testing.T) {
 	}
 }
 
+// Progress setStatus lines must keep FR accents (Démarrage / Exécution / Responsabilité).
+func TestPlatformHTMLStatusAccents(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	need := []string{
+		`setStatus("Démarrage API…");`,
+		`setStatus("Démarrage… "`,
+		`setStatus("Exécution…");`,
+		`setStatus("Responsabilité…");`,
+	}
+	for _, n := range need {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing accented status %q", n)
+		}
+	}
+	for _, bad := range []string{
+		`setStatus("Demarrage API…");`,
+		`setStatus("Demarrage… "`,
+		`setStatus("Execution…");`,
+		`setStatus("Responsabilite…");`,
+	} {
+		if strings.Contains(html, bad) {
+			t.Fatalf("platform.html still has unaccented status %q", bad)
+		}
+	}
+}
+
 // After /start-api 202, health poll timeout must still surface recovery hint (parity fail path).
 func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
