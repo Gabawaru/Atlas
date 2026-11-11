@@ -81,4 +81,29 @@ describe("sendAgentRedirect", () => {
       localStorage.removeItem(AGENT_REDIRECT_STORAGE_KEY);
     }
   });
+
+  it("network catch appends Démarrer l'API recovery (parity #111–#114)", async () => {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(AGENT_REDIRECT_STORAGE_KEY);
+    }
+    const prev = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+    try {
+      const result = await sendAgentRedirect({
+        message: "Ping offline",
+        apiBase: "http://127.0.0.1:9",
+        token: "tok",
+      });
+      assert.equal(result.api, "error");
+      assert.match(result.apiDetail ?? "", /Failed to fetch/);
+      assert.match(result.apiDetail ?? "", /Démarrer l'API/);
+    } finally {
+      globalThis.fetch = prev;
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem(AGENT_REDIRECT_STORAGE_KEY);
+      }
+    }
+  });
 });
