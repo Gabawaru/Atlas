@@ -34,3 +34,27 @@ func TestPlatformHTMLHasRoePrecheck(t *testing.T) {
 		t.Fatalf("isAuthorizedRoeHost must gate before ensureAsset (roe=%d asset=%d)", roeIdx, assetIdx)
 	}
 }
+
+// Pages → shell deep-link (?action=&host=) must prefill RoE host (parity with Vite client).
+func TestPlatformHTMLAppliesLaunchQuery(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		"function applyLaunchFromQuery",
+		"function normalizeLaunchHost",
+		"applyLaunchFromQuery(location.search)",
+		`$("target").value = host`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing launch prefill marker %q", n)
+		}
+	}
+	boot := "syncScanEnabled();\n    applyLaunchFromQuery(location.search);\n    void ping();"
+	if !strings.Contains(html, boot) {
+		t.Fatalf("platform.html boot must call applyLaunchFromQuery before ping")
+	}
+}

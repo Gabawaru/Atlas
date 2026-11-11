@@ -231,10 +231,7 @@
 
     /** Fail-closed: même RoE que apps/client authorizedLaunch. */
     function isAuthorizedRoeHost(host) {
-      const h = String(host || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\.$/, "");
+      const h = normalizeLaunchHost(host);
       if (!h || h.includes(" ") || h.includes("..") || h.includes(":")) {
         return false;
       }
@@ -243,6 +240,56 @@
         const suffix = pattern.slice(1);
         return h.endsWith(suffix) && h.length > suffix.length;
       });
+    }
+
+    function normalizeLaunchHost(value) {
+      const raw = String(value || "").trim();
+      try {
+        if (raw.includes("://")) {
+          return new URL(raw).hostname.toLowerCase().replace(/\.$/, "");
+        }
+      } catch {
+        /* fallthrough */
+      }
+      let host = raw.toLowerCase().replace(/\.$/, "").split("/")[0] || "";
+      if (host.includes(":") && !host.includes("::")) {
+        host = host.split(":")[0] || host;
+      }
+      return host;
+    }
+
+    /**
+     * Deep-link Pages / atlas-secu.com → shell Scan (?action=&host=#scanner).
+     * Prefill FQDN only when host is in RoE; hors RoE → status err, keep défaut.
+     */
+    function applyLaunchFromQuery(search) {
+      const q = new URLSearchParams(
+        String(search || "").startsWith("?")
+          ? String(search).slice(1)
+          : String(search || ""),
+      );
+      const action = (q.get("action") || "").trim();
+      const hostRaw = (q.get("host") || "").trim();
+      if (!action && !hostRaw) return;
+      if (!hostRaw) {
+        if (action) {
+          setStatus("Deep-link : action « " + action + " » — renseignez un FQDN RoE.", "muted");
+        }
+        return;
+      }
+      const host = normalizeLaunchHost(hostRaw);
+      if (!isAuthorizedRoeHost(host)) {
+        setStatus(
+          "Cible « " + hostRaw + " » hors RoE (" + ROE_SCOPE_LABEL + ").",
+          "err",
+        );
+        return;
+      }
+      $("target").value = host;
+      setStatus(
+        (action ? "Deep-link « " + action + " » · " : "Deep-link · ") + host,
+        "muted",
+      );
     }
 
     function syncScanEnabled() {
@@ -518,6 +565,7 @@
     $("testResponsibility").onchange = () => syncScanEnabled();
     $("scanBtn").onclick = () => void runScan();
     syncScanEnabled();
+    applyLaunchFromQuery(location.search);
     void ping();
   </script>
 </body>
