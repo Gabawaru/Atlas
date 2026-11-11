@@ -29,6 +29,7 @@ import {
   parseAuthorizedLaunch,
   type AuthorizedLaunchIntent,
 } from "./authorizedLaunch";
+import { formatLocalBridgeNetworkFailure } from "./localShell";
 import {
   riskTableFromReportExport,
   type RiskTableRow,
@@ -250,17 +251,23 @@ export function App() {
 
   async function login() {
     setError(null);
-    const res = await fetch(`${API}/v1/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(String(data.message ?? "Échec"));
-      return;
+    try {
+      const res = await fetch(`${API}/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(String(data.message ?? "Échec"));
+        return;
+      }
+      setToken(data.accessToken);
+    } catch (e) {
+      // API/:3001 down — parity Session api-health (#92); Entrer must not go silent.
+      const raw = e instanceof Error ? e.message : String(e);
+      setError(formatLocalBridgeNetworkFailure(raw, "api-health"));
     }
-    setToken(data.accessToken);
   }
 
   async function refresh() {
