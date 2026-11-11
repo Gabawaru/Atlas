@@ -10,9 +10,10 @@ bash scripts/unix/install-atlas-prereqs.sh
 bash scripts/unix/install-atlas-prereqs.sh --skip-launch
 bash scripts/unix/install-atlas-prereqs.sh --skip-install   # checklist only
 bash scripts/unix/install-atlas-prereqs.sh --self-test      # Darwin keg PATH stubs (Linux CI OK)
+bash scripts/unix/run-atlas-shell.sh --self-test            # Scan shell PATH stubs (Linux CI OK)
 ```
 
-**macOS / Homebrew:** `node@20` is keg-only. The installer prepends `$(brew --prefix node@20)/bin` to `PATH` and re-checks `node -v` (fail-closed) — same idea as Windows `Refresh-PathFromMachine` after winget. `pnpm atlas:shell` / AtlasLocal also prepend at runtime so `/start-api` children still see Node.
+**macOS / Homebrew:** `node@20` is keg-only. The installer prepends `$(brew --prefix node@20)/bin` to `PATH` and re-checks `node -v` (fail-closed) — same idea as Windows `Refresh-PathFromMachine` after winget. `pnpm atlas:shell` / AtlasLocal also prepend at runtime so `/start-api` children still see Node. `run-atlas-shell.sh --self-test` proves GUI brew-off-PATH + keg-direct fallbacks without a Mac.
 
 ## After install
 
