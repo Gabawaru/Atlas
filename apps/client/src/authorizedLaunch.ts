@@ -130,6 +130,17 @@ export function formatAuthorizedLaunchBanner(
 }
 
 /**
+ * Hors-RoE / bad-action refuse text for deep-link status.
+ * Survives login() clearing generic `error` — empty miss (no action) → null.
+ */
+export function launchRefuseReason(
+  result: AuthorizedLaunchResult,
+): string | null {
+  if (result.ok || !result.reason) return null;
+  return result.reason;
+}
+
+/**
  * Build local client deep-link used by atlas-secu.com capability CTAs.
  * Default origin is `http://localhost:3002`. Vite `server.host: true` also
  * serves `127.0.0.1:3002` (Atlas.exe / IPv4 bookmarks).
