@@ -22,14 +22,31 @@ fi
 cp -f "$LOCAL" "$(dirname "$BIN")/AtlasLocal" 2>/dev/null || true
 
 # Homebrew node@20 is keg-only — same class as install-atlas-prereqs.sh (#74).
-# Prepend so AtlasLocal start (child of /start-api) sees node/pnpm/corepack.
+# GUI PATH often omits /opt/homebrew/bin; resolve brew via well-known locations.
+BREW_BIN=""
 if command -v brew >/dev/null 2>&1; then
+  BREW_BIN="$(command -v brew)"
+elif [[ -x /opt/homebrew/bin/brew ]]; then
+  BREW_BIN=/opt/homebrew/bin/brew
+elif [[ -x /usr/local/bin/brew ]]; then
+  BREW_BIN=/usr/local/bin/brew
+fi
+if [[ -n "$BREW_BIN" ]]; then
   for formula in node@20 node; do
-    prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+    prefix="$("$BREW_BIN" --prefix "$formula" 2>/dev/null || true)"
     if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
       case ":$PATH:" in
         *":$prefix/bin:"*) ;;
         *) PATH="$prefix/bin:$PATH"; export PATH ;;
+      esac
+    fi
+  done
+else
+  for keg in /opt/homebrew/opt/node@20/bin /opt/homebrew/opt/node/bin /usr/local/opt/node@20/bin /usr/local/opt/node/bin; do
+    if [[ -d "$keg" ]]; then
+      case ":$PATH:" in
+        *":$keg:"*) ;;
+        *) PATH="$keg:$PATH"; export PATH ;;
       esac
     fi
   done
