@@ -117,6 +117,21 @@ func TestPlatformHTMLDeepLinkActionLabels(t *testing.T) {
 	}
 }
 
+// Button + offline status must use accented Démarrer (parity Vite localShell label/hint).
+func TestPlatformHTMLDemarrerAccent(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	if !strings.Contains(html, "Démarrer l'API") {
+		t.Fatalf("platform.html missing accented Démarrer l'API")
+	}
+	if strings.Contains(html, "Demarrer l'API") {
+		t.Fatalf("platform.html still has unaccented Demarrer l'API")
+	}
+}
+
 // After /start-api 202, health poll timeout must still surface recovery hint (parity fail path).
 func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))

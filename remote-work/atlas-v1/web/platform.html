@@ -180,7 +180,7 @@
       <div class="row">
         <span class="muted">API</span>
         <code id="apiBase">http://127.0.0.1:3001</code>
-        <button type="button" class="ghost" id="startApiBtn">Demarrer l'API</button>
+        <button type="button" class="ghost" id="startApiBtn">Démarrer l'API</button>
         <button type="button" class="ghost" id="pingBtn">Tester</button>
         <span id="apiHealth" class="muted"></span>
       </div>
@@ -526,7 +526,7 @@
       exportsEl.hidden = true;
       try {
         if (!(await ping())) {
-          setStatus("API hors ligne — Demarrer l'API.", "err");
+          setStatus("API hors ligne — Démarrer l'API.", "err");
           return;
         }
 
