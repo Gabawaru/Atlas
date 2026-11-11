@@ -205,6 +205,57 @@ func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
 	}
 }
 
+// Hors-RoE / bad-action deep-link refuse must persist past Démarrer l'API setStatus (parity Vite #107).
+func TestPlatformHTMLLaunchRefusePersist(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		`id="launchRefuse"`,
+		`data-testid="launch-refuse"`,
+		`function setLaunchRefuse`,
+		`setLaunchRefuse(`,
+		`setStatus("Démarrage API…");`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing launch-refuse persist marker %q", n)
+		}
+	}
+	// Refuse paths must not dump solely through setStatus (wiped by Démarrer / Scan).
+	bad := []string{
+		`setStatus(
+          "Action « " + action + " » non autorisée — utiliser recon|scan|vuln|osint.",
+          "err",
+        )`,
+		`setStatus(
+          "Cible « " + hostRaw + " » hors RoE (" + ROE_SCOPE_LABEL + ").",
+          "err",
+        )`,
+	}
+	for _, b := range bad {
+		if strings.Contains(html, b) {
+			t.Fatalf("refuse still routed only through ephemeral setStatus")
+		}
+	}
+	startIdx := strings.Index(html, `function applyLaunchFromQuery`)
+	if startIdx < 0 {
+		t.Fatal("applyLaunchFromQuery missing")
+	}
+	snippet := html[startIdx:]
+	if end := strings.Index(snippet, `function syncScanEnabled`); end > 0 {
+		snippet = snippet[:end]
+	}
+	if !strings.Contains(snippet, `setLaunchRefuse(`) {
+		t.Fatal("applyLaunchFromQuery must call setLaunchRefuse")
+	}
+	if !strings.Contains(snippet, `hors RoE`) {
+		t.Fatal("applyLaunchFromQuery missing hors RoE refuse copy")
+	}
+}
+
 // showExports onclick must catch network and append API recovery (parity Vite #114).
 func TestPlatformHTMLExportNetworkCatchHint(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))

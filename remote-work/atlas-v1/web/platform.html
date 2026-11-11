@@ -154,6 +154,12 @@
     }
     .muted { color: var(--muted); font-size: 0.92rem; }
     .status { margin-top: 14px; white-space: pre-wrap; }
+    #launchRefuse {
+      margin: 0 0 12px;
+      color: var(--accent);
+      white-space: pre-wrap;
+    }
+    #launchRefuse[hidden] { display: none; }
     .ok { color: var(--ok); }
     .err { color: var(--accent); }
     .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
@@ -175,6 +181,8 @@
       <h1 class="brand">Atlas</h1>
     </div>
     <p class="tagline">Scan passif</p>
+    <!-- Parité Vite #107 launchRefuse — survives Démarrer l'API / Scan setStatus. -->
+    <p id="launchRefuse" role="status" data-testid="launch-refuse" hidden></p>
 
     <div class="card">
       <div class="row">
@@ -281,14 +289,15 @@
       const hostRaw = (q.get("host") || "").trim();
       if (!action && !hostRaw) return;
       if (action && !isAuthorizedAction(action)) {
-        setStatus(
+        // Dedicated refuse node — Démarrer l'API / Scan must not wipe (parity Vite #107).
+        setLaunchRefuse(
           "Action « " + action + " » non autorisée — utiliser recon|scan|vuln|osint.",
-          "err",
         );
         return;
       }
       const actionLabel = AUTHORIZED_ACTION_LABELS[action] || action;
       if (!hostRaw) {
+        setLaunchRefuse("");
         setStatus(
           "Deep-link : action « " + actionLabel + " » — renseignez un FQDN RoE.",
           "muted",
@@ -297,12 +306,12 @@
       }
       const host = normalizeLaunchHost(hostRaw);
       if (!isAuthorizedRoeHost(host)) {
-        setStatus(
+        setLaunchRefuse(
           "Cible « " + hostRaw + " » hors RoE (" + ROE_SCOPE_LABEL + ").",
-          "err",
         );
         return;
       }
+      setLaunchRefuse("");
       $("target").value = host;
       setStatus(
         (action ? "Deep-link « " + actionLabel + " » · " : "Deep-link · ") + host,
@@ -321,6 +330,19 @@
     function setStatus(text, cls) {
       statusEl.className = "status " + (cls || "muted");
       statusEl.textContent = text;
+    }
+
+    /** Hors-RoE / bad-action refuse — must survive setStatus (parity Vite #107). */
+    function setLaunchRefuse(text) {
+      const el = $("launchRefuse");
+      const msg = String(text || "").trim();
+      if (!msg) {
+        el.textContent = "";
+        el.hidden = true;
+        return;
+      }
+      el.textContent = msg;
+      el.hidden = false;
     }
 
     async function apiJson(path, opts = {}) {
