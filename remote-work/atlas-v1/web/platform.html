@@ -226,6 +226,8 @@
       "pragma-cloud.com",
       "pragma.mc",
     ];
+    /** Parité apps/client authorizedLaunch — deep-link actions only. */
+    const AUTHORIZED_ACTIONS = ["recon", "scan", "vuln", "osint"];
     let token = null;
     let lastMissionId = null;
 
@@ -258,9 +260,13 @@
       return host;
     }
 
+    function isAuthorizedAction(value) {
+      return AUTHORIZED_ACTIONS.indexOf(String(value || "").trim()) !== -1;
+    }
+
     /**
      * Deep-link Pages / atlas-secu.com → shell Scan (?action=&host=#scanner).
-     * Prefill FQDN only when host is in RoE; hors RoE → status err, keep défaut.
+     * Prefill FQDN only when action (if set) + host are authorized; else status err.
      */
     function applyLaunchFromQuery(search) {
       const q = new URLSearchParams(
@@ -271,10 +277,18 @@
       const action = (q.get("action") || "").trim();
       const hostRaw = (q.get("host") || "").trim();
       if (!action && !hostRaw) return;
+      if (action && !isAuthorizedAction(action)) {
+        setStatus(
+          "Action « " + action + " » non autorisée — utiliser recon|scan|vuln|osint.",
+          "err",
+        );
+        return;
+      }
       if (!hostRaw) {
-        if (action) {
-          setStatus("Deep-link : action « " + action + " » — renseignez un FQDN RoE.", "muted");
-        }
+        setStatus(
+          "Deep-link : action « " + action + " » — renseignez un FQDN RoE.",
+          "muted",
+        );
         return;
       }
       const host = normalizeLaunchHost(hostRaw);
