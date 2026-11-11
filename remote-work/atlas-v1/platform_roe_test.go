@@ -204,3 +204,34 @@ func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
 		t.Fatalf("timeout status must append hint, not bare hors-ligne line")
 	}
 }
+
+// startApi network catch must append shell recovery (parity Vite Session #92).
+func TestPlatformHTMLStartApiNetworkCatchHint(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		`failed to fetch|networkerror|load failed|network request failed`,
+		"Shell hors ligne — lancez `pnpm atlas:shell`",
+		`setStatus(msg, "err");`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing start-api network catch marker %q", n)
+		}
+	}
+	// startApi catch must use msg+recovery, not the old bare one-liner adjacent to finally.
+	startIdx := strings.Index(html, `async function startApi`)
+	if startIdx < 0 {
+		t.Fatal("startApi function missing")
+	}
+	snippet := html[startIdx:]
+	if end := strings.Index(snippet, `async function ensureLogin`); end > 0 {
+		snippet = snippet[:end]
+	}
+	if strings.Contains(snippet, `setStatus(e instanceof Error ? e.message : String(e), "err");`) {
+		t.Fatalf("startApi catch still dumps bare e.message without shell recovery")
+	}
+}

@@ -387,7 +387,12 @@
           "err",
         );
       } catch (e) {
-        setStatus(e instanceof Error ? e.message : String(e), "err");
+        // Network throw (shell died after page load) — parity Vite formatLocalBridgeNetworkFailure.
+        let msg = e instanceof Error ? e.message : String(e);
+        if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+          msg += "\nShell hors ligne — lancez `pnpm atlas:shell` (http://127.0.0.1:17865).";
+        }
+        setStatus(msg, "err");
       } finally {
         $("startApiBtn").disabled = false;
       }
