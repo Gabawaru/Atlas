@@ -178,6 +178,15 @@ describe("web.passive.presence.v1", () => {
         "content-security-policy",
       ),
     );
+    assert.ok(
+      results[0]!.http!.securityHeaders!.missing.includes(
+        "permissions-policy",
+      ),
+      "Permissions-Policy absent must reach live riskTable feed",
+    );
+    assert.ok(
+      results[0]!.http!.securityHeaders!.missing.includes("referrer-policy"),
+    );
     assert.ok(results[0]!.dns.ns?.includes("ns1.test"));
     assert.equal(results[0]!.tls?.daysRemaining, 30);
   });

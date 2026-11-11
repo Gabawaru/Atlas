@@ -358,6 +358,8 @@ function extractSecurityHeaders(
   if (!xFrameOptions) missing.push("x-frame-options");
   if (!xContentTypeOptions) missing.push("x-content-type-options");
   if (!referrerPolicy) missing.push("referrer-policy");
+  // HEADER_META already maps this; without push, live riskTable never flags PP absent.
+  if (!permissionsPolicy) missing.push("permissions-policy");
   return {
     hsts,
     csp,
