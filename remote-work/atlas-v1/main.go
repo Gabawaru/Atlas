@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	_ "embed"
@@ -133,28 +134,64 @@ func handleStartAPI(installDir string) http.HandlerFunc {
 func findAtlasLocal(installDir string) string {
 	names := atlasLocalNames()
 	var candidates []string
-	for _, name := range names {
-		candidates = append(candidates,
-			filepath.Join(installDir, name),
-			filepath.Join(installDir, "tools", name),
-		)
+	addFiles := func(paths ...string) {
+		candidates = append(candidates, paths...)
 	}
-	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
+	// Shell / NSIS layout: binary beside install dir, tools/, or bin/.
+	addInstallLayout := func(dir string) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			return
+		}
 		for _, name := range names {
-			candidates = append(candidates, filepath.Join(localApp, "AtlasLocal", name))
+			addFiles(
+				filepath.Join(dir, name),
+				filepath.Join(dir, "tools", name),
+				filepath.Join(dir, "bin", name),
+			)
 		}
 	}
+
+	addInstallLayout(installDir)
+
+	// Windows NSIS default: %LOCALAPPDATA%\AtlasLocal\AtlasLocal.exe
+	if localApp := os.Getenv("LOCALAPPDATA"); localApp != "" {
+		addInstallLayout(filepath.Join(localApp, "AtlasLocal"))
+	}
+
+	// Unix/macOS twin of LOCALAPPDATA: ~/Atlas (AtlasLocal installRoot) + ATLAS_HOME.
 	if home, err := os.UserHomeDir(); err == nil {
+		atlasHome := filepath.Join(home, "Atlas")
+		if v := strings.TrimSpace(os.Getenv("ATLAS_HOME")); v != "" {
+			atlasHome = filepath.Clean(v)
+		}
+		addInstallLayout(atlasHome)
+		// Common after monorepo clone / build.sh payload.
+		addInstallLayout(filepath.Join(atlasHome, "remote-work", "atlas-v1", "payload"))
+		addInstallLayout(filepath.Join(atlasHome, "remote-work", "atlas-v1", "bin"))
+		addInstallLayout(filepath.Join(atlasHome, "remote-work", "offline-installer", "bin"))
 		for _, name := range names {
-			candidates = append(candidates,
+			addFiles(
 				filepath.Join(home, ".local", "bin", name),
 				filepath.Join(home, "bin", name),
 			)
 		}
 	}
-	if path, err := exec.LookPath("AtlasLocal"); err == nil {
-		candidates = append(candidates, path)
+
+	// App-support dir (darwin Application Support / XDG) + last shell install-path.txt.
+	appData := atlasAppDataDir()
+	addInstallLayout(appData)
+	if b, err := os.ReadFile(filepath.Join(appData, "install-path.txt")); err == nil {
+		addInstallLayout(strings.TrimSpace(string(b)))
 	}
+
+	if path, err := exec.LookPath("AtlasLocal"); err == nil {
+		addFiles(path)
+	}
+	if path, err := exec.LookPath("AtlasLocal.exe"); err == nil {
+		addFiles(path)
+	}
+
 	for _, p := range candidates {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p
