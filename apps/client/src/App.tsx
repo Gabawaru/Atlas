@@ -49,6 +49,7 @@ import {
   appendReportAvailable,
   appendScanOutcome,
   appendScanStarted,
+  refusedScanJournalArgs,
 } from "./sessionTraceLive";
 import type { TraceBridge } from "./sessionTraceBridge";
 
@@ -457,6 +458,11 @@ export function App() {
       });
       if (!validated.ok) {
         setError(validated.reason);
+        appendScanOutcome(
+          refusedScanJournalArgs(realTargetHost, validated.reason),
+          undefined,
+          traceBridge,
+        );
         return;
       }
 
