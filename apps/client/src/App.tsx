@@ -884,11 +884,19 @@ export function App() {
           )}
         </section>
       ) : view === "tracking" ? (
-        <VulnTrackingView
-          store={vulnStore}
-          onStoreChange={persistVulnStore}
-          onBack={goScanner}
-        />
+        <>
+          {/* #118 Demarrer must survive Suivi — no local API CTA (parity hub #123 / Journal #125). */}
+          {error && (
+            <p style={{ color: "var(--alert)" }} role="status">
+              {error}
+            </p>
+          )}
+          <VulnTrackingView
+            store={vulnStore}
+            onStoreChange={persistVulnStore}
+            onBack={goScanner}
+          />
+        </>
       ) : view === "terminal" ? (
         <SessionTerminalView onBack={goSession} onLaunchScan={goScanner} />
       ) : (
