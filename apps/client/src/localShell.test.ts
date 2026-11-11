@@ -23,6 +23,12 @@ describe("localShell stubs", () => {
     );
   });
 
+  it("start-api CTA label uses Démarrer l'API (parity platform)", () => {
+    const startApi = LOCAL_SHELL_COMMANDS.find((c) => c.id === "start-api");
+    assert.equal(startApi?.label, "Démarrer l'API");
+    assert.doesNotMatch(startApi?.label ?? "", /^Démarrer API$/);
+  });
+
   it("healthz parse JSON ok", async () => {
     const fetchImpl: typeof fetch = async () =>
       new Response(JSON.stringify({ ok: true, service: "atlas-shell" }), {
