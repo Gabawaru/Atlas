@@ -25,6 +25,7 @@ import {
 } from "./scannerMissionPath";
 import {
   formatAuthorizedLaunchBanner,
+  launchRefuseReason,
   parseAuthorizedLaunch,
   type AuthorizedLaunchIntent,
 } from "./authorizedLaunch";
@@ -160,6 +161,8 @@ export function App() {
   /** RoE deep-link from atlas-secu.com (?action=&host=) — Scanner prefill only. */
   const [authorizedLaunch, setAuthorizedLaunch] =
     useState<AuthorizedLaunchIntent | null>(null);
+  /** Hors-RoE / bad-action refuse — must survive login() clearing `error`. */
+  const [launchRefuse, setLaunchRefuse] = useState<string | null>(null);
   const [view, setView] = useState<SessionRoute>(() =>
     typeof window !== "undefined"
       ? parseSessionHash(window.location.hash)
@@ -327,10 +330,13 @@ export function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const parsed = parseAuthorizedLaunch(window.location.search);
-    if (!parsed.ok) {
-      if (parsed.reason) setError(parsed.reason);
+    const refuse = launchRefuseReason(parsed);
+    if (refuse) {
+      setLaunchRefuse(refuse);
       return;
     }
+    if (!parsed.ok) return;
+    setLaunchRefuse(null);
     setAuthorizedLaunch(parsed.intent);
     setRealTargetHost(parsed.intent.host);
     setInfo(formatAuthorizedLaunchBanner(parsed.intent));
@@ -771,6 +777,11 @@ export function App() {
         <span className="hero-orb" aria-hidden="true" />
         <p className="brand">Atlas</p>
       </div>
+      {launchRefuse && (
+        <p style={{ color: "var(--alert)" }} role="status" data-testid="launch-refuse">
+          {launchRefuse}
+        </p>
+      )}
 
       {!token ? (
         <section id="session" aria-label="Connexion">
@@ -786,6 +797,7 @@ export function App() {
             Entrer
           </button>
           <p className="muted">owner@demo.atlas.local / atlas-demo</p>
+          {error && <p style={{ color: "var(--alert)" }}>{error}</p>}
         </section>
       ) : view === "session-trace" ? (
         <SessionTracePage

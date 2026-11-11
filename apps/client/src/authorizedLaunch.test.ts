@@ -4,6 +4,7 @@ import {
   authorizedLaunchHref,
   formatAuthorizedLaunchBanner,
   isAuthorizedRoeHost,
+  launchRefuseReason,
   parseAuthorizedLaunch,
 } from "./authorizedLaunch.js";
 
@@ -73,6 +74,28 @@ describe("formatAuthorizedLaunchBanner", () => {
         label: "Scan",
       }),
       "Deep-link « Scan » · api.pragma-serve.com",
+    );
+  });
+});
+
+describe("launchRefuseReason", () => {
+  it("pins hors-RoE / bad action; empty miss stays null", () => {
+    assert.equal(launchRefuseReason(parseAuthorizedLaunch("")), null);
+    assert.match(
+      launchRefuseReason(
+        parseAuthorizedLaunch("?action=scan&host=evil.com"),
+      ) ?? "",
+      /hors RoE/,
+    );
+    assert.match(
+      launchRefuseReason(
+        parseAuthorizedLaunch("?action=exploit&host=pragma-serve.com"),
+      ) ?? "",
+      /non autorisée/,
+    );
+    assert.equal(
+      launchRefuseReason(parseAuthorizedLaunch("?action=scan")),
+      null,
     );
   });
 });
