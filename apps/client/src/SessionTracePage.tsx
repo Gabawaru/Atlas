@@ -12,6 +12,7 @@ import {
 import {
   LIVE_TRACE_EVENT,
   appendRedirectTrace,
+  formatRedirectEnqueueInfo,
   hydrateLiveFromDurable,
   loadLiveTrace,
   mergeSeedAndLive,
@@ -209,12 +210,8 @@ export function SessionTracePage({
       setLive(loadLiveTrace());
       onRedirectQueued?.(draft.trim());
       setDraft("");
-      if (result.api === "ok") {
-        setSendInfo("Message enfilé + /v1/conversation OK · journal durable.");
-      } else if (result.api === "skipped") {
-        setSendInfo("Message enfilé (local). API conversation ignorée — pas de jeton.");
-      } else {
-        setSendInfo("Message enfilé (local + journal).");
+      setSendInfo(formatRedirectEnqueueInfo(result.api));
+      if (result.api === "error") {
         setSendError(result.apiDetail ?? "Bridge conversation en erreur.");
       }
     } catch (err) {
