@@ -882,7 +882,7 @@ export function App() {
             </span>
           </p>
 
-          <h2 id="results-title">Resultats</h2>
+          <h2 id="results-title">Résultats</h2>
           {latestRiskTable.length > 0 ? (
             <div className="risk-table-wrap">
               <table className="risk-table" aria-label="Niveaux de risque et compromission">
@@ -924,7 +924,7 @@ export function App() {
               </table>
             </div>
           ) : recentResults.length === 0 ? (
-            <p className="muted">Aucun resultat.</p>
+            <p className="muted">Aucun résultat.</p>
           ) : null}
           {recentResults.length > 0 && (
             <ul className="results-list results-compact">
