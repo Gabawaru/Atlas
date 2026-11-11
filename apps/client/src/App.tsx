@@ -340,10 +340,16 @@ export function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onHash = () => setView(parseSessionHash(window.location.hash));
+    const onHash = () => {
+      const next = parseSessionHash(window.location.hash);
+      setView(next);
+      // #120 twin: browser-back / typed #scanner after Demarrer must re-hydrate grants
+      // (goScanner already refreshes; hash-only navigation was still stuck).
+      if (next === "scanner" && token) void refresh();
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
