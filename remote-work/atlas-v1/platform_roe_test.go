@@ -116,3 +116,25 @@ func TestPlatformHTMLDeepLinkActionLabels(t *testing.T) {
 		t.Fatalf("success Deep-link banner must use actionLabel, not raw action id")
 	}
 }
+
+// After /start-api 202, health poll timeout must still surface recovery hint (parity fail path).
+func TestPlatformHTMLStartApiTimeoutKeepsHint(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	needles := []string{
+		`const hint = data && data.hint ? String(data.hint) : "";`,
+		`API toujours hors ligne." + (hint ? "\n" + hint : "")`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(html, n) {
+			t.Fatalf("platform.html missing start-api timeout hint marker %q", n)
+		}
+	}
+	bare := `setStatus("API toujours hors ligne.", "err");`
+	if strings.Contains(html, bare) {
+		t.Fatalf("timeout status must append hint, not bare hors-ligne line")
+	}
+}
