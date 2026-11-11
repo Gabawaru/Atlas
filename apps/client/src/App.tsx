@@ -243,7 +243,9 @@ export function App() {
           : `Export ${format.toUpperCase()} téléchargé.`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // API/:3001 down during export — parity login/Scan (#111/#113).
+      const raw = e instanceof Error ? e.message : String(e);
+      setError(formatLocalBridgeNetworkFailure(raw, "api-health"));
     } finally {
       setExportBusyKey(null);
     }
