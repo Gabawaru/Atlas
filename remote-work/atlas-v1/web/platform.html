@@ -193,7 +193,7 @@
       <label for="password">Mot de passe</label>
       <input id="password" type="password" value="atlas-demo" autocomplete="current-password" />
 
-      <label for="target">FQDN</label>
+      <label for="target">FQDN (*.pragma-serve.com, *.pragma-cloud.com, *.pragma.mc)</label>
       <input id="target" value="pragma-serve.com" autocomplete="off" />
 
       <label class="mode-toggle" for="testResponsibility" style="display:flex;gap:10px;align-items:flex-start;margin:14px 0 8px;cursor:pointer">
@@ -214,8 +214,36 @@
     const exportsEl = $("exports");
     const TEST_RESPONSIBILITY_LABEL =
       "Je prends la responsabilité de ce scan s'il s'avère non autorisé.";
+    const ROE_SCOPE_LABEL =
+      "*.pragma-serve.com, *.pragma-cloud.com, *.pragma.mc";
+    const ROE_SCOPE_PATTERNS = [
+      "*.pragma-serve.com",
+      "*.pragma-cloud.com",
+      "*.pragma.mc",
+    ];
+    const ROE_EXPLICIT_APEXES = [
+      "pragma-serve.com",
+      "pragma-cloud.com",
+      "pragma.mc",
+    ];
     let token = null;
     let lastMissionId = null;
+
+    /** Fail-closed: même RoE que apps/client authorizedLaunch. */
+    function isAuthorizedRoeHost(host) {
+      const h = String(host || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\.$/, "");
+      if (!h || h.includes(" ") || h.includes("..") || h.includes(":")) {
+        return false;
+      }
+      if (ROE_EXPLICIT_APEXES.includes(h)) return true;
+      return ROE_SCOPE_PATTERNS.some((pattern) => {
+        const suffix = pattern.slice(1);
+        return h.endsWith(suffix) && h.length > suffix.length;
+      });
+    }
 
     function syncScanEnabled() {
       $("scanBtn").disabled = !$("testResponsibility").checked;
@@ -416,8 +444,12 @@
         setStatus("Cochez « " + TEST_RESPONSIBILITY_LABEL + " » avant le scan.", "err");
         return;
       }
-      if (target.length < 3) {
-        setStatus("Cible FQDN requise.", "err");
+      if (!target || target.length < 3) {
+        setStatus("Cible FQDN requise (" + ROE_SCOPE_LABEL + ").", "err");
+        return;
+      }
+      if (!isAuthorizedRoeHost(target)) {
+        setStatus("Cible hors RoE (" + ROE_SCOPE_LABEL + ").", "err");
         return;
       }
 
