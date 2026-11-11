@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   apiHealthUrl,
+  formatStartApiFailureBody,
   LOCAL_SHELL_COMMANDS,
   runLocalShellCommand,
   shellUrl,
@@ -39,6 +40,27 @@ describe("localShell stubs", () => {
     const r = await runLocalShellCommand("start-api", { fetchImpl });
     assert.equal(r.ok, true);
     assert.equal(r.status, 202);
+  });
+
+  it("start-api fail surface hint + lookedIn (pas JSON brut)", async () => {
+    const payload = {
+      ok: false,
+      error: "AtlasLocal introuvable",
+      hint: "bash scripts/unix/install-atlas-prereqs.sh",
+      lookedIn: ["~/Atlas", "tools/", "bin/"],
+    };
+    const formatted = formatStartApiFailureBody(JSON.stringify(payload), 404);
+    assert.match(formatted, /AtlasLocal introuvable/);
+    assert.match(formatted, /install-atlas-prereqs/);
+    assert.match(formatted, /Cherché : ~\/Atlas · tools\/ · bin\//);
+
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify(payload), { status: 404 });
+    const r = await runLocalShellCommand("start-api", { fetchImpl });
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 404);
+    assert.match(r.body, /Cherché :/);
+    assert.doesNotMatch(r.body, /"lookedIn"/);
   });
 
   it("launch-scan est UI-only", async () => {
