@@ -343,9 +343,9 @@ export function App() {
     const onHash = () => {
       const next = parseSessionHash(window.location.hash);
       setView(next);
-      // #120 twin: browser-back / typed #scanner after Demarrer must re-hydrate grants
-      // (goScanner already refreshes; hash-only navigation was still stuck).
-      if (next === "scanner" && token) void refresh();
+      // #120/#121 twin: browser-back / typed #scanner|#session after Demarrer
+      // must re-hydrate (and clear stale hub Demarrer via successful refresh).
+      if ((next === "scanner" || next === "session") && token) void refresh();
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -403,6 +403,9 @@ export function App() {
 
   function goSession() {
     goRoute("session");
+    // After #123 hub shows Demarrer, ← Session from Session-locale recovery
+    // must re-hydrate so successful AtlasLocal start clears the stale banner.
+    if (token) void refresh();
   }
 
   function goSessionTrace() {
