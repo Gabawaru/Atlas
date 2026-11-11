@@ -8,6 +8,7 @@ import {
   appendReportAvailable,
   appendScanOutcome,
   appendScanStarted,
+  refusedScanJournalArgs,
   loadLiveTrace,
   mergeSeedAndLive,
 } from "./sessionTraceLive";
@@ -53,6 +54,21 @@ describe("sessionTraceLive", () => {
     const merged = mergeSeedAndLive(seed, live);
     assert.ok(merged.length >= 2);
     assert.equal(merged[merged.length - 1]!.id, "live-z");
+  });
+
+  it("refuse CTA journalise avant POST (RoE / liability)", () => {
+    const s = new MemStorage() as unknown as Storage;
+    const args = refusedScanJournalArgs(
+      "evil.com",
+      "Cible hors RoE (*.pragma-serve.com, *.pragma-cloud.com, *.pragma.mc).",
+    );
+    assert.equal(args.missionId, "refused");
+    assert.equal(args.ok, false);
+    assert.equal(args.host, "evil.com");
+    const msg = appendScanOutcome(args, s);
+    assert.match(msg.text, /bloqué/);
+    assert.match(msg.text, /evil\.com/);
+    assert.match(msg.details?.reasons?.join(" ") ?? "", /hors RoE/i);
   });
 
   it("scan / report / redirect helpers shape ids", () => {

@@ -122,6 +122,24 @@ export function appendScanStarted(
   );
 }
 
+/** CTA refused before POST (RoE / liability) — journal durable still records. */
+export function refusedScanJournalArgs(
+  host: string,
+  reason: string,
+): {
+  host: string;
+  missionId: string;
+  ok: false;
+  detail: string;
+} {
+  return {
+    host: host.trim() || "(cible)",
+    missionId: "refused",
+    ok: false,
+    detail: reason,
+  };
+}
+
 export function appendScanOutcome(
   args: {
     host: string;
