@@ -343,10 +343,13 @@ export function App() {
     const onHash = () => {
       const next = parseSessionHash(window.location.hash);
       setView(next);
-      // #120/#121/#124 twin: browser-back / typed #scanner|#session|#session-trace
-      // after Demarrer must re-hydrate (clear stale Journal Demarrer via refresh).
+      // #120/#121/#124/#127 twin: browser-back / typed hash after Demarrer must
+      // re-hydrate (clear stale Suivi Demarrer via refresh — #128 lit tracking).
       if (
-        (next === "scanner" || next === "session" || next === "session-trace") &&
+        (next === "scanner" ||
+          next === "session" ||
+          next === "session-trace" ||
+          next === "tracking") &&
         token
       )
         void refresh();
@@ -392,6 +395,9 @@ export function App() {
 
   function goTracking() {
     goRoute("tracking");
+    // After #128 Suivi shows Demarrer, hub/Scanner → Suivi after AtlasLocal start
+    // must re-hydrate so successful recovery clears the stale banner (#127 twin).
+    if (token) void refresh();
   }
 
   function goTerminal() {
