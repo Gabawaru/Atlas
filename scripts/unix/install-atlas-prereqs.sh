@@ -50,13 +50,34 @@ echo "NOTE: Does not start Cursor/agent workers."
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Override in --self-test only (prod = real Homebrew layouts).
+: "${ATLAS_INSTALL_BREW_CANDIDATES:=/opt/homebrew/bin/brew:/usr/local/bin/brew}"
+
+# GUI macOS often omits brew from PATH — same class as AtlasLocal / run-atlas-shell.
+resolve_brew() {
+  local cand
+  if command -v brew >/dev/null 2>&1; then
+    command -v brew
+    return 0
+  fi
+  IFS=':' read -r -a _brew_cands <<< "$ATLAS_INSTALL_BREW_CANDIDATES"
+  for cand in "${_brew_cands[@]}"; do
+    if [[ -x "$cand" ]]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Homebrew node@20 is keg-only — install can succeed while `node` stays off PATH
 # (mirrors Windows Refresh-PathFromMachine after winget).
 prepend_brew_node_path() {
-  local formula prefix
-  have brew || return 0
+  local formula prefix brew_bin
+  brew_bin="$(resolve_brew || true)"
+  [[ -n "${brew_bin:-}" ]] || return 0
   for formula in node@20 node; do
-    prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+    prefix="$("$brew_bin" --prefix "$formula" 2>/dev/null || true)"
     if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
       case ":$PATH:" in
         *":$prefix/bin:"*) ;;
@@ -89,20 +110,22 @@ ensure_node() {
     return 0
   fi
   # Darwin: keg already installed but shell PATH never saw it.
-  if [[ "$OS" == "Darwin" ]] && have brew; then
+  if [[ "$OS" == "Darwin" ]] && resolve_brew >/dev/null; then
     prepend_brew_node_path
     if node_major_ok; then
       return 0
     fi
   fi
   info "Node >= $NODE_MAJOR_REQUIRED required."
-  if [[ "$OS" == "Darwin" ]] && have brew; then
-    brew install node@20 || brew install node
+  if [[ "$OS" == "Darwin" ]] && resolve_brew >/dev/null; then
+    local brew_bin
+    brew_bin="$(resolve_brew)"
+    "$brew_bin" install node@20 || "$brew_bin" install node
     prepend_brew_node_path
     if node_major_ok; then
       return 0
     fi
-    info "Node still missing after brew (keg-only?). Try: export PATH=\"\$(brew --prefix node@20)/bin:\$PATH\""
+    info "Node still missing after brew (keg-only?). Try: export PATH=\"\$(\"$brew_bin\" --prefix node@20)/bin:\$PATH\""
     return 1
   fi
   if have apt-get; then
@@ -130,7 +153,7 @@ ensure_docker_or_native() {
     return 0
   fi
   info "Need Docker Engine/Desktop OR native Postgres 16 + Redis 7 on localhost."
-  if [[ "$OS" == "Darwin" ]] && have brew; then
+  if [[ "$OS" == "Darwin" ]] && resolve_brew >/dev/null; then
     info "Hint: brew install --cask docker   OR   brew install postgresql@16 redis"
   elif have apt-get; then
     info "Hint: sudo apt-get install -y docker.io docker-compose-v2"
@@ -233,6 +256,39 @@ EOS
     return 1
   fi
   pass "ensure_node fail-closed when brew stub useless and no node"
+
+  step "self-test: brew OFF PATH (GUI absolute)"
+  mkdir -p "$tmp/gui/bin" "$tmp/emptybin"
+  cat >"$tmp/gui/bin/brew" <<EOS
+#!/usr/bin/env bash
+if [[ "\$1" == "--prefix" && "\$2" == "node@20" ]]; then
+  echo "$keg"
+  exit 0
+fi
+exit 1
+EOS
+  chmod +x "$tmp/gui/bin/brew"
+  # Exclude $tmp/bin (prior stub brew) — GUI has brew only at absolute candidate.
+  PATH="$tmp/emptybin:/usr/bin:/bin"
+  export PATH
+  hash -r 2>/dev/null || true
+  ATLAS_INSTALL_BREW_CANDIDATES="$tmp/gui/bin/brew"
+  export ATLAS_INSTALL_BREW_CANDIDATES
+  if command -v brew >/dev/null 2>&1; then
+    fail "brew must be absent from PATH for GUI case"
+    return 1
+  fi
+  if node_major_ok; then
+    fail "node must be absent before GUI brew resolve"
+    return 1
+  fi
+  prepend_brew_node_path
+  if ! node_major_ok; then
+    fail "GUI absolute brew must prepend keg"
+    return 1
+  fi
+  pass "GUI absolute brew → $(node -v)"
+  unset ATLAS_INSTALL_BREW_CANDIDATES
 
   OS="$saved_os"
   PATH="$saved_path"
