@@ -27,11 +27,13 @@ Le stub Rust compile **sans** dépendance `tauri` pour rester vérifiable (`carg
 
 ## macOS (plateforme stage)
 
-1. Prérequis Node 20 + pnpm ; API locale optionnelle (`pnpm demo:smoke` puis `pnpm dev:api`).
+1. One-shot prérequis : `bash scripts/unix/install-atlas-prereqs.sh` (Homebrew `node@20` keg-only → PATH géré par le script) ou Node 20 + pnpm à la main.
 2. UI web (chemin supporté) : `pnpm dev:client` → http://localhost:3002 (Safari / Chrome).
-3. Vérifier le packaging : `pnpm --filter @atlas/client run build` puis `pnpm client:smoke`.
-4. Stub desktop (message-only, pas de `.dmg`) : `cd apps/client/src-tauri && cargo run`.
-5. CTA **Scanner** visible dès l’ouverture ; exécution uniquement via API + Policy Guard.
+3. Shell Scan desktop `:17865` : `pnpm atlas:shell` (binaire `remote-work/atlas-v1`, même parcours Linux).
+4. API locale : `pnpm demo:smoke` puis `pnpm dev:api` si besoin.
+5. Vérifier le packaging : `pnpm --filter @atlas/client run build` puis `pnpm client:smoke`.
+6. Stub desktop (message-only, pas de `.dmg`) : `cd apps/client/src-tauri && cargo run`.
+7. CTA **Scanner** visible dès l’ouverture ; exécution uniquement via API + Policy Guard.
 
 ## Commandes
 

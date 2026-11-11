@@ -6,6 +6,7 @@
 #   bash scripts/unix/install-atlas-prereqs.sh
 #   bash scripts/unix/install-atlas-prereqs.sh --skip-launch
 #   bash scripts/unix/install-atlas-prereqs.sh --skip-install   # checklist only
+#   bash scripts/unix/install-atlas-prereqs.sh --self-test      # Darwin PATH stubs (no Mac)
 #
 # Does NOT start Cursor / agent workers.
 set -euo pipefail
@@ -14,6 +15,7 @@ NODE_MAJOR_REQUIRED=20
 PNPM_EXACT="9.15.0"
 SKIP_INSTALL=0
 SKIP_LAUNCH=0
+SELF_TEST=0
 LAUNCH_SCRIPT="dev"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -22,10 +24,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-install) SKIP_INSTALL=1; shift ;;
     --skip-launch) SKIP_LAUNCH=1; shift ;;
+    --self-test) SELF_TEST=1; shift ;;
     --launch) LAUNCH_SCRIPT="${2:-dev}"; shift 2 ;;
     --repo-root) REPO_ROOT="$(cd "$2" && pwd)"; shift 2 ;;
     -h|--help)
-      sed -n '1,20p' "$0"
+      sed -n '1,22p' "$0"
       exit 0
       ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
@@ -47,6 +50,30 @@ echo "NOTE: Does not start Cursor/agent workers."
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Homebrew node@20 is keg-only — install can succeed while `node` stays off PATH
+# (mirrors Windows Refresh-PathFromMachine after winget).
+prepend_brew_node_path() {
+  local formula prefix
+  have brew || return 0
+  for formula in node@20 node; do
+    prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+    if [[ -n "${prefix:-}" && -d "$prefix/bin" ]]; then
+      case ":$PATH:" in
+        *":$prefix/bin:"*) ;;
+        *) PATH="$prefix/bin:$PATH"; export PATH ;;
+      esac
+    fi
+  done
+  hash -r 2>/dev/null || true
+}
+
+node_major_ok() {
+  have node || return 1
+  local major
+  major="$(node -v 2>/dev/null | sed -n 's/^v\([0-9]*\).*/\1/p')"
+  [[ "${major:-0}" -ge "$NODE_MAJOR_REQUIRED" ]]
+}
+
 port_open() {
   local host="$1" port="$2"
   python3 - "$host" "$port" <<'PY' 2>/dev/null
@@ -58,16 +85,25 @@ PY
 }
 
 ensure_node() {
-  if have node; then
-    major="$(node -v | sed -n 's/^v\([0-9]*\).*/\1/p')"
-    if [[ "${major:-0}" -ge "$NODE_MAJOR_REQUIRED" ]]; then
+  if node_major_ok; then
+    return 0
+  fi
+  # Darwin: keg already installed but shell PATH never saw it.
+  if [[ "$OS" == "Darwin" ]] && have brew; then
+    prepend_brew_node_path
+    if node_major_ok; then
       return 0
     fi
   fi
   info "Node >= $NODE_MAJOR_REQUIRED required."
   if [[ "$OS" == "Darwin" ]] && have brew; then
     brew install node@20 || brew install node
-    return 0
+    prepend_brew_node_path
+    if node_major_ok; then
+      return 0
+    fi
+    info "Node still missing after brew (keg-only?). Try: export PATH=\"\$(brew --prefix node@20)/bin:\$PATH\""
+    return 1
   fi
   if have apt-get; then
     info "Install Node 20 via NodeSource or nvm, then re-run. (apt node may be older)"
@@ -119,6 +155,98 @@ ensure_env_and_deps() {
   (cd "$REPO_ROOT" && pnpm --filter @atlas/shared build && pnpm --filter @atlas/policy-guard build)
   (cd "$REPO_ROOT" && pnpm db:generate || true)
 }
+
+# Linux-CIable proof of Darwin keg-only PATH wiring (no Mac / no real brew).
+run_self_test() {
+  local tmp keg bin saved_path saved_os bare
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+  keg="$tmp/Cellar/node@20/20.11.0"
+  bin="$keg/bin"
+  bare="$tmp/bin:/usr/bin:/bin" # excludes host Node (/exec-daemon, nvm, …)
+  mkdir -p "$bin" "$tmp/bin"
+  cat >"$bin/node" <<'EOS'
+#!/usr/bin/env bash
+echo "v20.11.0"
+EOS
+  chmod +x "$bin/node"
+  cat >"$tmp/bin/brew" <<EOS
+#!/usr/bin/env bash
+if [[ "\$1" == "--prefix" && "\$2" == "node@20" ]]; then
+  echo "$keg"
+  exit 0
+fi
+if [[ "\$1" == "--prefix" && "\$2" == "node" ]]; then
+  exit 1
+fi
+if [[ "\$1" == "install" ]]; then
+  exit 0
+fi
+exit 1
+EOS
+  chmod +x "$tmp/bin/brew"
+
+  saved_path="$PATH"
+  saved_os="$OS"
+  OS="Darwin"
+  PATH="$bare"
+  export PATH OS
+  hash -r 2>/dev/null || true
+
+  step "self-test: prepend keg-only node@20"
+  if node_major_ok; then
+    fail "bare PATH must hide host node before prepend"
+    return 1
+  fi
+  prepend_brew_node_path
+  if ! node_major_ok; then
+    fail "node_major_ok after prepend (expected v20 from keg)"
+    return 1
+  fi
+  pass "node_major_ok after keg PATH prepend — $(node -v)"
+
+  step "self-test: ensure_node recovers via brew --prefix"
+  PATH="$bare"
+  export PATH
+  hash -r 2>/dev/null || true
+  if ! ensure_node; then
+    fail "ensure_node should succeed with stub brew + keg"
+    return 1
+  fi
+  if ! node_major_ok; then
+    fail "ensure_node returned 0 but node still bad"
+    return 1
+  fi
+  pass "ensure_node recovers via brew --prefix — $(node -v)"
+
+  step "self-test: fail-closed when brew useless"
+  cat >"$tmp/bin/brew" <<'EOS'
+#!/usr/bin/env bash
+exit 1
+EOS
+  chmod +x "$tmp/bin/brew"
+  PATH="$bare"
+  export PATH
+  hash -r 2>/dev/null || true
+  if ensure_node; then
+    fail "ensure_node must fail-closed without node and without brew prefix"
+    return 1
+  fi
+  pass "ensure_node fail-closed when brew stub useless and no node"
+
+  OS="$saved_os"
+  PATH="$saved_path"
+  export PATH OS
+  hash -r 2>/dev/null || true
+  echo
+  echo "Self-test: ALL PASS"
+  return 0
+}
+
+if [[ "$SELF_TEST" -eq 1 ]]; then
+  run_self_test
+  exit $?
+fi
 
 if [[ "$SKIP_INSTALL" -eq 0 ]]; then
   step "Install / verify Node"
