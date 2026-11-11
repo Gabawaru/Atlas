@@ -154,9 +154,15 @@ describe("RLS multi-tenant (Postgres)", () => {
       t.skip("Postgres / atlas_app / 2 tenants requis");
       return;
     }
-    await prisma.$executeRaw`SELECT set_config('app.bypass_rls', 'on', false)`;
-    const a = await prisma.mission.findFirst({ where: { id: missionA } });
-    const b = await prisma.mission.findFirst({ where: { id: missionB } });
+    // Same connection as queries — session set_config can land on another pooler conn.
+    const [a, b] = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', true)`;
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', '', true)`;
+      return [
+        await tx.mission.findFirst({ where: { id: missionA! } }),
+        await tx.mission.findFirst({ where: { id: missionB! } }),
+      ] as const;
+    });
     assert.ok(a);
     assert.ok(b);
   });

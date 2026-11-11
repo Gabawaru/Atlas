@@ -29,6 +29,31 @@ describe("client riskTable", () => {
     assert.match(hsts!.compromise, /Exposition moyenne/);
   });
 
+  it("dérive cookie flags manquants (parity API pushCookieRows)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "a.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://a.test/",
+          cookies: [
+            { name: "session", missingFlags: ["Secure", "HttpOnly"] },
+            { name: "prefs", missingFlags: ["SameSite"] },
+          ],
+        },
+      },
+    ]);
+    const session = rows.find((r) => r.control.includes("session"));
+    assert.ok(session, "Secure/HttpOnly cookie must reach client riskTable rebuild");
+    assert.equal(session!.risk, "moyen");
+    assert.match(session!.signal ?? "", /Secure/);
+    const prefs = rows.find((r) => r.control.includes("prefs"));
+    assert.ok(prefs);
+    assert.equal(prefs!.risk, "faible");
+  });
+
   it("riskTableFromReportExport préfère riskTable stocké + backfill url", () => {
     const rows = riskTableFromReportExport({
       riskTable: [
