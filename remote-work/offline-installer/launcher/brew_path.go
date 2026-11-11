@@ -27,7 +27,9 @@ func resolveBrew() string {
 		return p
 	}
 	for _, p := range wellKnownBrewBins {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+		// Parity scripts/unix/* resolve_brew `-x`: non-exec stub must not
+		// block the keg-direct hop below.
+		if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
 			return p
 		}
 	}

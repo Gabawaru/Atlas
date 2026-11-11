@@ -106,6 +106,57 @@ func TestPrependHomebrewNodePathWellKnownBrewOffPATH(t *testing.T) {
 	}
 }
 
+func TestPrependHomebrewNodePathNonExecWellKnownBrewFallsToKeg(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("brew keg layout is Unix/macOS")
+	}
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "opt", "node@20", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	node := filepath.Join(bin, "node")
+	if err := os.WriteFile(node, []byte("#!/bin/sh\necho v20.11.0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-executable brew stub at well-known path (0644) — must NOT count as brew
+	// (shell/installer use -x); otherwise keg-direct is skipped and node stays off PATH.
+	brew := filepath.Join(tmp, "homebrew", "bin", "brew")
+	if err := os.MkdirAll(filepath.Dir(brew), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(brew, []byte("not-executable-brew-stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prevBrew := wellKnownBrewBins
+	prevKeg := wellKnownNodeKegBins
+	wellKnownBrewBins = []string{brew}
+	wellKnownNodeKegBins = []string{bin}
+	t.Cleanup(func() {
+		wellKnownBrewBins = prevBrew
+		wellKnownNodeKegBins = prevKeg
+	})
+
+	t.Setenv("PATH", "/usr/bin:/bin")
+	if _, err := exec.LookPath("brew"); err == nil {
+		t.Fatal("brew must be off PATH for this test")
+	}
+	if resolveBrew() != "" {
+		t.Fatal("non-exec well-known brew must not resolve")
+	}
+
+	prependHomebrewNodePath()
+	got, err := exec.LookPath("node")
+	if err != nil {
+		t.Fatalf("keg-direct after non-exec brew: %v (PATH=%s)", err, os.Getenv("PATH"))
+	}
+	if filepath.Clean(got) != filepath.Clean(node) {
+		t.Fatalf("got %q want %q", got, node)
+	}
+}
+
 func TestPrependHomebrewNodePathDirectKegBins(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("brew keg layout is Unix/macOS")
