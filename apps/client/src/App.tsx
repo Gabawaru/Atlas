@@ -300,6 +300,8 @@ export function App() {
       setCatalog(Array.isArray(c) ? c : []);
       setGrants(Array.isArray(g) ? g : []);
       setFindings(Array.isArray(f) ? f : []);
+      // Clear stale Demarrer / offline banner after successful re-hydrate.
+      setError(null);
     } catch (e) {
       // Post-login / mid-session API death — void refresh() must not leave only
       // « Connecteur inactif — reconnexion… » without Démarrer (parity #111–#115).
@@ -388,6 +390,9 @@ export function App() {
 
   function goScanner() {
     goRoute("scanner");
+    // After #118 Demarrer recovery, grants may still be [] until re-hydrate —
+    // launch-scan / Session→Scanner must not stay stuck on Connecteur inactif.
+    if (token) void refresh();
   }
 
   function goSession() {
