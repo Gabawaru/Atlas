@@ -256,6 +256,35 @@ func TestPlatformHTMLLaunchRefusePersist(t *testing.T) {
 	}
 }
 
+// Tester ping must surface Démarrer on hors-ligne / HTTP !ok (parity Vite api-health #101).
+func TestPlatformHTMLPingOfflineHint(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
+	if err != nil {
+		t.Fatalf("read platform.html: %v", err)
+	}
+	html := string(raw)
+	startIdx := strings.Index(html, `async function ping`)
+	if startIdx < 0 {
+		t.Fatal("ping function missing")
+	}
+	snippet := html[startIdx:]
+	if end := strings.Index(snippet, `async function startApi`); end > 0 {
+		snippet = snippet[:end]
+	}
+	needles := []string{
+		`hors ligne — Démarrer l'API.`,
+		`HTTP " + res.status + " — Démarrer l'API.`,
+	}
+	for _, n := range needles {
+		if !strings.Contains(snippet, n) {
+			t.Fatalf("ping missing offline recovery marker %q", n)
+		}
+	}
+	if strings.Contains(snippet, `$("apiHealth").textContent = "hors ligne";`) {
+		t.Fatalf("ping catch still dumps bare hors ligne without Démarrer")
+	}
+}
+
 // showExports onclick must catch network and append API recovery (parity Vite #114).
 func TestPlatformHTMLExportNetworkCatchHint(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("web", "platform.html"))
