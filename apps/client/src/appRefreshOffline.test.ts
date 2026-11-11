@@ -36,4 +36,13 @@ describe("refresh offline recovery", () => {
     assert.match(formatted, /Failed to fetch/);
     assert.match(formatted, /Démarrer l'API/);
   });
+
+  it("goScanner re-calls refresh when token present (post-Demarrer recovery)", () => {
+    const start = appSrc.indexOf("function goScanner()");
+    assert.ok(start >= 0);
+    const end = appSrc.indexOf("function goSession()", start);
+    const go = appSrc.slice(start, end > start ? end : undefined);
+    assert.match(go, /goRoute\("scanner"\)/);
+    assert.match(go, /if \(token\) void refresh\(\)/);
+  });
 });
