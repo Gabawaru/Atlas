@@ -235,7 +235,8 @@ export function buildPresenceRiskTable(
           riskCode: "critical",
           compromise:
             "Compromission potentielle — chaîne de confiance rompue / MITM possible",
-          signal: `authorized=false · ${tls.protocol ?? "?"}`,
+          // API pushTlsRows parity — issuerCN typed on EvidenceLike but was dropped.
+          signal: `authorized=false · ${tls.protocol ?? "?"} · issuer=${tls.issuerCN ?? "?"}`,
         }),
       );
     } else if (typeof tls?.daysRemaining === "number" && tls.daysRemaining < 0) {

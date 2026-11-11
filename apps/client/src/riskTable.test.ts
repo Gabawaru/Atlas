@@ -29,6 +29,25 @@ describe("client riskTable", () => {
     assert.match(hsts!.compromise, /Exposition moyenne/);
   });
 
+  it("dérive TLS unauthorized + issuerCN (parity API pushTlsRows)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "bad.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: { ok: true, status: 200, url: "https://bad.test/" },
+        tls: {
+          authorized: false,
+          protocol: "TLSv1.3",
+          issuerCN: "Evil CA",
+        },
+      },
+    ]);
+    const tls = rows.find((r) => r.control.includes("non de confiance"));
+    assert.ok(tls);
+    assert.equal(tls!.risk, "critique");
+    assert.match(tls!.signal ?? "", /issuer=Evil CA/);
+  });
+
   it("dérive cookie flags manquants (parity API pushCookieRows)", () => {
     const rows = buildPresenceRiskTable([
       {
