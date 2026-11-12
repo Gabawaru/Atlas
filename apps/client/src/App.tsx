@@ -51,6 +51,7 @@ import {
   type SessionRoute,
 } from "./sessionRoute";
 import { SessionTracePage } from "./SessionTracePage";
+import { NotificationsBell } from "./NotificationsBell";
 import {
   appendReportAvailable,
   appendScanOutcome,
@@ -834,6 +835,9 @@ export function App() {
       <div className="brand-lockup">
         <span className="hero-orb" aria-hidden="true" />
         <p className="brand">Atlas</p>
+        {token && (
+          <NotificationsBell apiBase={API} token={token} />
+        )}
       </div>
       {launchRefuse && (
         <p style={{ color: "var(--alert)" }} role="status" data-testid="launch-refuse">

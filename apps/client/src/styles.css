@@ -55,9 +55,10 @@ body {
 
 .brand-lockup {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
   margin: 0 0 0.35rem;
 }
 
@@ -1238,4 +1239,189 @@ a {
 .trace-composer textarea {
   resize: vertical;
   min-height: 3.2rem;
+}
+
+/* —— Gab notifications bell (Atlas-SQL session) —— */
+.notif-bell-wrap {
+  position: relative;
+  margin-left: auto;
+  z-index: 5;
+}
+
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.notif-bell:hover,
+.notif-bell[aria-expanded="true"] {
+  color: var(--teal-deep);
+  border-color: var(--teal-mid);
+  background: var(--teal-soft);
+}
+
+.notif-bell-glyph {
+  display: block;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  line-height: 1.15rem;
+  text-align: center;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(24rem, 70vh);
+  overflow: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.notif-bridge-err,
+.notif-empty {
+  margin: 0.75rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.notif-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.notif-item:hover {
+  background: var(--teal-soft);
+}
+
+.notif-item.unread {
+  background: rgba(47, 143, 138, 0.06);
+}
+
+.notif-item.unread .notif-item-title {
+  font-weight: 650;
+}
+
+.notif-item.needs-ben .notif-item-meta {
+  color: var(--accent);
+}
+
+.notif-item-title {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.notif-item-meta {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.notif-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(42, 61, 69, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem 2rem;
+}
+
+.notif-detail {
+  width: min(32rem, 100%);
+  max-height: min(85vh, 40rem);
+  overflow: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.15rem 1.35rem;
+}
+
+.notif-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.notif-detail h2 {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.notif-detail-dl {
+  margin: 1rem 0 0;
+}
+
+.notif-detail-dl > div {
+  margin: 0 0 0.85rem;
+}
+
+.notif-detail-dl dt {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.2rem;
+}
+
+.notif-detail-dl dd {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }

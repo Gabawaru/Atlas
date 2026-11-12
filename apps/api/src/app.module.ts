@@ -18,6 +18,7 @@ import { RetentionModule } from "./retention/retention.module";
 import { BillingModule } from "./billing/billing.module";
 import { OpsModule } from "./ops/ops.module";
 import { SessionTraceModule } from "./session-trace/session-trace.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { HealthController } from "./health.controller";
 import { PrismaService } from "./prisma/prisma.service";
 
@@ -42,6 +43,7 @@ import { PrismaService } from "./prisma/prisma.service";
     BillingModule,
     OpsModule,
     SessionTraceModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService],
