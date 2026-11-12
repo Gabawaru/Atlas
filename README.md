@@ -4,6 +4,12 @@ Assistant conversationnel de **pentest autorisé** (entreprise A), accessible au
 
 Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard déterministe (sans LLM), machine d’états mission, présence web passive bornée, file BullMQ, exports rapport, consoles client & admin minimales, seeds fictives.
 
+![Console Scanner Atlas](docs/assets/console-scanner.png)
+
+## Téléchargement
+
+Installateur Windows et site public : [https://atlas-secu.com](https://atlas-secu.com) (`Atlas-Setup.exe`).
+
 ## Jalon d’acceptation (figé)
 
 **Une** mission passive autorisée par écrit + Policy Guard → résultats unifiés.  
