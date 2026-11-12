@@ -6,7 +6,10 @@ import {
   buildPresenceRiskTable,
   collapseRiskTableByControl,
   evidenceTargetUrl,
+  HSTS_MAX_AGE_FLOOR_SEC,
   isAutoRenewIssuer,
+  isHstsMaxAgeWeak,
+  parseHstsMaxAge,
   partitionRiskTable,
   riskTableFromReportExport,
 } from "./riskTable";
@@ -104,6 +107,31 @@ describe("client riskTable", () => {
     assert.ok(findings.length >= 1);
     const bilan = buildBilanSummary(collapsed);
     assert.ok(bilan.priorityActions.length <= 3);
+  });
+
+  it("HSTS max-age insuffisant — faible + pas all-clear (parity API)", () => {
+    assert.equal(parseHstsMaxAge("max-age=86400"), 86400);
+    assert.equal(isHstsMaxAgeWeak("max-age=86400"), true);
+    assert.equal(isHstsMaxAgeWeak(`max-age=${HSTS_MAX_AGE_FLOOR_SEC}`), false);
+    const rows = buildPresenceRiskTable([
+      {
+        host: "weak-hsts.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://weak-hsts.test/",
+          securityHeaders: { missing: [], hsts: "max-age=1" },
+        },
+      },
+    ]);
+    const weak = rows.find((r) => r.control.includes("max-age insuffisant"));
+    assert.ok(weak);
+    assert.equal(weak!.risk, "faible");
+    assert.equal(
+      rows.some((r) => r.control === "Headers de sécurité"),
+      false,
+    );
   });
 
   it("dérive headers all-clear when missing=[] (parity API pushHeaderRows)", () => {

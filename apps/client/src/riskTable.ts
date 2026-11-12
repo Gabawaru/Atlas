@@ -55,6 +55,7 @@ type EvidenceLike = {
     error?: string;
     securityHeaders?: {
       missing?: string[];
+      hsts?: string;
       browserOnlySkipped?: boolean;
     };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
@@ -67,6 +68,25 @@ type EvidenceLike = {
   };
   osint?: { ok?: boolean; error?: string; source?: string };
 };
+
+/** 180 j — plancher Mozilla ; pas d'exigence preload. */
+export const HSTS_MAX_AGE_FLOOR_SEC = 15_552_000;
+
+/** Parse max-age=N depuis Strict-Transport-Security (null si absent / invalide). */
+export function parseHstsMaxAge(hsts: string | undefined | null): number | null {
+  if (!hsts?.trim()) return null;
+  const m = /(?:^|;)\s*max-age\s*=\s*(\d+)/i.exec(hsts);
+  if (!m) return null;
+  return Number(m[1]);
+}
+
+/** HSTS présent mais max-age manquant ou sous plancher (absence → missing[]). */
+export function isHstsMaxAgeWeak(hsts: string | undefined | null): boolean {
+  if (!hsts?.trim()) return false;
+  const age = parseHstsMaxAge(hsts);
+  if (age === null) return true;
+  return age < HSTS_MAX_AGE_FLOOR_SEC;
+}
 
 const HEADER_META: Record<
   string,
@@ -486,7 +506,29 @@ export function buildPresenceRiskTable(
     }
 
     const missingHeaders = ev.http?.securityHeaders?.missing;
-    if (missingHeaders && !missingHeaders.length) {
+    const hstsHeader = ev.http?.securityHeaders?.hsts;
+    const hstsListedMissing = (missingHeaders ?? []).some(
+      (n) => n.toLowerCase() === "strict-transport-security",
+    );
+    if (!hstsListedMissing && isHstsMaxAgeWeak(hstsHeader)) {
+      const age = parseHstsMaxAge(hstsHeader);
+      out.push(
+        row({
+          control: "Header HSTS max-age insuffisant",
+          host,
+          url,
+          riskCode: "low",
+          compromise:
+            "Exposition faible — HSTS trop court / sans max-age (downgrade encore possible)",
+          signal:
+            age === null
+              ? `${hstsHeader?.trim() || "?"} · max-age manquant · floor=${HSTS_MAX_AGE_FLOOR_SEC}`
+              : `max-age=${age} · floor=${HSTS_MAX_AGE_FLOOR_SEC}`,
+        }),
+      );
+    }
+    const hstsWeak = !hstsListedMissing && isHstsMaxAgeWeak(hstsHeader);
+    if (missingHeaders && !missingHeaders.length && !hstsWeak) {
       out.push(
         row({
           control: "Headers de sécurité",

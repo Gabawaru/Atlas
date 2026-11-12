@@ -6,8 +6,11 @@ import {
   buildPresenceRiskTable,
   collapseRiskTableByControl,
   evidenceTargetUrl,
+  HSTS_MAX_AGE_FLOOR_SEC,
   isAutoRenewIssuer,
+  isHstsMaxAgeWeak,
   mapSeverityToRisk,
+  parseHstsMaxAge,
   partitionRiskTable,
   rowsFromFindings,
 } from "./risk-table";
@@ -75,6 +78,42 @@ describe("risk-table", () => {
     assert.equal(isAutoRenewIssuer("R3"), true);
     assert.equal(isAutoRenewIssuer("Let's Encrypt"), true);
     assert.equal(isAutoRenewIssuer("DigiCert SHA2"), false);
+  });
+
+  it("parseHstsMaxAge / isHstsMaxAgeWeak — floor 180j", () => {
+    assert.equal(parseHstsMaxAge("max-age=31536000; includeSubDomains"), 31536000);
+    assert.equal(parseHstsMaxAge("max-age=1"), 1);
+    assert.equal(parseHstsMaxAge("includeSubDomains"), null);
+    assert.equal(isHstsMaxAgeWeak("max-age=1"), true);
+    assert.equal(isHstsMaxAgeWeak(`max-age=${HSTS_MAX_AGE_FLOOR_SEC}`), false);
+    assert.equal(isHstsMaxAgeWeak(undefined), false);
+  });
+
+  it("buildPresenceRiskTable — HSTS max-age insuffisant (faible, pas all-clear)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "weak-hsts.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://weak-hsts.test/",
+          securityHeaders: {
+            missing: [],
+            hsts: "max-age=1",
+          },
+        },
+      },
+    ]);
+    const weak = rows.find((r) => r.control.includes("max-age insuffisant"));
+    assert.ok(weak);
+    assert.equal(weak!.risk, "faible");
+    assert.match(weak!.signal ?? "", /max-age=1/);
+    assert.equal(
+      rows.some((r) => r.control === "Headers de sécurité"),
+      false,
+      "weak HSTS must not emit all-clear",
+    );
   });
 
   it("buildPresenceRiskTable — headers + TLS auto-renew + skip unresolved", () => {
