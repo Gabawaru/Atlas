@@ -31,5 +31,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "multer": "^2.5.0",
+      "body-parser": "^1.20.9"
+    }
   }
 }
