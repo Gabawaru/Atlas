@@ -52,3 +52,7 @@ pnpm atlas:shell          # run native shell on :17865
 ```
 
 Requires: Go ≥ 1.22. `makensis` only for the Windows Setup PE.
+
+## Code signing
+
+Setup + `Atlas.exe` are **unsigned** until an org Authenticode cert is purchased and wired in CI. Plan (no certs in repo): [`SIGNING.md`](./SIGNING.md).
