@@ -31,6 +31,9 @@ import {
 } from "./authorizedLaunch";
 import { formatLocalBridgeNetworkFailure } from "./localShell";
 import {
+  buildBilanSummary,
+  collapseRiskTableByControl,
+  partitionRiskTable,
   riskTableFromReportExport,
   type RiskTableRow,
 } from "./riskTable";
@@ -782,6 +785,13 @@ export function App() {
     return { table: [], missionId: null, reportId: null };
   })();
   const latestRiskTable = latestRiskMeta.table;
+  /** Densité UI : 1 ligne / contrôle ; info à part ; Suivi garde les lignes hôtes. */
+  const displayRisk = useMemo(() => {
+    const collapsed = collapseRiskTableByControl(latestRiskTable);
+    const { findings, observations } = partitionRiskTable(collapsed);
+    const bilan = buildBilanSummary(collapsed);
+    return { findings, observations, bilan };
+  }, [latestRiskTable]);
 
   const ingestSignature = latestRiskMeta.reportId
     ? `${latestRiskMeta.reportId}:${latestRiskTable
@@ -941,7 +951,7 @@ export function App() {
             disabled={busy || !readiness.ready || !testResponsibilityAccepted}
             onClick={() => void runScanner()}
           >
-            {busy ? "…" : "Scan"}
+            {busy ? "…" : "Scanner"}
           </button>
           {readiness.blockReason && (
             <p className="block-reason" role="status">
@@ -968,45 +978,87 @@ export function App() {
 
           <h2 id="results-title">Résultats</h2>
           {latestRiskTable.length > 0 ? (
-            <div className="risk-table-wrap">
-              <table className="risk-table" aria-label="Niveaux de risque et compromission">
-                <thead>
-                  <tr>
-                    <th scope="col">URL</th>
-                    <th scope="col">Contrôle</th>
-                    <th scope="col">Risque</th>
-                    <th scope="col">Compromission / exposition</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {latestRiskTable.map((r, i) => (
-                    <tr
-                      key={`${r.control}-${r.url || r.host}-${i}`}
-                      data-risk={r.riskCode}
-                    >
-                      <td className="risk-url">
-                        {r.url ? (
-                          <a href={r.url} target="_blank" rel="noreferrer">
-                            {r.url}
-                          </a>
-                        ) : (
-                          <span className="muted">{r.host || "—"}</span>
-                        )}
-                      </td>
-                      <td>
+            <>
+              {displayRisk.findings.length > 0 ? (
+                <div className="risk-table-wrap">
+                  <table
+                    className="risk-table"
+                    aria-label="Niveaux de risque et compromission"
+                  >
+                    <thead>
+                      <tr>
+                        <th scope="col">Contrôle</th>
+                        <th scope="col">Hôtes</th>
+                        <th scope="col">Risque</th>
+                        <th scope="col">Compromission / exposition</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayRisk.findings.map((r, i) => (
+                        <tr
+                          key={`${r.control}-${r.host}-${i}`}
+                          data-risk={r.riskCode}
+                        >
+                          <td>
+                            <strong>{r.control}</strong>
+                          </td>
+                          <td className="risk-hosts">
+                            {r.url && !r.host.includes(",") ? (
+                              <a href={r.url} target="_blank" rel="noreferrer">
+                                {r.host || r.url}
+                              </a>
+                            ) : (
+                              <span>{r.host || "—"}</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`risk-badge risk-${r.riskCode}`}>
+                              {r.risk}
+                            </span>
+                          </td>
+                          <td>{r.compromise}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted">Aucun finding actionnable.</p>
+              )}
+              {displayRisk.observations.length > 0 && (
+                <div className="risk-summary" aria-label="Observations">
+                  <h3 className="risk-summary-title">Observations</h3>
+                  <ul className="risk-summary-list">
+                    {displayRisk.observations.map((r, i) => (
+                      <li key={`obs-${r.control}-${r.host}-${i}`}>
                         <strong>{r.control}</strong>
-                      </td>
-                      <td>
-                        <span className={`risk-badge risk-${r.riskCode}`}>
-                          {r.risk}
-                        </span>
-                      </td>
-                      <td>{r.compromise}</td>
-                    </tr>
+                        {r.host ? ` — ${r.host}` : ""}
+                        {r.signal ? (
+                          <span className="muted"> · {r.signal}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="bilan-panel" aria-label="Bilan">
+                <div className="bilan-score">
+                  Score{" "}
+                  <strong data-testid="bilan-score">
+                    {displayRisk.bilan.score}
+                  </strong>
+                  <span className="muted"> / 100</span>
+                </div>
+                <ol className="bilan-actions">
+                  {(displayRisk.bilan.priorityActions.length
+                    ? displayRisk.bilan.priorityActions
+                    : ["Aucune action prioritaire — surface observée OK"]
+                  ).map((action, i) => (
+                    <li key={`bilan-${i}`}>{action}</li>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </ol>
+              </div>
+            </>
           ) : recentResults.length === 0 ? (
             <p className="muted">Aucun résultat.</p>
           ) : null}
@@ -1025,9 +1077,9 @@ export function App() {
                           <button
                             key={format}
                             type="button"
-                            className="ghost export-btn"
+                            className="export-btn export-btn-active"
                             disabled={
-                              busy || exportBusyKey === `${row.reportId}:${format}`
+                              exportBusyKey === `${row.reportId}:${format}`
                             }
                             onClick={() =>
                               void downloadReportExport(

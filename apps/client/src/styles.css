@@ -150,6 +150,27 @@ body {
   font-size: 0.85rem;
 }
 
+/* Export JSON/CSV/PDF — look enabled (not ghost/washed-out) */
+.export-btn-active {
+  background: var(--teal-soft);
+  color: var(--teal-deep);
+  border: 1px solid var(--teal);
+  box-shadow: none;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.export-btn-active:hover:not(:disabled) {
+  background: var(--teal);
+  color: #fff;
+  transform: none;
+}
+
+.export-btn-active:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .export-hint {
   margin-left: 0.35rem;
 }
@@ -442,6 +463,61 @@ pre {
   color: var(--teal-deep);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Hôtes complets — pas de truncation (Ben: no host truncation) */
+.risk-hosts {
+  font-size: 0.85rem;
+  word-break: break-word;
+  white-space: normal;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.risk-hosts a {
+  color: var(--teal-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.risk-summary {
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-soft);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.risk-summary-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.risk-summary-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+}
+
+.bilan-panel {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-soft);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.bilan-score {
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.bilan-actions {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
 }
 
 .risk-badge {

@@ -21,8 +21,8 @@ export const TEST_RESPONSIBILITY_LABEL =
 /**
  * ASCII-safe mission titles (avoid Windows/UI mojibake on "présence" / "réelle").
  */
-export const REAL_MISSION_TITLE = "Presence web";
-export const FICTIF_MISSION_TITLE = "[FICTIF] Presence web";
+export const REAL_MISSION_TITLE = "Présence web";
+export const FICTIF_MISSION_TITLE = "[FICTIF] Présence web";
 
 export type RealMissionInput = {
   targetHost: string;
