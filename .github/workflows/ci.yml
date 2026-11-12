@@ -13,6 +13,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Axe 3: one command — secrets + SAST + critical deps. Fail-closed.
+  make-secure:
+    name: make-secure
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.21.2"
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Install semgrep
+        run: |
+          python3 -m pip install --user semgrep==1.97.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: pnpm make-secure
+        run: pnpm make-secure
+
   # Cheap fail-closed hygiene: internship/stage personal paths must not reappear.
   repo-hygiene:
     name: no stage/personal paths
@@ -143,10 +185,3 @@ jobs:
 
       - name: Client packaging smoke
         run: pnpm client:smoke
-
-      # Musk étape 5 — après harden execute-path. Fail-closed critique différé :
-      # admin Next 14.x a encore des advisories critiques → upgrade Next d'abord
-      # (TODO humain/eng), puis retirer continue-on-error.
-      - name: Audit critical deps (informational)
-        continue-on-error: true
-        run: pnpm audit --audit-level=critical

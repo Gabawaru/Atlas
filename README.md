@@ -134,7 +134,7 @@ Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) sur `push` / `pu
 4. Build `@atlas/shared` + `@atlas/policy-guard`  
 5. `pnpm db:generate` + `pnpm db:migrate` + `pnpm db:seed`  
 6. `pnpm test:unit` puis `pnpm test:acceptance`  
-7. `pnpm audit --audit-level=critical` (informatif tant que Next admin n’est pas upgradé)
+7. `pnpm make-secure` (gitleaks + semgrep ERROR + `pnpm audit --audit-level=critical` — fail-closed)
 
 Variables CI (alignées `.env.example`) : `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (valeur CI uniquement), `ATLAS_FORCE_MOCK_NETWORK=true`, `ATLAS_ENV=ci`.
 
