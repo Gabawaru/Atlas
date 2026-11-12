@@ -91,4 +91,50 @@ describe("supportHandoff", () => {
     assert.equal(b.fingerprints.length, 1);
     if (r.ok) assert.equal(r.ticketId, "tix-1");
   });
+
+  it("après handoff + supportSessionId → POST /v1/support/vulns (scanner opt-in)", async () => {
+    const calls: { url: string; body: unknown; headers: HeadersInit | undefined }[] =
+      [];
+    const r = await requestPragmaSupportHandoff({
+      entries: [sampleEntry()],
+      apiBase: "http://localhost:3001",
+      token: "tok",
+      supportCustomer: true,
+      fetchImpl: (async (input, init) => {
+        const url = String(input);
+        calls.push({
+          url,
+          body: JSON.parse(String(init?.body ?? "{}")),
+          headers: init?.headers,
+        });
+        if (url.endsWith("/v1/support/handoff")) {
+          return new Response(
+            JSON.stringify({
+              ticketId: "tix-2",
+              supportSessionId: "sup_opaque_test",
+              notice: "ok",
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.endsWith("/v1/support/vulns")) {
+          return new Response(JSON.stringify({ vulns: [] }), { status: 200 });
+        }
+        return new Response("nope", { status: 404 });
+      }) as typeof fetch,
+    });
+    assert.equal(r.ok, true);
+    if (r.ok) assert.equal(r.supportSessionId, "sup_opaque_test");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1]!.url, "http://localhost:3001/v1/support/vulns");
+    const headers = calls[1]!.headers as Record<string, string>;
+    assert.equal(headers["X-Atlas-Support-Session"], "sup_opaque_test");
+    const ingest = calls[1]!.body as {
+      vulns: Array<{ title: string; fingerprint: string }>;
+      source: string;
+    };
+    assert.equal(ingest.source, "scanner-opt-in");
+    assert.match(ingest.vulns[0]!.title, /HSTS/);
+    assert.equal(/email|firstName/i.test(JSON.stringify(ingest)), false);
+  });
 });
