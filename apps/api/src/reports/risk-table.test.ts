@@ -2,9 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   aggregateRiskTable,
+  buildBilanSummary,
   buildPresenceRiskTable,
+  collapseRiskTableByControl,
   evidenceTargetUrl,
+  isAutoRenewIssuer,
   mapSeverityToRisk,
+  partitionRiskTable,
   rowsFromFindings,
 } from "./risk-table";
 
@@ -16,6 +20,7 @@ const sampleEvidence = [
       ok: true,
       status: 200,
       url: "https://pragma-serve.com/",
+      cdn: { provider: "Cloudflare", originNotAnalyzed: true },
       securityHeaders: {
         missing: [
           "strict-transport-security",
@@ -32,8 +37,9 @@ const sampleEvidence = [
       protocol: "TLSv1.3",
       daysRemaining: 45,
       issuerCN: "YE1",
+      autoRenewLikely: true,
     },
-    osint: { ok: false, error: "HTTP 403", source: "rdap" },
+    osint: { ok: true, source: "rdap" },
   },
   {
     host: "mail.pragma-serve.com",
@@ -64,7 +70,14 @@ describe("risk-table", () => {
     assert.equal(evidenceTargetUrl("—"), "");
   });
 
-  it("buildPresenceRiskTable — headers + TLS + DNS + url", () => {
+  it("isAutoRenewIssuer — LE / YE1", () => {
+    assert.equal(isAutoRenewIssuer("YE1"), true);
+    assert.equal(isAutoRenewIssuer("R3"), true);
+    assert.equal(isAutoRenewIssuer("Let's Encrypt"), true);
+    assert.equal(isAutoRenewIssuer("DigiCert SHA2"), false);
+  });
+
+  it("buildPresenceRiskTable — headers + TLS auto-renew + skip unresolved", () => {
     const rows = buildPresenceRiskTable(sampleEvidence);
     assert.ok(rows.length >= 6);
     const hsts = rows.find((r) => r.control.includes("HSTS"));
@@ -75,13 +88,93 @@ describe("risk-table", () => {
     const pp = rows.find((r) => r.control.includes("Permissions-Policy"));
     assert.ok(pp, "Permissions-Policy missing must surface in riskTable");
     assert.equal(pp!.risk, "faible");
-    const tls = rows.find((r) => r.control.includes("renouvellement"));
-    assert.ok(tls);
-    assert.equal(tls!.risk, "moyen");
-    const dnsMissing = rows.find((r) => r.host === "mail.pragma-serve.com");
-    assert.ok(dnsMissing);
-    assert.equal(dnsMissing!.risk, "info");
-    assert.equal(dnsMissing!.url, "https://mail.pragma-serve.com/");
+    // YE1 / LE 45j → info (pas medium)
+    const tlsRenew = rows.find((r) => r.control.includes("renouvellement"));
+    assert.equal(tlsRenew, undefined);
+    const tlsOk = rows.find((r) => r.control.includes("certificat valide"));
+    assert.ok(tlsOk);
+    assert.equal(tlsOk!.risk, "info");
+    assert.match(tlsOk!.signal ?? "", /auto-renew/);
+    const cf = rows.find((r) => r.control.includes("Cloudflare"));
+    assert.ok(cf, "Cloudflare origin note required");
+    assert.equal(cf!.risk, "info");
+    // mail.* non résolu — absent du tableau
+    assert.equal(
+      rows.some((r) => r.host === "mail.pragma-serve.com"),
+      false,
+    );
+  });
+
+  it("TLS 45j sans auto-renew → medium ; ≤14j → high même ACME", () => {
+    const mid = buildPresenceRiskTable([
+      {
+        host: "manual.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        tls: {
+          authorized: true,
+          protocol: "TLSv1.2",
+          daysRemaining: 45,
+          issuerCN: "DigiCert SHA2 Secure Server CA",
+        },
+      },
+    ]);
+    const plan = mid.find((r) => r.control.includes("renouvellement"));
+    assert.ok(plan);
+    assert.equal(plan!.risk, "moyen");
+
+    const soon = buildPresenceRiskTable([
+      {
+        host: "le.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        tls: {
+          authorized: true,
+          protocol: "TLSv1.3",
+          daysRemaining: 7,
+          issuerCN: "R3",
+          autoRenewLikely: true,
+        },
+      },
+    ]);
+    const imminent = soon.find((r) => r.control.includes("expiration imminente"));
+    assert.ok(imminent);
+    assert.equal(imminent!.risk, "élevé");
+  });
+
+  it("collapse + partition + bilan score/actions", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "a.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://a.example/",
+          securityHeaders: { missing: ["strict-transport-security"] },
+        },
+      },
+      {
+        host: "b.example",
+        dns: { resolved: true, addresses: ["1.0.0.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://b.example/",
+          securityHeaders: { missing: ["strict-transport-security"] },
+        },
+      },
+    ]);
+    const collapsed = collapseRiskTableByControl(rows);
+    const hsts = collapsed.filter((r) => r.control.includes("HSTS"));
+    assert.equal(hsts.length, 1);
+    assert.match(hsts[0]!.host, /a\.example/);
+    assert.match(hsts[0]!.host, /b\.example/);
+    const { findings, observations } = partitionRiskTable(collapsed);
+    assert.ok(findings.every((r) => r.riskCode !== "info"));
+    assert.ok(observations.every((r) => r.riskCode === "info"));
+    const bilan = buildBilanSummary(collapsed);
+    assert.ok(bilan.score <= 100 && bilan.score >= 0);
+    assert.ok(bilan.priorityActions.length >= 1);
+    assert.ok(bilan.priorityActions.length <= 3);
   });
 
   it("expand — blob legacy → une URL par hôte", () => {

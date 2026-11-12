@@ -6,12 +6,13 @@ Module `web.passive.presence.v1` — **in-scope uniquement**, Policy Guard, pas 
 
 | Observation | Limite |
 |-------------|--------|
-| DNS (A/AAAA/NS/MX/TXT) | Pas d’énumération brute |
-| TLS certificat | Port 443, pas de fuzzing ; **non tenté** si IP privée |
-| Headers sécu (HSTS, CSP, XFO, …) | Lecture seule |
+| DNS (A/AAAA/NS/MX/TXT) | Pas d’énumération brute ; hôtes **devinés non résolus** exclus du rapport |
+| TLS certificat | Port 443, pas de fuzzing ; **non tenté** si IP privée ; alerte expiration si **&lt;14 j** ou renouvellement **non** auto (LE/ACME 90 j ≠ medium à 45 j) |
+| Headers sécu (HSTS, CSP, XFO, …) | Lecture seule sur l’**URL finale** après 301 ; `api.*` / JSON : skip CSP+XFO (garder HSTS + X-CTO) |
 | **Cookies** (`Secure` / `HttpOnly` / `SameSite`) | Flags Set-Cookie seulement |
-| **Redirects** | Max **5** hops ; **arrêt** si Location hors scope |
-| RDAP apex | Une GET publique ; pas de WHOIS agressif |
+| **Redirects** | Max **5** hops ; suivi www→apex ; **arrêt** si Location hors scope |
+| RDAP apex | Bootstrap **IANA dns.json** → serveur TLD (ex. Verisign `.com`) ; pas de WHOIS agressif |
+| Cloudflare | Si edge CF détecté → note **origine non analysée** |
 | Sous-domaines `www` / `mail` / `api` | Seulement si parent in-scope et non exclu |
 | **Post-DNS private-IP deny** | Si A/AAAA ∈ loopback / RFC1918 / link-local / ULA / metadata → pas de HTTP/TLS (`PRIVATE_IP_DENIED`) |
 

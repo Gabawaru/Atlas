@@ -74,6 +74,8 @@ export interface WebPassiveHttpEvidence {
   bodyBytesSampled?: number;
   observedAt?: string;
   error?: string;
+  /** Edge CDN (ex. Cloudflare) — origine non analysée */
+  cdn?: { provider: string; originNotAnalyzed: true };
 }
 
 /** Limites documentées du module (pas un scan agressif). */
@@ -95,6 +97,8 @@ export interface WebPassiveTlsEvidence {
   validTo?: string;
   daysRemaining?: number;
   fingerprint256?: string;
+  /** ACME / CDN — renouvellement automatique probable (LE 90j, etc.) */
+  autoRenewLikely?: boolean;
   error?: string;
 }
 
@@ -169,6 +173,8 @@ export interface WebPassiveOptions {
     bodyBytesSampled?: number;
     redirectChain?: WebPassiveRedirectHop[];
     cookies?: WebPassiveCookieFlags[];
+    /** URL finale après suivi 301/302 (headers évalués ici) */
+    finalUrl?: string;
   }>;
   tlsFn?: (host: string) => Promise<WebPassiveTlsEvidence>;
   /** Injection tests — RDAP / OSINT public */
@@ -178,6 +184,51 @@ export interface WebPassiveOptions {
   expandCommonSubdomains?: boolean;
   /** default true — RDAP apex in-scope */
   includeOsintRdap?: boolean;
+}
+
+/** API JSON (api.*) : CSP / XFO non applicables ; garder HSTS + X-CTO. */
+export function isJsonApiHost(
+  host: string,
+  contentType?: string | null,
+): boolean {
+  const h = normalizeHost(host);
+  if (h.startsWith("api.") || h.includes(".api.")) return true;
+  if (contentType && /application\/([\w.+-]*\+)?json/i.test(contentType)) {
+    return true;
+  }
+  return false;
+}
+
+/** Détection edge Cloudflare (empreinte passive, pas d'origine). */
+export function detectCloudflareCdn(
+  headers: Record<string, string>,
+): { provider: "Cloudflare"; originNotAnalyzed: true } | undefined {
+  const server = (headers["server"] ?? "").toLowerCase();
+  const cdnLoop = (headers["cdn-loop"] ?? "").toLowerCase();
+  const via = (headers["via"] ?? "").toLowerCase();
+  if (
+    headers["cf-ray"] ||
+    headers["cf-cache-status"] ||
+    server.includes("cloudflare") ||
+    cdnLoop.includes("cloudflare") ||
+    via.includes("cloudflare")
+  ) {
+    return { provider: "Cloudflare", originNotAnalyzed: true };
+  }
+  return undefined;
+}
+
+/** Let's Encrypt / ISRG / CDN GTS — renouvellement ACME probable. */
+export function isAutoRenewIssuer(issuerCN?: string | null): boolean {
+  if (!issuerCN) return false;
+  const s = issuerCN.trim().toLowerCase();
+  if (!s) return false;
+  if (s.includes("let's encrypt") || s.includes("lets encrypt")) return true;
+  if (s.includes("isrg")) return true;
+  if (s.includes("cloudflare")) return true;
+  if (s.includes("google trust") || s.startsWith("gts")) return true;
+  if (/^(r\d+|e\d+|ye\d+|we\d+)$/i.test(issuerCN.trim())) return true;
+  return false;
 }
 
 export function normalizeHost(value: string): string {
@@ -344,6 +395,7 @@ export function expandPassiveTargets(
 
 function extractSecurityHeaders(
   headers: Record<string, string>,
+  opts?: { host?: string; skipBrowserOnly?: boolean },
 ): WebPassiveSecurityHeaders {
   const hsts = headers["strict-transport-security"];
   const csp = headers["content-security-policy"];
@@ -352,10 +404,18 @@ function extractSecurityHeaders(
   const referrerPolicy = headers["referrer-policy"];
   const permissionsPolicy =
     headers["permissions-policy"] ?? headers["feature-policy"];
+  const skipBrowserOnly =
+    opts?.skipBrowserOnly === true ||
+    (opts?.host
+      ? isJsonApiHost(opts.host, headers["content-type"])
+      : false);
   const missing: string[] = [];
   if (!hsts) missing.push("strict-transport-security");
-  if (!csp) missing.push("content-security-policy");
-  if (!xFrameOptions) missing.push("x-frame-options");
+  // API JSON : CSP + X-Frame-Options non pertinents (pas de document navigateur)
+  if (!skipBrowserOnly) {
+    if (!csp) missing.push("content-security-policy");
+    if (!xFrameOptions) missing.push("x-frame-options");
+  }
   if (!xContentTypeOptions) missing.push("x-content-type-options");
   if (!referrerPolicy) missing.push("referrer-policy");
   // HEADER_META already maps this; without push, live riskTable never flags PP absent.
@@ -469,6 +529,7 @@ async function realHttpProbe(
   bodyBytesSampled?: number;
   redirectChain?: WebPassiveRedirectHop[];
   cookies?: WebPassiveCookieFlags[];
+  finalUrl?: string;
 }> {
   const redirectChain: WebPassiveRedirectHop[] = [];
   let current = url;
@@ -481,7 +542,8 @@ async function realHttpProbe(
       redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
-    headers["set-cookie"] = "";
+    // Remplace toujours les headers — évaluation sur la réponse courante uniquement
+    for (const key of Object.keys(headers)) delete headers[key];
     res.headers.forEach((v, k) => {
       headers[k.toLowerCase()] = v;
     });
@@ -531,7 +593,7 @@ async function realHttpProbe(
   }
 
   if (!res) {
-    return { status: 0, headers: {}, redirectChain };
+    return { status: 0, headers: {}, redirectChain, finalUrl: current };
   }
 
   let bodySha256: string | undefined;
@@ -544,6 +606,7 @@ async function realHttpProbe(
       signal: AbortSignal.timeout(8_000),
       headers: { Range: "bytes=0-2047" },
     });
+    for (const key of Object.keys(headers)) delete headers[key];
     res.headers.forEach((v, k) => {
       headers[k.toLowerCase()] = v;
     });
@@ -575,6 +638,8 @@ async function realHttpProbe(
     bodyBytesSampled,
     redirectChain: redirectChain.length ? redirectChain : undefined,
     cookies: cookies.length ? cookies : undefined,
+    /** Headers sécu = réponse finale (après 301 www→apex) */
+    finalUrl: current,
   };
 }
 
@@ -590,10 +655,74 @@ export function isApexInAllowlist(
 const OSINT_DISCLAIMER =
   "OSINT passif RDAP public uniquement — in-scope ; pas de WHOIS agressif ni d'énumération.";
 
+const IANA_RDAP_DNS_JSON = "https://data.iana.org/rdap/dns.json";
+
+/** Cache process-lifetime du bootstrap IANA dns.json */
+let ianaRdapDirectoryCache:
+  | { fetchedAt: number; services: Array<[string[], string[]]> }
+  | null = null;
+
+/**
+ * Résout le serveur RDAP via le répertoire IANA (ex. .com → Verisign).
+ * Évite les faux « indisponible » quand rdap.org / mauvais bootstrap échoue.
+ */
+export async function resolveRdapServerForDomain(
+  domain: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  const labels = normalizeHost(domain).split(".").filter(Boolean);
+  if (labels.length < 2) return null;
+  const tld = labels[labels.length - 1]!;
+
+  const now = Date.now();
+  if (
+    !ianaRdapDirectoryCache ||
+    now - ianaRdapDirectoryCache.fetchedAt > 24 * 3600 * 1000
+  ) {
+    const res = await fetchImpl(IANA_RDAP_DNS_JSON, {
+      method: "GET",
+      signal: AbortSignal.timeout(10_000),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      services?: Array<[string[], string[]]>;
+    };
+    if (!Array.isArray(data.services)) return null;
+    ianaRdapDirectoryCache = {
+      fetchedAt: now,
+      services: data.services,
+    };
+  }
+
+  for (const [tlds, urls] of ianaRdapDirectoryCache.services) {
+    if (!tlds.some((t) => t.toLowerCase() === tld)) continue;
+    const base = urls.find((u) => /^https?:\/\//i.test(u));
+    if (base) return base.replace(/\/$/, "");
+  }
+  return null;
+}
+
+/** @internal tests — reset cache IANA */
+export function clearRdapDirectoryCache(): void {
+  ianaRdapDirectoryCache = null;
+}
+
 async function realRdapProbe(host: string): Promise<WebPassiveOsintEvidence> {
   const query = normalizeHost(host);
-  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(query)}`;
+  let rdapUrl = "";
   try {
+    const base = await resolveRdapServerForDomain(query);
+    if (!base) {
+      return {
+        source: "rdap",
+        query,
+        ok: false,
+        disclaimer: OSINT_DISCLAIMER,
+        error: "Aucun serveur RDAP IANA pour ce TLD",
+      };
+    }
+    rdapUrl = `${base}/domain/${encodeURIComponent(query)}`;
     const res = await fetch(rdapUrl, {
       method: "GET",
       redirect: "follow",
@@ -652,7 +781,7 @@ async function realRdapProbe(host: string): Promise<WebPassiveOsintEvidence> {
       source: "rdap",
       query,
       ok: false,
-      rdapUrl,
+      rdapUrl: rdapUrl || undefined,
       disclaimer: OSINT_DISCLAIMER,
       error: e instanceof Error ? e.message : String(e),
     };
@@ -686,16 +815,18 @@ async function realTlsProbe(host: string): Promise<WebPassiveTlsEvidence> {
               .map((s) => s.trim().replace(/^DNS:/i, ""))
               .filter(Boolean)
           : undefined;
+        const issuerCN = cn(cert.issuer?.CN);
         resolve({
           protocol: proto ?? undefined,
           authorized,
           subjectCN: cn(cert.subject?.CN),
           subjectSANs,
-          issuerCN: cn(cert.issuer?.CN),
+          issuerCN,
           validFrom: cert.valid_from,
           validTo: cert.valid_to,
           daysRemaining,
           fingerprint256: cert.fingerprint256,
+          autoRenewLikely: isAutoRenewIssuer(issuerCN) || undefined,
         });
       },
     );
@@ -736,9 +867,11 @@ export async function runWebPassivePresence(
   const includeOsint = opts.includeOsintRdap !== false;
 
   // Refus immédiat si une cible fournie est hors périmètre (avant élargissement)
+  const explicitHosts = new Set<string>();
   for (const t of targets) {
     const host = normalizeHost(t.host || t.url || "");
     assertInScope(host, opts.allowedHosts, opts.exclusions, scopeOpts);
+    explicitHosts.add(host);
   }
 
   const expanded = expandPassiveTargets(
@@ -794,6 +927,12 @@ export async function runWebPassivePresence(
       };
     }
 
+    // Hôtes devinés (www/mail/api) non résolus — ne pas polluer le rapport
+    if (!entryCore.dns.resolved && !explicitHosts.has(host)) {
+      if (i < expanded.length - 1) await sleep(intervalMs);
+      continue;
+    }
+
     const resolvedIps = [
       ...entryCore.dns.addresses,
       ...(entryCore.dns.aaaa ?? []),
@@ -835,7 +974,18 @@ export async function runWebPassivePresence(
 
     try {
       const http = await fetchImpl(url);
-      const securityHeaders = extractSecurityHeaders(http.headers);
+      const finalUrl = http.finalUrl?.trim() || url;
+      const finalHost = normalizeHost(finalUrl);
+      const stillRedirect =
+        typeof http.status === "number" &&
+        http.status >= 300 &&
+        http.status < 400;
+      // Headers sécu uniquement sur la réponse finale (pas le 301 intermédiaire)
+      const securityHeaders = stillRedirect
+        ? {
+            missing: [] as string[],
+          }
+        : extractSecurityHeaders(http.headers, { host: finalHost || host });
       const cookies =
         http.cookies ??
         parseCookieFlags(
@@ -843,10 +993,11 @@ export async function runWebPassivePresence(
             ? http.headers["set-cookie"].split("\n")
             : http.headers["set-cookie"],
         );
+      const cdn = detectCloudflareCdn(http.headers);
       entryCore.http = {
         ok: http.status > 0 && http.status < 500,
         method: http.bodySha256 ? "GET" : "HEAD",
-        url,
+        url: finalUrl,
         status: http.status,
         server: http.headers["server"],
         contentType: http.headers["content-type"],
@@ -857,6 +1008,7 @@ export async function runWebPassivePresence(
         bodySha256: http.bodySha256,
         bodyBytesSampled: http.bodyBytesSampled,
         observedAt: new Date().toISOString(),
+        cdn,
       };
     } catch (e) {
       entryCore.http = {
@@ -868,8 +1020,20 @@ export async function runWebPassivePresence(
       };
     }
 
-    if (url.startsWith("https://") && !opts.isCancelled()) {
-      entryCore.tls = await tlsImpl(host);
+    if (
+      (entryCore.http?.url ?? url).startsWith("https://") &&
+      !opts.isCancelled()
+    ) {
+      const tlsHost = normalizeHost(entryCore.http?.url ?? host);
+      entryCore.tls = await tlsImpl(tlsHost || host);
+      if (
+        entryCore.tls &&
+        !entryCore.tls.error &&
+        entryCore.tls.autoRenewLikely === undefined
+      ) {
+        entryCore.tls.autoRenewLikely =
+          isAutoRenewIssuer(entryCore.tls.issuerCN) || undefined;
+      }
     }
 
     if (
