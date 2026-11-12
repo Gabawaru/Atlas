@@ -63,7 +63,24 @@ describe("supportHandoff", () => {
     if (!r.ok) assert.equal(r.code, "no_selection");
   });
 
-  it("POST /v1/support/handoff quand support + token", async () => {
+  it("refus c1_required sans pcConfirmedAt — aucun fetch", async () => {
+    let called = false;
+    const r = await requestPragmaSupportHandoff({
+      entries: [sampleEntry()],
+      apiBase: "http://localhost:3001",
+      token: "tok",
+      supportCustomer: true,
+      fetchImpl: (async () => {
+        called = true;
+        return new Response("{}");
+      }) as typeof fetch,
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.code, "c1_required");
+    assert.equal(called, false);
+  });
+
+  it("POST /v1/support/handoff quand support + token + C1", async () => {
     let url = "";
     let body: unknown;
     const r = await requestPragmaSupportHandoff({
@@ -71,6 +88,7 @@ describe("supportHandoff", () => {
       apiBase: "http://localhost:3001",
       token: "tok",
       supportCustomer: true,
+      pcConfirmedAt: "2026-11-12T16:00:00.000Z",
       fetchImpl: (async (input, init) => {
         url = String(input);
         body = JSON.parse(String(init?.body ?? "{}"));
@@ -86,9 +104,16 @@ describe("supportHandoff", () => {
     assert.equal(r.ok, true);
     assert.equal(url, "http://localhost:3001/v1/support/handoff");
     assert.ok(body && typeof body === "object");
-    const b = body as { reportMarkdown: string; fingerprints: string[] };
+    const b = body as {
+      reportMarkdown: string;
+      fingerprints: string[];
+      pcConfirmedAt: string;
+      initiatedFrom: string;
+    };
     assert.match(b.reportMarkdown, /HSTS/);
     assert.equal(b.fingerprints.length, 1);
+    assert.equal(b.pcConfirmedAt, "2026-11-12T16:00:00.000Z");
+    assert.equal(b.initiatedFrom, "pc");
     if (r.ok) assert.equal(r.ticketId, "tix-1");
   });
 
@@ -100,6 +125,7 @@ describe("supportHandoff", () => {
       apiBase: "http://localhost:3001",
       token: "tok",
       supportCustomer: true,
+      pcConfirmedAt: "2026-11-12T16:00:00.000Z",
       fetchImpl: (async (input, init) => {
         const url = String(input);
         calls.push({

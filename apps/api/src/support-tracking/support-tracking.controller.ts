@@ -22,6 +22,7 @@ import { JwtService } from "@nestjs/jwt";
 import { AuthService } from "../auth/auth.service";
 import type { AuthUser } from "../auth/auth.types";
 import { TicketsService } from "../tickets/tickets.service";
+import { requirePcConfirmedAt } from "./pc-confirm";
 import { SupportTrackingService } from "./support-tracking.service";
 
 class SoftTicketDto {
@@ -77,6 +78,19 @@ class SupportHandoffDto {
   @IsOptional()
   @IsString()
   missionId?: string;
+
+  /**
+   * C1 local confirm (ISO). Required for Bearer handoff.
+   * Phone→PC path needs ATLAS_API_BASE — not invented here.
+   */
+  @IsOptional()
+  @IsString()
+  pcConfirmedAt?: string;
+
+  /** Client hint only — never grants handoff. Fail-closed if phone. */
+  @IsOptional()
+  @IsString()
+  initiatedFrom?: string;
 }
 
 class SupportVulnItemDto {
@@ -128,6 +142,8 @@ function sessionIdFrom(
  * POST /v1/support/handoff : soft twin (pages, no auth) OR Bearer → Pragma ticket.
  * GET  /v1/support/{tickets|vulns|progress} : X-Atlas-Support-Session
  * POST /v1/support/vulns : scanner opt-in ingest
+ *
+ * Thin slice (D5 missing): PC-initiated C1 only. Phone soft twin refused.
  */
 @Controller("support")
 export class SupportTrackingController {
@@ -144,9 +160,18 @@ export class SupportTrackingController {
     @Body() body: SupportHandoffDto,
     @Req() req: { headers: { authorization?: string }; user?: AuthUser },
   ) {
+    const initiated = (body.initiatedFrom ?? "").trim().toLowerCase();
+    /* Fail-closed: no invent phone→PC without ATLAS_API_BASE */
+    if (initiated === "phone" || initiated === "mobile") {
+      throw new BadRequestException(
+        "Handoff téléphone refusé tant que le pont PC (ATLAS_API_BASE) n’est pas branché. Ouvrez Atlas sur le PC local.",
+      );
+    }
+
     const user = await this.optionalUser(req.headers.authorization);
     if (user) {
       this.auth.requireTenant(user, ["owner", "operator"]);
+      requirePcConfirmedAt(body.pcConfirmedAt);
       if (!body.reportMarkdown || body.reportMarkdown.trim().length < 20) {
         throw new BadRequestException(
           "Rapport Markdown requis pour la prise en charge authentifiée",
@@ -174,7 +199,11 @@ export class SupportTrackingController {
       };
     }
 
-    /* Pages / soft twin — no Bearer, no PII accepted */
+    /*
+     * Pages soft twin (hors monorepo) — follow-up C1 on atlas-secu-pages.
+     * Phone already refused above. Do not require pcConfirmedAt here yet
+     * (would break live Pages until that repo ships C1).
+     */
     const snap = await this.tracking.createSoftHandoff({
       source: body.source || "atlas-secu-pages",
       ticket: body.ticket,
