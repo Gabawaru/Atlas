@@ -11,7 +11,7 @@ export type RiskLabelFr =
 
 export type RiskTableRow = {
   control: string;
-  /** Hôte concerné (un seul hôte — jamais agrégé) */
+  /** Hôte concerné (un seul hôte — jamais agrégé côté Suivi) */
   host: string;
   /** URL explicite de la cible (https://host/… quand connue) */
   url: string;
@@ -21,7 +21,7 @@ export type RiskTableRow = {
   signal: string;
 };
 
-const RISK_LABEL_FR: Record<RiskCode, RiskLabelFr> = {
+export const RISK_LABEL_FR: Record<RiskCode, RiskLabelFr> = {
   critical: "critique",
   high: "élevé",
   medium: "moyen",
@@ -46,6 +46,7 @@ type EvidenceLike = {
     daysRemaining?: number;
     error?: string;
     issuerCN?: string;
+    autoRenewLikely?: boolean;
   };
   http?: {
     ok?: boolean;
@@ -54,6 +55,7 @@ type EvidenceLike = {
     error?: string;
     securityHeaders?: { missing?: string[] };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
+    cdn?: { provider?: string; originNotAnalyzed?: boolean };
   };
   osint?: { ok?: boolean; error?: string; source?: string };
 };
@@ -93,6 +95,19 @@ const HEADER_META: Record<
     compromise: "Exposition faible — API navigateur non restreintes",
   },
 };
+
+/** Let's Encrypt / ISRG / CDN edge — renouvellement ACME probable. */
+export function isAutoRenewIssuer(issuerCN?: string | null): boolean {
+  if (!issuerCN) return false;
+  const s = issuerCN.trim().toLowerCase();
+  if (!s) return false;
+  if (s.includes("let's encrypt") || s.includes("lets encrypt")) return true;
+  if (s.includes("isrg")) return true;
+  if (s.includes("cloudflare")) return true;
+  if (s.includes("google trust") || s.startsWith("gts")) return true;
+  if (/^(r\d+|e\d+|ye\d+|we\d+)$/i.test(issuerCN.trim())) return true;
+  return false;
+}
 
 /** URL explicite pour une preuve : http.url sinon https://host/ */
 export function evidenceTargetUrl(
@@ -154,7 +169,7 @@ export function expandRiskTableRows(rows: RiskTableRow[]): RiskTableRow[] {
 
 /**
  * Dédoublonne les lignes exactes — une ligne par URL hôte.
- * Ne fusionne jamais les hôtes en blobs « api.x, www.x ».
+ * Ne fusionne jamais les hôtes en blobs « api.x, www.x » (Suivi / empreintes).
  */
 export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
   const map = new Map<string, RiskTableRow>();
@@ -168,6 +183,75 @@ export function aggregateRiskTable(rows: RiskTableRow[]): RiskTableRow[] {
   return sortRiskTable([...map.values()]);
 }
 
+/**
+ * Densité UI : une ligne par contrôle, hôtes listés sans troncature.
+ * Séparé d'aggregateRiskTable (empreintes Suivi restent 1 hôte / ligne).
+ */
+export function collapseRiskTableByControl(
+  rows: RiskTableRow[],
+): RiskTableRow[] {
+  const map = new Map<string, RiskTableRow & { _hosts: string[] }>();
+  for (const r of expandRiskTableRows(rows)) {
+    const key = `${r.control}|${r.riskCode}|${r.compromise}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...r, _hosts: [r.host].filter(Boolean) });
+      continue;
+    }
+    if (r.host && !existing._hosts.includes(r.host)) {
+      existing._hosts.push(r.host);
+    }
+    if (RISK_RANK[r.riskCode] > RISK_RANK[existing.riskCode]) {
+      existing.riskCode = r.riskCode;
+      existing.risk = RISK_LABEL_FR[r.riskCode];
+      existing.compromise = r.compromise;
+      existing.signal = r.signal;
+    }
+  }
+  return sortRiskTable(
+    [...map.values()].map(({ _hosts, ...r }) => ({
+      ...r,
+      host: _hosts.join(", "),
+      url: _hosts.length === 1 ? r.url || evidenceTargetUrl(_hosts[0]!) : "",
+    })),
+  );
+}
+
+export function partitionRiskTable(rows: RiskTableRow[]): {
+  findings: RiskTableRow[];
+  observations: RiskTableRow[];
+} {
+  const findings: RiskTableRow[] = [];
+  const observations: RiskTableRow[] = [];
+  for (const r of rows) {
+    if (r.riskCode === "info") observations.push(r);
+    else findings.push(r);
+  }
+  return { findings, observations };
+}
+
+export function buildBilanSummary(rows: RiskTableRow[]): {
+  score: number;
+  priorityActions: string[];
+} {
+  const actionable = rows.filter((r) => r.riskCode !== "info");
+  let score = 100;
+  for (const r of actionable) {
+    if (r.riskCode === "critical") score -= 25;
+    else if (r.riskCode === "high") score -= 15;
+    else if (r.riskCode === "medium") score -= 8;
+    else if (r.riskCode === "low") score -= 3;
+  }
+  score = Math.max(0, Math.min(100, score));
+  const priorityActions = sortRiskTable(actionable)
+    .slice(0, 3)
+    .map((r) => {
+      const where = r.host && r.host !== "—" ? ` (${r.host})` : "";
+      return `${r.control}${where}`;
+    });
+  return { score, priorityActions };
+}
+
 export function buildPresenceRiskTable(
   evidence: EvidenceLike[] | null | undefined,
 ): RiskTableRow[] {
@@ -175,20 +259,13 @@ export function buildPresenceRiskTable(
   if (!Array.isArray(evidence)) return out;
 
   for (const ev of evidence) {
+    // Hôtes non résolus (devinés) — ne pas rapporter
+    if (ev.dns?.resolved === false) continue;
+
     const host = ev.host?.trim() || "(hôte inconnu)";
     const url = evidenceTargetUrl(host, ev.http?.url);
-    if (ev.dns?.resolved === false) {
-      out.push(
-        row({
-          control: "DNS — hôte non résolu",
-          host,
-          url,
-          riskCode: "info",
-          compromise: "Observation — pas d'exposition HTTP publique détectée",
-          signal: ev.dns.error ?? "NXDOMAIN / ENOTFOUND",
-        }),
-      );
-    } else if (ev.dns?.resolved) {
+
+    if (ev.dns?.resolved) {
       out.push(
         row({
           control: "DNS — résolution publique",
@@ -197,6 +274,21 @@ export function buildPresenceRiskTable(
           riskCode: "info",
           compromise: "Observation — surface DNS visible sur Internet",
           signal: (ev.dns.addresses ?? []).slice(0, 2).join(", ") || "résolu",
+        }),
+      );
+    }
+
+    if (ev.http?.cdn?.originNotAnalyzed || ev.http?.cdn?.provider) {
+      const provider = ev.http.cdn.provider ?? "CDN";
+      out.push(
+        row({
+          control: `CDN ${provider} — origine non analysée`,
+          host,
+          url,
+          riskCode: "info",
+          compromise:
+            "Observation — empreinte edge uniquement ; l'origine derrière le CDN n'est pas sondée",
+          signal: `${provider} · originNotAnalyzed`,
         }),
       );
     }
@@ -213,7 +305,6 @@ export function buildPresenceRiskTable(
         }),
       );
     } else if (ev.http?.error) {
-      // API pushDnsHttpRows parity — http.error typed but was dropped on rebuild.
       out.push(
         row({
           control: "HTTP — sonde en échec",
@@ -247,7 +338,6 @@ export function buildPresenceRiskTable(
           riskCode: "critical",
           compromise:
             "Compromission potentielle — chaîne de confiance rompue / MITM possible",
-          // API pushTlsRows parity — issuerCN typed on EvidenceLike but was dropped.
           signal: `authorized=false · ${tls.protocol ?? "?"} · issuer=${tls.issuerCN ?? "?"}`,
         }),
       );
@@ -263,7 +353,12 @@ export function buildPresenceRiskTable(
           signal: `daysRemaining=${tls.daysRemaining}`,
         }),
       );
-    } else if (typeof tls?.daysRemaining === "number" && tls.daysRemaining <= 14) {
+    } else if (
+      typeof tls?.daysRemaining === "number" &&
+      tls.daysRemaining <= 14
+    ) {
+      const autoRenew =
+        tls.autoRenewLikely === true || isAutoRenewIssuer(tls.issuerCN);
       out.push(
         row({
           control: "TLS — expiration imminente",
@@ -272,12 +367,14 @@ export function buildPresenceRiskTable(
           riskCode: "high",
           compromise:
             "Exposition élevée — interruption HTTPS / alerte navigateurs proche",
-          // API pushTlsRows parity — protocol typed on EvidenceLike but was dropped
-          // on ≤14 while medium (≤45) already keeps it.
-          signal: `${tls.daysRemaining} j restants · ${tls.protocol ?? "?"}`,
+          signal: `${tls.daysRemaining} j restants · ${tls.protocol ?? "?"}${autoRenew ? " · auto-renew ?" : ""}`,
         }),
       );
-    } else if (typeof tls?.daysRemaining === "number" && tls.daysRemaining <= 45) {
+    } else if (
+      typeof tls?.daysRemaining === "number" &&
+      tls.daysRemaining <= 45 &&
+      !(tls.autoRenewLikely === true || isAutoRenewIssuer(tls.issuerCN))
+    ) {
       out.push(
         row({
           control: "TLS — renouvellement à planifier",
@@ -289,19 +386,22 @@ export function buildPresenceRiskTable(
         }),
       );
     } else if (tls?.authorized) {
+      const autoRenew =
+        tls.autoRenewLikely === true || isAutoRenewIssuer(tls.issuerCN);
       out.push(
         row({
           control: "TLS — certificat valide",
           host,
           url,
           riskCode: "info",
-          compromise: "Observation — chaîne de confiance OK",
-          signal: `${tls.protocol ?? "TLS"} · ${tls.daysRemaining ?? "?"} j`,
+          compromise: autoRenew
+            ? "Observation — chaîne OK · renouvellement automatique probable"
+            : "Observation — chaîne de confiance OK",
+          signal: `${tls.protocol ?? "TLS"} · ${tls.daysRemaining ?? "?"} j${autoRenew ? " · auto-renew" : ""}`,
         }),
       );
     }
 
-    // API pushHeaderRows parity — empty missing[] is an observed all-clear, not silence.
     const missingHeaders = ev.http?.securityHeaders?.missing;
     if (missingHeaders && !missingHeaders.length) {
       out.push(
@@ -331,7 +431,6 @@ export function buildPresenceRiskTable(
       );
     }
 
-    // API risk-table pushCookieRows parity — evidence rebuild must not drop cookies.
     for (const c of ev.http?.cookies ?? []) {
       const missing = c.missingFlags ?? [];
       if (!missing.length) continue;

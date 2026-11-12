@@ -3,11 +3,16 @@ import assert from "node:assert/strict";
 import {
   assertInScope,
   assertRoePlatformAllowed,
+  clearRdapDirectoryCache,
+  detectCloudflareCdn,
   expandPassiveTargets,
   hasDeniedConnectAddress,
   isApexInAllowlist,
+  isAutoRenewIssuer,
   isDeniedConnectAddress,
+  isJsonApiHost,
   parseCookieFlags,
+  resolveRdapServerForDomain,
   runWebPassivePresence,
   WEB_PASSIVE_LIMITS,
 } from "./web-passive";
@@ -241,6 +246,136 @@ describe("web.passive.presence.v1", () => {
     assert.equal(isDeniedConnectAddress("fe80::1"), true);
     assert.equal(isDeniedConnectAddress("93.184.216.34"), false);
     assert.equal(hasDeniedConnectAddress(["93.184.216.34", "10.1.1.1"]), true);
+  });
+
+  it("isJsonApiHost — skip CSP/XFO pertinence ; Cloudflare detect", () => {
+    assert.equal(isJsonApiHost("api.pragma-serve.com"), true);
+    assert.equal(isJsonApiHost("www.pragma-serve.com"), false);
+    assert.equal(
+      isJsonApiHost("pragma-serve.com", "application/json; charset=utf-8"),
+      true,
+    );
+    assert.ok(detectCloudflareCdn({ "cf-ray": "abc", server: "cloudflare" }));
+    assert.equal(detectCloudflareCdn({ server: "nginx" }), undefined);
+    assert.equal(isAutoRenewIssuer("R10"), true);
+  });
+
+  it("resolveRdapServerForDomain — IANA dns.json → Verisign .com", async () => {
+    clearRdapDirectoryCache();
+    const base = await resolveRdapServerForDomain("pragma-serve.com", async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          services: [
+            [["com", "net"], ["https://rdap.verisign.com/com/v1/"]],
+          ],
+        }),
+      }) as Response,
+    );
+    assert.equal(base, "https://rdap.verisign.com/com/v1");
+  });
+
+  it("skip hôtes élargis non résolus ; API sans CSP/XFO manquants ; CF note", async () => {
+    const results = await runWebPassivePresence([{ host: "example.com" }], {
+      allowedHosts: new Set(["example.com"]),
+      enforceRoePlatform: false,
+      rateLimitPerMinute: 1000,
+      expandCommonSubdomains: true,
+      includeOsintRdap: false,
+      isCancelled: () => false,
+      lookupFn: async (host) => {
+        if (host === "mail.example.com") return { a: [], aaaa: [] };
+        if (host.startsWith("api.")) {
+          return { a: ["93.184.216.34"], aaaa: [] };
+        }
+        return { a: ["93.184.216.34"], aaaa: [] };
+      },
+      fetchFn: async (url) => {
+        if (url.includes("api.")) {
+          return {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+              "x-content-type-options": "nosniff",
+              "strict-transport-security": "max-age=1",
+            },
+            finalUrl: url,
+          };
+        }
+        return {
+          status: 200,
+          headers: {
+            server: "cloudflare",
+            "cf-ray": "deadbeef",
+            "strict-transport-security": "max-age=1",
+            "x-content-type-options": "nosniff",
+          },
+          finalUrl: url,
+        };
+      },
+      tlsFn: async () => ({
+        protocol: "TLSv1.3",
+        authorized: true,
+        issuerCN: "YE1",
+        daysRemaining: 45,
+        autoRenewLikely: true,
+      }),
+      sleepFn: async () => undefined,
+    });
+    const hosts = results.map((r) => r.host);
+    assert.ok(hosts.includes("example.com"));
+    assert.ok(hosts.includes("api.example.com"));
+    assert.ok(!hosts.includes("mail.example.com"), "unresolved guessed host skipped");
+    const api = results.find((r) => r.host === "api.example.com");
+    assert.ok(api);
+    const missing = api!.http?.securityHeaders?.missing ?? [];
+    assert.ok(!missing.includes("content-security-policy"));
+    assert.ok(!missing.includes("x-frame-options"));
+    assert.ok(missing.includes("referrer-policy") || missing.includes("permissions-policy"));
+    const apex = results.find((r) => r.host === "example.com");
+    assert.equal(apex!.http?.cdn?.provider, "Cloudflare");
+    assert.equal(apex!.http?.cdn?.originNotAnalyzed, true);
+  });
+
+  it("suit 301 — headers sur URL finale uniquement", async () => {
+    const results = await runWebPassivePresence([{ host: "www.example.com" }], {
+      allowedHosts: new Set(["example.com"]),
+      enforceRoePlatform: false,
+      rateLimitPerMinute: 1000,
+      expandCommonSubdomains: false,
+      includeOsintRdap: false,
+      isCancelled: () => false,
+      lookupFn: async () => ({ a: ["93.184.216.34"], aaaa: [] }),
+      fetchFn: async () => ({
+        status: 200,
+        headers: {
+          "strict-transport-security": "max-age=31536000",
+          "content-security-policy": "default-src 'self'",
+          "x-frame-options": "DENY",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+          "permissions-policy": "geolocation=()",
+        },
+        redirectChain: [
+          {
+            url: "https://www.example.com/",
+            status: 301,
+            location: "https://example.com/",
+          },
+          { url: "https://example.com/", status: 200 },
+        ],
+        finalUrl: "https://example.com/",
+      }),
+      tlsFn: async () => ({
+        protocol: "TLSv1.3",
+        authorized: true,
+        daysRemaining: 80,
+        issuerCN: "R3",
+      }),
+      sleepFn: async () => undefined,
+    });
+    assert.equal(results[0]!.http?.url, "https://example.com/");
+    assert.deepEqual(results[0]!.http?.securityHeaders?.missing, []);
   });
 
   it("refuse HTTP/TLS si DNS résout vers IP privée (SSRF)", async () => {

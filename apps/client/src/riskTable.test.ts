@@ -2,8 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   aggregateRiskTable,
+  buildBilanSummary,
   buildPresenceRiskTable,
+  collapseRiskTableByControl,
   evidenceTargetUrl,
+  isAutoRenewIssuer,
+  partitionRiskTable,
   riskTableFromReportExport,
 } from "./riskTable";
 
@@ -27,6 +31,79 @@ describe("client riskTable", () => {
     assert.equal(hsts!.risk, "moyen");
     assert.equal(hsts!.url, "https://pragma-serve.com/");
     assert.match(hsts!.compromise, /Exposition moyenne/);
+  });
+
+  it("TLS LE/YE1 à 45j → info (pas medium) ; unresolved skip", () => {
+    assert.equal(isAutoRenewIssuer("YE1"), true);
+    const rows = buildPresenceRiskTable([
+      {
+        host: "pragma-serve.com",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://pragma-serve.com/",
+          cdn: { provider: "Cloudflare", originNotAnalyzed: true },
+        },
+        tls: {
+          authorized: true,
+          protocol: "TLSv1.3",
+          daysRemaining: 45,
+          issuerCN: "YE1",
+          autoRenewLikely: true,
+        },
+      },
+      {
+        host: "mail.pragma-serve.com",
+        dns: { resolved: false, addresses: [] },
+        tls: { error: "ENOTFOUND" },
+      },
+    ]);
+    assert.equal(
+      rows.some((r) => r.control.includes("renouvellement")),
+      false,
+    );
+    const tls = rows.find((r) => r.control.includes("certificat valide"));
+    assert.ok(tls);
+    assert.equal(tls!.risk, "info");
+    assert.ok(rows.some((r) => r.control.includes("Cloudflare")));
+    assert.equal(
+      rows.some((r) => r.host === "mail.pragma-serve.com"),
+      false,
+    );
+  });
+
+  it("collapseByControl + bilan (densité UI)", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "a.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://a.test/",
+          securityHeaders: { missing: ["content-security-policy"] },
+        },
+      },
+      {
+        host: "b.test",
+        dns: { resolved: true, addresses: ["1.0.0.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://b.test/",
+          securityHeaders: { missing: ["content-security-policy"] },
+        },
+      },
+    ]);
+    const collapsed = collapseRiskTableByControl(rows);
+    const csp = collapsed.filter((r) => r.control.includes("CSP"));
+    assert.equal(csp.length, 1);
+    assert.match(csp[0]!.host, /a\.test.*b\.test|b\.test.*a\.test/);
+    const { findings } = partitionRiskTable(collapsed);
+    assert.ok(findings.length >= 1);
+    const bilan = buildBilanSummary(collapsed);
+    assert.ok(bilan.priorityActions.length <= 3);
   });
 
   it("dérive headers all-clear when missing=[] (parity API pushHeaderRows)", () => {

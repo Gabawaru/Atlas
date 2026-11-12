@@ -59,6 +59,8 @@ type EvidenceLike = {
     daysRemaining?: number;
     error?: string;
     issuerCN?: string;
+    /** ACME / CDN short-lived — renouvellement auto probable */
+    autoRenewLikely?: boolean;
   };
   http?: {
     ok?: boolean;
@@ -74,6 +76,8 @@ type EvidenceLike = {
       referrerPolicy?: string;
     };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
+    /** CDN edge observé — origine non sondée */
+    cdn?: { provider?: string; originNotAnalyzed?: boolean };
   };
   osint?: {
     ok?: boolean;
@@ -81,6 +85,20 @@ type EvidenceLike = {
     source?: string;
   };
 };
+
+/** Let's Encrypt / ISRG / CDN edge (GTS YE*, Cloudflare) — 90j ACME typique. */
+export function isAutoRenewIssuer(issuerCN?: string | null): boolean {
+  if (!issuerCN) return false;
+  const s = issuerCN.trim().toLowerCase();
+  if (!s) return false;
+  if (s.includes("let's encrypt") || s.includes("lets encrypt")) return true;
+  if (s.includes("isrg")) return true;
+  if (s.includes("cloudflare")) return true;
+  if (s.includes("google trust") || s.startsWith("gts")) return true;
+  // Intermediate short CNs used by LE / Cloudflare Universal SSL
+  if (/^(r\d+|e\d+|ye\d+|we\d+)$/i.test(issuerCN.trim())) return true;
+  return false;
+}
 
 /** URL explicite pour une preuve : http.url sinon https://host/ */
 export function evidenceTargetUrl(
@@ -210,6 +228,8 @@ function pushTlsRows(
     return;
   }
   const days = tls.daysRemaining;
+  const autoRenew =
+    tls.autoRenewLikely === true || isAutoRenewIssuer(tls.issuerCN);
   if (typeof days === "number" && days < 0) {
     out.push(
       row({
@@ -223,6 +243,7 @@ function pushTlsRows(
       }),
     );
   } else if (typeof days === "number" && days <= 14) {
+    // Alerte même si ACME : <14 j = renouvellement auto probablement en panne
     out.push(
       row({
         control: "TLS — expiration imminente",
@@ -231,10 +252,11 @@ function pushTlsRows(
         riskCode: "high",
         compromise:
           "Exposition élevée — interruption HTTPS / alerte navigateurs proche",
-        signal: `${days} j restants · ${tls.protocol ?? "?"}`,
+        signal: `${days} j restants · ${tls.protocol ?? "?"}${autoRenew ? " · auto-renew ?" : ""}`,
       }),
     );
-  } else if (typeof days === "number" && days <= 45) {
+  } else if (typeof days === "number" && days <= 45 && !autoRenew) {
+    // Fenêtre courte seulement si renouvellement non automatique (pas LE 90j ACME)
     out.push(
       row({
         control: "TLS — renouvellement à planifier",
@@ -252,8 +274,10 @@ function pushTlsRows(
         host,
         url,
         riskCode: "info",
-        compromise: "Observation — chaîne de confiance OK",
-        signal: `${tls.protocol ?? "TLS"} · ${typeof days === "number" ? `${days} j` : "durée n/d"}`,
+        compromise: autoRenew
+          ? "Observation — chaîne OK · renouvellement automatique probable"
+          : "Observation — chaîne de confiance OK",
+        signal: `${tls.protocol ?? "TLS"} · ${typeof days === "number" ? `${days} j` : "durée n/d"}${autoRenew ? " · auto-renew" : ""}`,
       }),
     );
   }
@@ -265,19 +289,9 @@ function pushDnsHttpRows(
   url: string,
   ev: EvidenceLike,
 ) {
-  if (ev.dns?.resolved === false) {
-    out.push(
-      row({
-        control: "DNS — hôte non résolu",
-        host,
-        url,
-        riskCode: "info",
-        compromise: "Observation — pas d'exposition HTTP publique détectée",
-        signal: ev.dns.error ?? "NXDOMAIN / ENOTFOUND",
-      }),
-    );
-    return;
-  }
+  // Hôtes non résolus (ex. mail.* deviné) — ne pas rapporter
+  if (ev.dns?.resolved === false) return;
+
   if (ev.dns?.resolved) {
     const addrs = (ev.dns.addresses ?? []).slice(0, 2).join(", ");
     out.push(
@@ -288,6 +302,20 @@ function pushDnsHttpRows(
         riskCode: "info",
         compromise: "Observation — surface DNS visible sur Internet",
         signal: addrs || "résolu",
+      }),
+    );
+  }
+  if (ev.http?.cdn?.originNotAnalyzed || ev.http?.cdn?.provider) {
+    const provider = ev.http.cdn.provider ?? "CDN";
+    out.push(
+      row({
+        control: `CDN ${provider} — origine non analysée`,
+        host,
+        url,
+        riskCode: "info",
+        compromise:
+          "Observation — empreinte edge uniquement ; l'origine derrière le CDN n'est pas sondée",
+        signal: `${provider} · originNotAnalyzed`,
       }),
     );
   }
@@ -431,6 +459,8 @@ export function buildPresenceRiskTable(
   if (!Array.isArray(evidence) || evidence.length === 0) return out;
 
   for (const ev of evidence) {
+    // Ne pas remonter les hôtes devinés non résolus (mail.*, etc.)
+    if (ev.dns?.resolved === false) continue;
     const host = ev.host?.trim() || "(hôte inconnu)";
     const url = evidenceTargetUrl(host, ev.http?.url);
     pushDnsHttpRows(out, host, url, ev);
@@ -441,6 +471,78 @@ export function buildPresenceRiskTable(
   }
 
   return sortRiskTable(out);
+}
+
+/**
+ * Une ligne par contrôle (hôtes listés, sans troncature) — densité UI.
+ * Conservé séparé d'aggregateRiskTable (empreintes Suivi = 1 hôte / ligne).
+ */
+export function collapseRiskTableByControl(
+  rows: RiskTableRow[],
+): RiskTableRow[] {
+  const map = new Map<string, RiskTableRow & { _hosts: string[] }>();
+  for (const r of expandRiskTableRows(rows)) {
+    const key = `${r.control}|${r.riskCode}|${r.compromise}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...r, _hosts: [r.host].filter(Boolean) });
+      continue;
+    }
+    if (r.host && !existing._hosts.includes(r.host)) {
+      existing._hosts.push(r.host);
+    }
+    if (RISK_RANK[r.riskCode] > RISK_RANK[existing.riskCode]) {
+      existing.riskCode = r.riskCode;
+      existing.risk = RISK_LABEL_FR[r.riskCode];
+      existing.compromise = r.compromise;
+      existing.signal = r.signal;
+    }
+  }
+  return sortRiskTable(
+    [...map.values()].map(({ _hosts, ...r }) => ({
+      ...r,
+      host: _hosts.join(", "),
+      // Multi-hôtes : pas d'URL unique trompeuse
+      url: _hosts.length === 1 ? r.url || evidenceTargetUrl(_hosts[0]!) : "",
+    })),
+  );
+}
+
+/** Sépare findings actionnables et observations info (résumé). */
+export function partitionRiskTable(rows: RiskTableRow[]): {
+  findings: RiskTableRow[];
+  observations: RiskTableRow[];
+} {
+  const findings: RiskTableRow[] = [];
+  const observations: RiskTableRow[] = [];
+  for (const r of rows) {
+    if (r.riskCode === "info") observations.push(r);
+    else findings.push(r);
+  }
+  return { findings, observations };
+}
+
+/** Score 0–100 + 3 actions prioritaires pour le bilan bas de page. */
+export function buildBilanSummary(rows: RiskTableRow[]): {
+  score: number;
+  priorityActions: string[];
+} {
+  const actionable = rows.filter((r) => r.riskCode !== "info");
+  let score = 100;
+  for (const r of actionable) {
+    if (r.riskCode === "critical") score -= 25;
+    else if (r.riskCode === "high") score -= 15;
+    else if (r.riskCode === "medium") score -= 8;
+    else if (r.riskCode === "low") score -= 3;
+  }
+  score = Math.max(0, Math.min(100, score));
+  const priorityActions = sortRiskTable(actionable)
+    .slice(0, 3)
+    .map((r) => {
+      const where = r.host && r.host !== "—" ? ` (${r.host})` : "";
+      return `${r.control}${where}`;
+    });
+  return { score, priorityActions };
 }
 
 /** Ajoute des lignes finding classiques (sévérité → risque/compromission). */
