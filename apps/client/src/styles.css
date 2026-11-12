@@ -482,6 +482,15 @@ pre {
   text-underline-offset: 2px;
 }
 
+/* Evidence snippet on actionable findings (atl-retours Signal column) */
+.risk-signal {
+  font-size: 0.82rem;
+  color: var(--muted);
+  word-break: break-word;
+  white-space: normal;
+  max-width: 18rem;
+}
+
 .risk-summary {
   margin-top: 0.85rem;
   padding: 0.55rem 0.65rem;
