@@ -11,6 +11,7 @@ import {
   isHstsMaxAgeWeak,
   parseHstsMaxAge,
   partitionRiskTable,
+  bilanFromReportExport,
   riskTableFromReportExport,
 } from "./riskTable";
 
@@ -232,6 +233,23 @@ describe("client riskTable", () => {
     const prefs = rows.find((r) => r.control.includes("prefs"));
     assert.ok(prefs);
     assert.equal(prefs!.risk, "faible");
+  });
+
+  it("bilanFromReportExport lit bilanScore + priorityActions", () => {
+    assert.equal(bilanFromReportExport(null), null);
+    assert.equal(bilanFromReportExport({ riskTable: [] }), null);
+    const bilan = bilanFromReportExport({
+      bilanScore: 77,
+      priorityActions: ["Header HSTS absent (a.test)", "x", "y", "z"],
+    });
+    assert.deepEqual(bilan, {
+      score: 77,
+      priorityActions: [
+        "Header HSTS absent (a.test)",
+        "x",
+        "y",
+      ],
+    });
   });
 
   it("riskTableFromReportExport préfère riskTable stocké + backfill url", () => {
