@@ -331,6 +331,7 @@ describe("web.passive.presence.v1", () => {
     const missing = api!.http?.securityHeaders?.missing ?? [];
     assert.ok(!missing.includes("content-security-policy"));
     assert.ok(!missing.includes("x-frame-options"));
+    assert.equal(api!.http?.securityHeaders?.browserOnlySkipped, true);
     assert.ok(missing.includes("referrer-policy") || missing.includes("permissions-policy"));
     const apex = results.find((r) => r.host === "example.com");
     assert.equal(apex!.http?.cdn?.provider, "Cloudflare");

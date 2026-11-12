@@ -74,6 +74,8 @@ type EvidenceLike = {
       xFrameOptions?: string;
       xContentTypeOptions?: string;
       referrerPolicy?: string;
+      /** API JSON — CSP/XFO skipped intentionally */
+      browserOnlySkipped?: boolean;
     };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
     /** CDN edge observé — origine non sondée */
@@ -413,6 +415,27 @@ function pushDnsHttpRows(
   }
 }
 
+/** Surface intentional API JSON browser-header skip (was silent). */
+export function pushApiPolicyObservation(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  http: EvidenceLike["http"],
+) {
+  if (!http?.securityHeaders?.browserOnlySkipped) return;
+  out.push(
+    row({
+      control: "API JSON — CSP/XFO non applicables",
+      host,
+      url,
+      riskCode: "info",
+      compromise:
+        "Observation — headers navigateur (CSP, X-Frame-Options) non scorés pour API JSON",
+      signal: "browserOnlySkipped · api/json",
+    }),
+  );
+}
+
 function pushHeaderRows(
   out: RiskTableRow[],
   host: string,
@@ -535,6 +558,7 @@ export function buildPresenceRiskTable(
     pushDnsHttpRows(out, host, url, ev);
     pushRedirectRows(out, host, url, ev.http);
     pushTlsRows(out, host, url, ev.tls);
+    pushApiPolicyObservation(out, host, url, ev.http);
     pushHeaderRows(out, host, url, ev.http?.securityHeaders?.missing);
     pushCookieRows(out, host, url, ev.http?.cookies);
     pushOsintRow(out, host, url, ev.osint);

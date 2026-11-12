@@ -305,6 +305,27 @@ describe("client riskTable", () => {
     assert.equal(evidenceTargetUrl("solo.test"), "https://solo.test/");
   });
 
+  it("API JSON — observation CSP/XFO non applicables", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "api.example.com",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://api.example.com/",
+          securityHeaders: {
+            missing: [],
+            browserOnlySkipped: true,
+          },
+        },
+      },
+    ]);
+    const obs = rows.find((r) => r.control.includes("CSP/XFO non applicables"));
+    assert.ok(obs);
+    assert.equal(obs!.risk, "info");
+  });
+
   it("redirect — http sans HTTPS + stuck 3xx scorés", () => {
     const plain = buildPresenceRiskTable([
       {

@@ -40,6 +40,8 @@ export interface WebPassiveSecurityHeaders {
   permissionsPolicy?: string;
   /** Headers de base absents (observation, pas d'attaque) */
   missing: string[];
+  /** API JSON — CSP/XFO volontairement non scorés (atl-retours depth) */
+  browserOnlySkipped?: boolean;
 }
 
 /** Observation Set-Cookie — pas de vol de session, pas de bypass. */
@@ -427,6 +429,7 @@ function extractSecurityHeaders(
     xContentTypeOptions,
     referrerPolicy,
     permissionsPolicy,
+    ...(skipBrowserOnly ? { browserOnlySkipped: true as const } : {}),
     missing,
   };
 }
