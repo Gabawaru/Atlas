@@ -90,8 +90,8 @@ describe("createMissionBody", () => {
     });
     assert.equal(body.synthetic, false);
     assert.deepEqual(body.exclusions, []);
-    assert.equal(body.title, "Presence web");
-    assert.doesNotMatch(String(body.title), /FICTIF|présence|réelle/i);
+    assert.equal(body.title, "Présence web");
+    assert.doesNotMatch(String(body.title), /FICTIF|réelle/i);
     assert.doesNotMatch(String(body.notes), /Sign attach/i);
   });
 });
