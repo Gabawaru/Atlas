@@ -6,6 +6,7 @@ import {
   Headers,
   Inject,
   Post,
+  Query,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -25,6 +26,7 @@ import { TicketsService } from "../tickets/tickets.service";
 import { requirePcConfirmedAt } from "./pc-confirm";
 import {
   publicStatusActive,
+  publicStatusAwaitingConfirm,
   publicStatusNone,
 } from "./support-status";
 import { SupportTrackingService } from "./support-tracking.service";
@@ -134,6 +136,32 @@ class SupportVulnIngestDto {
   source?: string;
 }
 
+class HandoffIntentDto {
+  @IsOptional()
+  @IsString()
+  initiatedFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => SoftTicketDto)
+  ticket?: SoftTicketDto;
+}
+
+class HandoffConfirmDto {
+  @IsString()
+  @MinLength(8)
+  handoffIntentId!: string;
+
+  @IsOptional()
+  @IsString()
+  pcConfirmedAt?: string;
+}
+
 function sessionIdFrom(
   header?: string,
   alt?: string,
@@ -223,40 +251,75 @@ export class SupportTrackingController {
 
   /**
    * GET /v1/support/status — public observability (Pages /test + client).
-   * With opaque session → active counts; without → none + phone→PC blocked flag.
+   * Session header → active; intent id → awaiting_confirm|active; else none.
    */
   @Get("status")
   async status(
     @Headers("x-atlas-support-session") sid?: string,
     @Headers("X-Atlas-Support-Session") sidAlt?: string,
+    @Headers("x-atlas-handoff-intent") intentHeader?: string,
+    @Query("intent") intentQuery?: string,
   ) {
-    const id = sessionIdFrom(sid, sidAlt);
-    if (!id) return publicStatusNone();
-    try {
-      const snap = await this.tracking.getSnapshot(id);
-      return publicStatusActive({
-        supportSessionId: snap.supportSessionId,
-        requestedAt: snap.requestedAt,
-        ticketCount: snap.tickets.length,
-        vulnCount: snap.vulns.length,
-        progressCount: snap.progress.length,
-      });
-    } catch {
-      return publicStatusNone();
+    const sessionId = sessionIdFrom(sid, sidAlt);
+    if (sessionId) {
+      try {
+        const snap = await this.tracking.getSnapshot(sessionId);
+        return publicStatusActive({
+          supportSessionId: snap.supportSessionId,
+          requestedAt: snap.requestedAt,
+          ticketCount: snap.tickets.length,
+          vulnCount: snap.vulns.length,
+          progressCount: snap.progress.length,
+        });
+      } catch {
+        /* fall through */
+      }
     }
+
+    const intentId = (intentHeader || intentQuery || "").trim();
+    if (intentId) {
+      try {
+        const rec = await this.tracking.getIntent(intentId);
+        const now = Date.now();
+        if (rec.status === "active" && rec.supportSessionId) {
+          const snap = await this.tracking.getSnapshot(rec.supportSessionId);
+          return publicStatusActive({
+            supportSessionId: snap.supportSessionId,
+            requestedAt: snap.requestedAt,
+            ticketCount: snap.tickets.length,
+            vulnCount: snap.vulns.length,
+            progressCount: snap.progress.length,
+            handoffIntentId: rec.handoffIntentId,
+          });
+        }
+        if (
+          rec.status === "awaiting_confirm" &&
+          Date.parse(rec.expiresAt) > now
+        ) {
+          return publicStatusAwaitingConfirm({
+            handoffIntentId: rec.handoffIntentId,
+            createdAt: rec.createdAt,
+            expiresAt: rec.expiresAt,
+          });
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+
+    return publicStatusNone();
   }
 
   /**
-   * POST /v1/support/handoff/intent — thin contract for future A1.
-   * Phone refused (no ATLAS_API_BASE). PC → ready_for_c1_handoff (use POST /handoff).
+   * POST /v1/support/handoff/intent — PC soft-twin pending (TTL 15m).
+   * Phone/doubt refused until ATLAS_API_BASE (D5).
    */
   @Post("handoff/intent")
-  intent(@Body() body: { initiatedFrom?: string }) {
+  async intent(@Body() body: HandoffIntentDto) {
     const initiated = (body?.initiatedFrom ?? "").trim().toLowerCase();
     if (initiated === "phone" || initiated === "mobile" || !initiated) {
-      /* Fail-closed: doubt / phone = block until D5 */
       throw new BadRequestException(
-        "Intent téléphone (ou doute) refusé — ATLAS_API_BASE manquant pour phone→PC. Ouvrez Atlas sur le PC et POST /v1/support/handoff avec pcConfirmedAt.",
+        "Intent téléphone (ou doute) refusé — ATLAS_API_BASE manquant pour phone→PC. Ouvrez Atlas sur le PC.",
       );
     }
     if (initiated !== "pc") {
@@ -264,11 +327,33 @@ export class SupportTrackingController {
         "initiatedFrom invalide (pc|phone). Doute = phone = refusé.",
       );
     }
+    const snap = await this.tracking.createPcIntent({
+      source: body.source,
+      ticket: body.ticket,
+    });
     return {
-      status: "ready_for_c1_handoff",
-      next: "POST /v1/support/handoff with pcConfirmedAt after local C1",
-      phoneToPc: "blocked_until_ATLAS_API_BASE",
-      c1Required: true,
+      ...snap,
+      next: "POST /v1/support/handoff/confirm with pcConfirmedAt",
+    };
+  }
+
+  /**
+   * POST /v1/support/handoff/confirm — C1 → soft twin session (idempotent).
+   */
+  @Post("handoff/confirm")
+  async confirm(@Body() body: HandoffConfirmDto) {
+    const result = await this.tracking.confirmPcIntent({
+      handoffIntentId: body.handoffIntentId,
+      pcConfirmedAt: body.pcConfirmedAt,
+    });
+    return {
+      ...result.intent,
+      ...result.session,
+      already: result.already === true,
+      ticketId: result.session.ticketId ?? result.session.tickets[0]?.id,
+      notice: result.already
+        ? "Intent déjà confirmé — session opaque réutilisée."
+        : "C1 confirmée — session support opaque créée (soft twin).",
     };
   }
 
