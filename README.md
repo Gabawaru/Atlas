@@ -8,7 +8,8 @@ Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard dé
 
 ## Téléchargement
 
-Installateur Windows et site public : [https://atlas-secu.com](https://atlas-secu.com) (`Atlas-Setup.exe`).
+Installateur Windows et site public : [https://atlas-secu.com](https://atlas-secu.com) (`Atlas-Setup.exe`).  
+L’exécutable n’est **pas encore signé** Authenticode — Windows SmartScreen peut avertir jusqu’à l’achat / câblage du certificat (voir `remote-work/atlas-v1/SIGNING.md`).
 
 ## Jalon d’acceptation (figé)
 
