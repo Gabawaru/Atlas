@@ -479,7 +479,7 @@ a {
   color: var(--teal-deep);
 }
 
-/* —— Suivi / archive (hors hero Scanner) —— */
+/* —— Historique local (une table, hors hero Scanner) —— */
 .tracking-nav-inline {
   display: flex;
   flex-wrap: wrap;
@@ -523,43 +523,101 @@ a {
   max-width: 36rem;
 }
 
-.tracking-tabs {
+.tracking-local-banner {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--teal-soft);
+  border: 1px solid var(--teal-mid);
+  border-radius: var(--radius-soft);
+  font-size: 0.92rem;
+  max-width: 52rem;
+}
+
+.history-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 0 0 0.85rem;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin: 0 0 0.65rem;
 }
 
-.tracking-tabs .tab {
-  margin: 0;
-  background: transparent;
-  color: var(--ink-soft);
-  border: 1px solid var(--line);
-  box-shadow: none;
-  padding: 0.5rem 0.9rem;
-  font-weight: 600;
-}
-
-.tracking-tabs .tab:hover:not(:disabled) {
-  background: var(--teal-soft);
-  color: var(--teal-deep);
-  border-color: var(--teal-mid);
-  transform: none;
-}
-
-.tracking-tabs .tab.active {
+.history-actions .primary-ish {
   background: var(--teal);
-  border-color: var(--teal-deep);
   color: #fff;
-  box-shadow: 0 8px 20px rgba(47, 143, 138, 0.2);
+  border: 1px solid var(--teal-deep);
+  padding: 0.45rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius);
 }
 
-.tab-count {
-  display: inline-block;
-  margin-left: 0.4rem;
+.history-actions .primary-ish:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.handoff-msg {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.history-table th,
+.history-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55rem 0.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.history-table th {
   font-family: var(--mono);
-  font-size: 0.75rem;
-  opacity: 0.9;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: none;
+  white-space: nowrap;
+}
+
+.history-control {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.history-target {
+  max-width: 14rem;
+  word-break: break-all;
+  font-size: 0.82rem;
+}
+
+.statut-badge {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.statut-a-corriger {
+  color: var(--accent);
+}
+
+.statut-corrige {
+  color: var(--ok);
+}
+
+.handoff-stamp {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+}
+
+.history-scroll {
+  overflow-x: auto;
 }
 
 .archive-toolbar {

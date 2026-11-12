@@ -1,6 +1,6 @@
 /**
- * Vue Suivi / Archive — hors écran Scanner principal.
- * Trois tables rotatives : non résolues · résolues · archive (recherche + filtres).
+ * Historique — une table (Statut / détection / correction) + filtres + recherche.
+ * Local-first : rien ne quitte la machine sauf « Demander une prise en charge ».
  *
  * FUTURE: propositions de correctifs IA — non implémentées (voir proposeAiFixStub).
  */
@@ -11,84 +11,70 @@ import {
   buildVulnArchivePdfMd,
   downloadVulnArchivePdfMd,
 } from "./vulnArchive";
+import { requestPragmaSupportHandoff } from "./supportHandoff";
 import {
-  filterArchiveEntries,
+  filterHistoryEntries,
   formatHeavyTimestamp,
-  formatOpenRange,
-  listResolved,
-  listUnresolved,
+  markSupportHandoffRequested,
   markVulnResolved,
   proposeAiFixStub,
+  statutLabelFr,
+  type HistoryStatusFilter,
   type VulnTrackEntry,
   type VulnTrackingStore,
 } from "./vulnTracking";
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 8;
 
 type Props = {
   store: VulnTrackingStore;
   onStoreChange: (next: VulnTrackingStore) => void;
   onBack: () => void;
+  apiBase: string;
+  token: string | null;
 };
 
-type PanelKind = "unresolved" | "resolved" | "archive";
-
-export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
-  const unresolved = useMemo(() => listUnresolved(store), [store]);
-  const resolved = useMemo(() => listResolved(store), [store]);
-
-  const [panel, setPanel] = useState<PanelKind>("unresolved");
+export function VulnTrackingView({
+  store,
+  onStoreChange,
+  onBack,
+  apiBase,
+  token,
+}: Props) {
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [risk, setRisk] = useState<RiskCode | "all">("all");
+  const [status, setStatus] = useState<HistoryStatusFilter>("all");
+  const [alpha, setAlpha] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffMsg, setHandoffMsg] = useState<string | null>(null);
 
-  const [archiveQuery, setArchiveQuery] = useState("");
-  const [archiveDateFrom, setArchiveDateFrom] = useState("");
-  const [archiveDateTo, setArchiveDateTo] = useState("");
-  const [archiveRisk, setArchiveRisk] = useState<RiskCode | "all">("all");
-  const [archiveAlpha, setArchiveAlpha] = useState(false);
-
-  const archiveRows = useMemo(
+  const rows = useMemo(
     () =>
-      filterArchiveEntries(store, {
-        query: archiveQuery,
-        dateFrom: archiveDateFrom,
-        dateTo: archiveDateTo,
-        riskCode: archiveRisk,
-        alphabetical: archiveAlpha,
+      filterHistoryEntries(store, {
+        query,
+        dateFrom,
+        dateTo,
+        riskCode: risk,
+        status,
+        alphabetical: alpha,
       }),
-    [
-      store,
-      archiveQuery,
-      archiveDateFrom,
-      archiveDateTo,
-      archiveRisk,
-      archiveAlpha,
-    ],
+    [store, query, dateFrom, dateTo, risk, status, alpha],
   );
 
-  const activeRows =
-    panel === "unresolved"
-      ? unresolved
-      : panel === "resolved"
-        ? resolved
-        : archiveRows;
-
-  const pageCount = Math.max(1, Math.ceil(activeRows.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
-  const slice = activeRows.slice(
+  const slice = rows.slice(
     safePage * PAGE_SIZE,
     safePage * PAGE_SIZE + PAGE_SIZE,
   );
 
   useEffect(() => {
     setPage(0);
-  }, [
-    panel,
-    archiveQuery,
-    archiveDateFrom,
-    archiveDateTo,
-    archiveRisk,
-    archiveAlpha,
-  ]);
+  }, [query, dateFrom, dateTo, risk, status, alpha]);
 
   const [resolveFp, setResolveFp] = useState<string | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
@@ -100,7 +86,6 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
     setResolutionNotes("");
     setFixAnalysis("");
     setFormError(null);
-    // FUTURE: AI fix propositions — stub only
     void proposeAiFixStub(entry);
   }
 
@@ -124,17 +109,65 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
     downloadVulnArchivePdfMd(doc);
   }
 
+  function toggleSelect(fp: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(fp)) next.delete(fp);
+      else next.add(fp);
+      return next;
+    });
+  }
+
+  function toggleSelectVisible() {
+    const fps = slice.map((e) => e.fingerprint);
+    const allOn = fps.every((fp) => selected.has(fp));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const fp of fps) {
+        if (allOn) next.delete(fp);
+        else next.add(fp);
+      }
+      return next;
+    });
+  }
+
+  async function askSupportHandoff() {
+    setHandoffMsg(null);
+    const chosen = store.entries.filter((e) => selected.has(e.fingerprint));
+    setHandoffBusy(true);
+    try {
+      const result = await requestPragmaSupportHandoff({
+        entries: chosen,
+        apiBase,
+        token,
+        // Compte en ligne = clients support ; sans jeton = local strict.
+        supportCustomer: Boolean(token),
+      });
+      if (result.ok) {
+        onStoreChange(
+          markSupportHandoffRequested(store, result.fingerprints),
+        );
+        setSelected(new Set());
+        setHandoffMsg(result.notice);
+      } else {
+        setHandoffMsg(result.message);
+      }
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
   return (
-    <section className="tracking-view" aria-label="Suivi vulnérabilités">
+    <section className="tracking-view" aria-label="Historique vulnérabilités">
       <header className="tracking-header">
         <button type="button" className="ghost" onClick={onBack}>
           ← Scanner
         </button>
         <div className="tracking-header-text">
-          <h2>Suivi &amp; archive</h2>
+          <h2>Historique</h2>
           <p className="muted tracking-lede">
-            Tables horodatées hors écran principal — identité cross-scan (ID
-            CCV) et archive des correctifs.
+            Une table locale — Statut, date détection, date correction. Les
+            findings ne quittent pas cette machine ; scan local gratuit.
           </p>
         </div>
         <button
@@ -146,177 +179,208 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
         </button>
       </header>
 
-      <nav className="tracking-tabs" aria-label="Tables de suivi">
-        <button
-          type="button"
-          className={panel === "unresolved" ? "tab active" : "tab"}
-          onClick={() => setPanel("unresolved")}
-        >
-          Non résolues
-          <span className="tab-count">{unresolved.length}</span>
-        </button>
-        <button
-          type="button"
-          className={panel === "resolved" ? "tab active" : "tab"}
-          onClick={() => setPanel("resolved")}
-        >
-          Résolues
-          <span className="tab-count">{resolved.length}</span>
-        </button>
-        <button
-          type="button"
-          className={panel === "archive" ? "tab active" : "tab"}
-          onClick={() => setPanel("archive")}
-        >
-          Archive
-          <span className="tab-count">{archiveRows.length}</span>
-        </button>
-      </nav>
+      <p className="tracking-local-banner" role="note">
+        Local-first : pas d’envoi automatique. Seul le bouton{" "}
+        <strong>Demander une prise en charge</strong> transmet le rapport choisi
+        à Pragma (abonnement support — pas de metering par domaine).
+      </p>
 
-      {panel === "archive" && (
-        <div className="archive-toolbar" role="search">
-          <label className="archive-search-label" htmlFor="archive-q">
-            Recherche
+      <div className="archive-toolbar history-toolbar" role="search">
+        <label className="archive-search-label" htmlFor="history-q">
+          Recherche
+        </label>
+        <input
+          id="history-q"
+          type="search"
+          placeholder="ID CCV, nom, hôte, statut…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="archive-filters">
+          <label>
+            Statut
+            <select
+              value={status}
+              onChange={(e) =>
+                setStatus(e.target.value as HistoryStatusFilter)
+              }
+            >
+              <option value="all">Tous</option>
+              <option value="a_corriger">À corriger</option>
+              <option value="corrige">Corrigé</option>
+            </select>
           </label>
-          <input
-            id="archive-q"
-            type="search"
-            placeholder="Date, nom, ID CCV…"
-            value={archiveQuery}
-            onChange={(e) => setArchiveQuery(e.target.value)}
-          />
-          <div className="archive-filters">
-            <label>
-              Du
-              <input
-                type="date"
-                value={archiveDateFrom}
-                onChange={(e) => setArchiveDateFrom(e.target.value)}
-              />
-            </label>
-            <label>
-              Au
-              <input
-                type="date"
-                value={archiveDateTo}
-                onChange={(e) => setArchiveDateTo(e.target.value)}
-              />
-            </label>
-            <label>
-              Type
-              <select
-                value={archiveRisk}
-                onChange={(e) =>
-                  setArchiveRisk(e.target.value as RiskCode | "all")
-                }
-              >
-                <option value="all">Tous</option>
-                <option value="critical">critique</option>
-                <option value="high">élevé</option>
-                <option value="medium">moyen</option>
-                <option value="low">faible</option>
-              </select>
-            </label>
-            <label className="mode-toggle archive-alpha">
-              <input
-                type="checkbox"
-                checked={archiveAlpha}
-                onChange={(e) => setArchiveAlpha(e.target.checked)}
-              />{" "}
-              Tri A→Z
-            </label>
-          </div>
+          <label>
+            Du
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </label>
+          <label>
+            Au
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </label>
+          <label>
+            Type
+            <select
+              value={risk}
+              onChange={(e) => setRisk(e.target.value as RiskCode | "all")}
+            >
+              <option value="all">Tous</option>
+              <option value="critical">critique</option>
+              <option value="high">élevé</option>
+              <option value="medium">moyen</option>
+              <option value="low">faible</option>
+            </select>
+          </label>
+          <label className="mode-toggle archive-alpha">
+            <input
+              type="checkbox"
+              checked={alpha}
+              onChange={(e) => setAlpha(e.target.checked)}
+            />{" "}
+            Tri A→Z
+          </label>
         </div>
+      </div>
+
+      <div className="history-actions">
+        <button
+          type="button"
+          className="primary-ish"
+          disabled={handoffBusy || selected.size === 0}
+          onClick={() => void askSupportHandoff()}
+        >
+          {handoffBusy
+            ? "Envoi…"
+            : `Demander une prise en charge${selected.size ? ` (${selected.size})` : ""}`}
+        </button>
+        <span className="muted">
+          {selected.size === 0
+            ? "Cochez les lignes du rapport à transmettre."
+            : `${selected.size} sélectionnée${selected.size > 1 ? "s" : ""}`}
+        </span>
+      </div>
+      {handoffMsg && (
+        <p className="handoff-msg" role="status">
+          {handoffMsg}
+        </p>
       )}
 
       <div className="tracking-panel">
-        <div className="tracking-scroll" tabIndex={0}>
+        <div className="tracking-scroll history-scroll" tabIndex={0}>
           {slice.length === 0 ? (
             <p className="muted tracking-empty">
-              {panel === "unresolved"
-                ? "Aucune vulnérabilité ouverte."
-                : panel === "resolved"
-                  ? "Aucune entrée résolue."
-                  : "Aucun résultat dans l’archive (ajustez la recherche)."}
+              Aucune entrée (ajustez recherche / filtres).
             </p>
           ) : (
-            <ul className="tracking-cards">
-              {slice.map((entry) => (
-                <li key={entry.fingerprint} className="tracking-card">
-                  <div className="tracking-card-top">
-                    <code className="ccv-id" title={entry.fingerprint}>
-                      {entry.shortId}
-                    </code>
-                    <span className={`risk-badge risk-${entry.riskCode}`}>
-                      {entry.risk}
-                    </span>
-                  </div>
-                  <h3 className="tracking-control">{entry.control}</h3>
-                  <p className="tracking-url">
-                    {entry.url ? (
-                      <a href={entry.url} target="_blank" rel="noreferrer">
-                        {entry.url}
-                      </a>
-                    ) : (
-                      <span className="muted">{entry.host || "—"}</span>
-                    )}
-                  </p>
-                  <p className="tracking-range" aria-label="Plage de dates">
-                    <span className="range-label">De → à</span>
-                    <strong>{formatOpenRange(entry)}</strong>
-                  </p>
-                  <dl className="tracking-meta">
-                    <div>
-                      <dt>Premier constat</dt>
-                      <dd>{formatHeavyTimestamp(entry.firstSeenAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>
-                        {entry.status === "resolved"
-                          ? "Résolu le"
-                          : "Dernier constat"}
-                      </dt>
-                      <dd>
-                        {formatHeavyTimestamp(
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <input
+                      type="checkbox"
+                      aria-label="Sélectionner la page"
+                      checked={
+                        slice.length > 0 &&
+                        slice.every((e) => selected.has(e.fingerprint))
+                      }
+                      onChange={toggleSelectVisible}
+                    />
+                  </th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Date détection</th>
+                  <th scope="col">Date correction</th>
+                  <th scope="col">ID</th>
+                  <th scope="col">Contrôle</th>
+                  <th scope="col">Risque</th>
+                  <th scope="col">Cible</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((entry) => (
+                  <tr key={entry.fingerprint}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Sélectionner ${entry.shortId}`}
+                        checked={selected.has(entry.fingerprint)}
+                        onChange={() => toggleSelect(entry.fingerprint)}
+                      />
+                    </td>
+                    <td>
+                      <span
+                        className={
                           entry.status === "resolved"
-                            ? entry.resolvedAt
-                            : entry.lastSeenAt,
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Scans</dt>
-                      <dd>{entry.seenCount}</dd>
-                    </div>
-                  </dl>
-                  {entry.status === "resolved" && (
-                    <div className="tracking-fix-preview">
-                      <p>
-                        <span className="meta-k">Fait</span>{" "}
-                        {entry.resolutionNotes || "—"}
-                      </p>
-                      <p>
-                        <span className="meta-k">Analyse</span>{" "}
-                        {entry.fixAnalysis || "—"}
-                      </p>
-                    </div>
-                  )}
-                  {entry.status === "unresolved" && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => openResolve(entry)}
-                    >
-                      Marquer résolu…
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+                            ? "statut-badge statut-corrige"
+                            : "statut-badge statut-a-corriger"
+                        }
+                      >
+                        {statutLabelFr(entry.status)}
+                      </span>
+                      {entry.supportHandoffAt && (
+                        <div className="handoff-stamp muted">
+                          Prise en charge{" "}
+                          {formatHeavyTimestamp(entry.supportHandoffAt)}
+                        </div>
+                      )}
+                    </td>
+                    <td>{formatHeavyTimestamp(entry.firstSeenAt)}</td>
+                    <td>
+                      {entry.status === "resolved"
+                        ? formatHeavyTimestamp(entry.resolvedAt)
+                        : "—"}
+                    </td>
+                    <td>
+                      <code className="ccv-id" title={entry.fingerprint}>
+                        {entry.shortId}
+                      </code>
+                    </td>
+                    <td>
+                      <strong className="history-control">{entry.control}</strong>
+                    </td>
+                    <td>
+                      <span className={`risk-badge risk-${entry.riskCode}`}>
+                        {entry.risk}
+                      </span>
+                    </td>
+                    <td className="history-target">
+                      {entry.url ? (
+                        <a href={entry.url} target="_blank" rel="noreferrer">
+                          {entry.url}
+                        </a>
+                      ) : (
+                        <span className="muted">{entry.host || "—"}</span>
+                      )}
+                    </td>
+                    <td>
+                      {entry.status === "unresolved" ? (
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => openResolve(entry)}
+                        >
+                          Marquer corrigé…
+                        </button>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
 
-        <div className="tracking-rotate" aria-label="Rotation des entrées">
+        <div className="tracking-rotate" aria-label="Pagination historique">
           <button
             type="button"
             className="ghost"
@@ -326,11 +390,10 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
             ← Préc.
           </button>
           <span className="muted">
-            {activeRows.length === 0
+            {rows.length === 0
               ? "0"
               : `${safePage + 1} / ${pageCount}`}{" "}
-            · {activeRows.length} entrée
-            {activeRows.length === 1 ? "" : "s"}
+            · {rows.length} entrée{rows.length === 1 ? "" : "s"}
           </span>
           <button
             type="button"
@@ -346,10 +409,11 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
       {resolveFp && (
         <div className="resolve-modal" role="dialog" aria-modal="true">
           <div className="resolve-sheet">
-            <h3>Clôturer l’entrée</h3>
+            <h3>Marquer corrigé</h3>
             <p className="muted">
               Notes + analyse du correctif final (archive PDF.md). Pas de
-              proposition IA pour l’instant.
+              proposition IA pour l’instant. Reste local jusqu’à une prise en
+              charge.
             </p>
             <label htmlFor="res-notes">Ce qui a été fait</label>
             <textarea
@@ -381,7 +445,7 @@ export function VulnTrackingView({ store, onStoreChange, onBack }: Props) {
                 Annuler
               </button>
               <button type="button" onClick={submitResolve}>
-                Enregistrer résolution
+                Enregistrer (Corrigé)
               </button>
             </div>
           </div>

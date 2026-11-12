@@ -4,10 +4,12 @@ import type { RiskTableRow } from "./riskTable";
 import {
   emptyVulnTrackingStore,
   filterArchiveEntries,
+  filterHistoryEntries,
   formatOpenRange,
   ingestRiskTableIntoTracking,
   markVulnResolved,
   shortVulnIdFromFingerprint,
+  statutLabelFr,
   vulnFingerprint,
 } from "./vulnTracking";
 import { buildVulnArchivePdfMd } from "./vulnArchive";
@@ -116,8 +118,8 @@ describe("vulnTracking fingerprint + CCV", () => {
   });
 });
 
-describe("archive filter + PDF.md", () => {
-  it("filtre recherche ID / nom + tri alpha", () => {
+describe("history filter + PDF.md", () => {
+  it("une table : filtre Statut + recherche + tri alpha", () => {
     let store = emptyVulnTrackingStore();
     store = ingestRiskTableIntoTracking(store, [
       row({ control: "Header HSTS absent" }),
@@ -129,24 +131,26 @@ describe("archive filter + PDF.md", () => {
         compromise: "Exposition faible",
       }),
     ], { seenAt: "2026-11-01T00:00:00.000Z" });
-    for (const e of [...store.entries]) {
-      store = markVulnResolved(store, e.fingerprint, {
-        resolutionNotes: "patch",
-        fixAnalysis: "ok",
-        resolvedAt: "2026-11-02T00:00:00.000Z",
-      });
-    }
-    const byName = filterArchiveEntries(store, { query: "hsts" });
+    assert.equal(statutLabelFr("unresolved"), "À corriger");
+    assert.equal(filterHistoryEntries(store, { status: "a_corriger" }).length, 2);
+    const hsts = store.entries.find((e) => /HSTS/i.test(e.control))!;
+    store = markVulnResolved(store, hsts.fingerprint, {
+      resolutionNotes: "patch",
+      fixAnalysis: "ok",
+      resolvedAt: "2026-11-02T00:00:00.000Z",
+    });
+    assert.equal(filterHistoryEntries(store, { status: "corrige" }).length, 1);
+    assert.equal(filterHistoryEntries(store, { status: "a_corriger" }).length, 1);
+    assert.equal(filterHistoryEntries(store).length, 2);
+    const byName = filterHistoryEntries(store, { query: "hsts" });
     assert.equal(byName.length, 1);
     assert.match(byName[0]!.control, /HSTS/i);
-    const byId = filterArchiveEntries(store, {
-      query: store.entries[0]!.shortId.toLowerCase(),
-    });
-    assert.ok(byId.length >= 1);
+    const byStatut = filterHistoryEntries(store, { query: "à corriger" });
+    assert.equal(byStatut.length, 1);
     const alpha = filterArchiveEntries(store, { alphabetical: true });
-    assert.equal(alpha.length, 2);
+    assert.equal(alpha.length, 1);
     assert.ok(
-      alpha[0]!.control.localeCompare(alpha[1]!.control, "fr") <= 0,
+      filterHistoryEntries(store, { alphabetical: true }).length === 2,
     );
   });
 
