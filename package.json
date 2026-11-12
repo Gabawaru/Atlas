@@ -25,7 +25,8 @@
     "client:stub-desktop": "cargo run --manifest-path apps/client/src-tauri/Cargo.toml",
     "atlas:shell": "bash scripts/unix/run-atlas-shell.sh",
     "atlas:build-shell": "bash remote-work/atlas-v1/build.sh",
-    "docs:exemple-rapport": "pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts"
+    "docs:exemple-rapport": "pnpm --filter @atlas/api exec tsx scripts/generate-exemple-rapport.ts",
+    "security:zap-dev": "bash scripts/security/zap-baseline-dev.sh"
   },
   "engines": {
     "node": ">=20"

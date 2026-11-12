@@ -1,0 +1,10 @@
+# Atlas axe 4 — authorized *-dev.pragma-cloud.com hosts for passive ZAP baseline.
+# Platform / tooling names only (no client-brand product slugs → no client data).
+# One FQDN per line. Comments (#) and blanks ignored.
+atlas-dev.pragma-cloud.com
+pragma-dev.pragma-cloud.com
+serve-dev.pragma-cloud.com
+demo-dev.pragma-cloud.com
+staging-dev.pragma-cloud.com
+preview-dev.pragma-cloud.com
+gtm-dev.pragma-cloud.com
