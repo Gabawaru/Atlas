@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Atlas axe 4 — ZAP passive × OWASP</title>
+<style>
+:root{--bg:#0e1514;--panel:#15201e;--fg:#e8f0ee;--muted:#8aa39e;--teal:#2f8f8a;--line:#243331;
+--high:#c45c4a;--medium:#c4923a;--low:#5a8fc4;--info:#6a7a78}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;background:
+radial-gradient(1200px 600px at 10% -10%,#1a3330 0%,transparent 55%),
+radial-gradient(900px 500px at 100% 0%,#1c2a28 0%,transparent 50%),var(--bg);color:var(--fg)}
+main{max-width:960px;margin:0 auto;padding:2rem 1.25rem 3.5rem}
+h1{font:650 1.55rem/1.2 "IBM Plex Sans",sans-serif;letter-spacing:.01em;margin:0 0 .35rem}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:1.5rem}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin:1rem 0 1.5rem}
+@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);padding:1rem;border-radius:4px}
+.card b{display:block;font-size:1.6rem;font-variant-numeric:tabular-nums}
+.card span{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+.card.high b{color:var(--high)}.card.medium b{color:var(--medium)}.card.low b{color:var(--low)}.card.info b{color:var(--info)}
+h2{font-size:1.05rem;margin:1.75rem 0 .75rem;color:var(--teal)}
+.bars{background:var(--panel);border:1px solid var(--line);padding:1rem;border-radius:4px}
+.bar-row{display:grid;grid-template-columns:5.5rem 1fr 120px 2rem;gap:.5rem;align-items:center;margin:.35rem 0;font-size:.88rem}
+.oid{color:var(--teal);font-variant-numeric:tabular-nums}.oname{color:var(--muted)}
+.track{height:10px;background:#0a1211;border-radius:2px;overflow:hidden}
+.fill{display:block;height:100%;background:linear-gradient(90deg,var(--teal),#4db5af)}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th,td{border-bottom:1px solid var(--line);padding:.55rem .4rem;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.03em}
+.pill{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.75rem;text-transform:uppercase}
+.pill.high{background:#3a1f1a;color:var(--high)}.pill.medium{background:#3a2f14;color:var(--medium)}
+.pill.low{background:#1a2a3a;color:var(--low)}.pill.info{background:#1a2221;color:var(--info)}
+.notes{color:var(--muted);font-size:.88rem;margin-top:1.5rem}
+.notes code{color:var(--teal)}
+ul.hosts{margin:.4rem 0;padding-left:1.1rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Atlas axe 4 — passive ZAP × OWASP Top 10</h1>
+  <p class="meta">Stamp <code>20261112T095050Z</code> · ZAP 2.17.0 · RoE: <code>*-dev.pragma-cloud.com</code> only · GET requestor · no spider / active / mutations</p>
+
+  <div class="cards">
+    <div class="card high"><b>0</b><span>High</span></div>
+    <div class="card medium"><b>0</b><span>Medium</span></div>
+    <div class="card low"><b>7</b><span>Low</span></div>
+    <div class="card info"><b>0</b><span>Info</span></div>
+  </div>
+
+  <h2>Hosts scanned</h2>
+  <ul class="hosts"><li><code>gtm-dev.pragma-cloud.com</code></li><li><code>preview-dev.pragma-cloud.com</code></li><li><code>staging-dev.pragma-cloud.com</code></li><li><code>demo-dev.pragma-cloud.com</code></li><li><code>serve-dev.pragma-cloud.com</code></li><li><code>pragma-dev.pragma-cloud.com</code></li><li><code>atlas-dev.pragma-cloud.com</code></li></ul>
+
+  <h2>OWASP Top 10 (2021) — finding counts</h2>
+  <div class="bars"><div class="bar-row"><span class="oid">A01:2021</span><span class="oname">Broken Access Control</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A02:2021</span><span class="oname">Cryptographic Failures</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A03:2021</span><span class="oname">Injection</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A04:2021</span><span class="oname">Insecure Design</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A05:2021</span><span class="oname">Security Misconfiguration</span><span class="track"><span class="fill" style="width:196px"></span></span><span class="n">7</span></div>
+<div class="bar-row"><span class="oid">A06:2021</span><span class="oname">Vulnerable and Outdated Components</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A07:2021</span><span class="oname">Identification and Authentication Failures</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A08:2021</span><span class="oname">Software and Data Integrity Failures</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A09:2021</span><span class="oname">Security Logging and Monitoring Failures</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div>
+<div class="bar-row"><span class="oid">A10:2021</span><span class="oname">Server-Side Request Forgery (SSRF)</span><span class="track"><span class="fill" style="width:0px"></span></span><span class="n">0</span></div></div>
+
+  <h2>Findings</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>OWASP</th><th>Source</th><th>Host</th><th>Alert</th><th>CWE</th></tr></thead>
+    <tbody>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>gtm-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>preview-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>staging-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>demo-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>serve-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>pragma-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+<tr>
+  <td><span class="pill low">low</span></td>
+  <td>A05:2021</td>
+  <td>zap-passive</td>
+  <td>atlas-dev.pragma-cloud.com</td>
+  <td>Strict-Transport-Security Header Not Set</td>
+  <td>CWE-319</td>
+</tr>
+    </tbody>
+  </table>
+
+  <p class="notes">pragma-serve.com (prod) header issues are real but origin fixes are Pragma-side — this report focuses on Atlas tooling + *-dev baseline.<br/>Default host list excludes client-brand product slugs (no client data).<br/>Static findings: pass ATLAS_ZAP_STATIC_JSON / --static-json when make-secure emits a JSON bundle (grouped into the same OWASP buckets).<br/>Source ZAP JSON: zap-baseline-dev-20261112T095050Z.json</p>
+</main>
+</body>
+</html>

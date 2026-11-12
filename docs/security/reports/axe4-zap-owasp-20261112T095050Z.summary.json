@@ -1,0 +1,257 @@
+{
+  "stamp": "20261112T095050Z",
+  "counts": {
+    "high": 0,
+    "medium": 0,
+    "low": 7,
+    "info": 0
+  },
+  "hosts": [
+    "gtm-dev.pragma-cloud.com",
+    "preview-dev.pragma-cloud.com",
+    "staging-dev.pragma-cloud.com",
+    "demo-dev.pragma-cloud.com",
+    "serve-dev.pragma-cloud.com",
+    "pragma-dev.pragma-cloud.com",
+    "atlas-dev.pragma-cloud.com"
+  ],
+  "findings": [
+    {
+      "source": "zap-passive",
+      "host": "gtm-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://gtm-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "preview-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://preview-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "staging-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://staging-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "demo-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://demo-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "serve-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://serve-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "pragma-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://pragma-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    },
+    {
+      "source": "zap-passive",
+      "host": "atlas-dev.pragma-cloud.com",
+      "name": "Strict-Transport-Security Header Not Set",
+      "pluginid": "10035",
+      "cweid": "319",
+      "risk": "low",
+      "confidence": "3",
+      "owasp": "A05:2021",
+      "uris": [
+        "https://atlas-dev.pragma-cloud.com/"
+      ],
+      "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+      "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+      "count": 1
+    }
+  ],
+  "grouped": {
+    "A01:2021": [],
+    "A02:2021": [],
+    "A03:2021": [],
+    "A04:2021": [],
+    "A05:2021": [
+      {
+        "source": "zap-passive",
+        "host": "gtm-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://gtm-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "preview-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://preview-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "staging-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://staging-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "demo-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://demo-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "serve-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://serve-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "pragma-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://pragma-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      },
+      {
+        "source": "zap-passive",
+        "host": "atlas-dev.pragma-cloud.com",
+        "name": "Strict-Transport-Security Header Not Set",
+        "pluginid": "10035",
+        "cweid": "319",
+        "risk": "low",
+        "confidence": "3",
+        "owasp": "A05:2021",
+        "uris": [
+          "https://atlas-dev.pragma-cloud.com/"
+        ],
+        "desc": "HTTP Strict Transport Security (HSTS) is a web security policy mechanism whereby a web server declares that complying user agents (such as a web browser) are to interact with it using only secure HTTPS connections (i.e. HTTP layered over TLS/SSL). HSTS is an IETF standards track ",
+        "solution": "Ensure that your web server, application server, load balancer, etc. is configured to enforce Strict-Transport-Security.",
+        "count": 1
+      }
+    ],
+    "A06:2021": [],
+    "A07:2021": [],
+    "A08:2021": [],
+    "A09:2021": [],
+    "A10:2021": []
+  }
+}
