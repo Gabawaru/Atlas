@@ -372,6 +372,7 @@ export function VulnTrackingView({
                   <th scope="col">ID</th>
                   <th scope="col">Contrôle</th>
                   <th scope="col">Risque</th>
+                  <th scope="col">Signal</th>
                   <th scope="col">Cible</th>
                   <th scope="col">Action</th>
                 </tr>
@@ -422,6 +423,9 @@ export function VulnTrackingView({
                       <span className={`risk-badge risk-${entry.riskCode}`}>
                         {entry.risk}
                       </span>
+                    </td>
+                    <td className="risk-signal">
+                      {entry.signal?.trim() ? entry.signal : "—"}
                     </td>
                     <td className="history-target">
                       {entry.url ? (
