@@ -23,6 +23,10 @@ import { AuthService } from "../auth/auth.service";
 import type { AuthUser } from "../auth/auth.types";
 import { TicketsService } from "../tickets/tickets.service";
 import { requirePcConfirmedAt } from "./pc-confirm";
+import {
+  publicStatusActive,
+  publicStatusNone,
+} from "./support-status";
 import { SupportTrackingService } from "./support-tracking.service";
 
 class SoftTicketDto {
@@ -214,6 +218,57 @@ export class SupportTrackingController {
       id: snap.ticketId ?? snap.tickets[0]?.id,
       notice:
         "Session support opaque créée (soft twin). Aucune donnée personnelle stockée.",
+    };
+  }
+
+  /**
+   * GET /v1/support/status — public observability (Pages /test + client).
+   * With opaque session → active counts; without → none + phone→PC blocked flag.
+   */
+  @Get("status")
+  async status(
+    @Headers("x-atlas-support-session") sid?: string,
+    @Headers("X-Atlas-Support-Session") sidAlt?: string,
+  ) {
+    const id = sessionIdFrom(sid, sidAlt);
+    if (!id) return publicStatusNone();
+    try {
+      const snap = await this.tracking.getSnapshot(id);
+      return publicStatusActive({
+        supportSessionId: snap.supportSessionId,
+        requestedAt: snap.requestedAt,
+        ticketCount: snap.tickets.length,
+        vulnCount: snap.vulns.length,
+        progressCount: snap.progress.length,
+      });
+    } catch {
+      return publicStatusNone();
+    }
+  }
+
+  /**
+   * POST /v1/support/handoff/intent — thin contract for future A1.
+   * Phone refused (no ATLAS_API_BASE). PC → ready_for_c1_handoff (use POST /handoff).
+   */
+  @Post("handoff/intent")
+  intent(@Body() body: { initiatedFrom?: string }) {
+    const initiated = (body?.initiatedFrom ?? "").trim().toLowerCase();
+    if (initiated === "phone" || initiated === "mobile" || !initiated) {
+      /* Fail-closed: doubt / phone = block until D5 */
+      throw new BadRequestException(
+        "Intent téléphone (ou doute) refusé — ATLAS_API_BASE manquant pour phone→PC. Ouvrez Atlas sur le PC et POST /v1/support/handoff avec pcConfirmedAt.",
+      );
+    }
+    if (initiated !== "pc") {
+      throw new BadRequestException(
+        "initiatedFrom invalide (pc|phone). Doute = phone = refusé.",
+      );
+    }
+    return {
+      status: "ready_for_c1_handoff",
+      next: "POST /v1/support/handoff with pcConfirmedAt after local C1",
+      phoneToPc: "blocked_until_ATLAS_API_BASE",
+      c1Required: true,
     };
   }
 

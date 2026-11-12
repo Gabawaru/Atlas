@@ -14,6 +14,12 @@ import {
 import { requestPragmaSupportHandoff } from "./supportHandoff";
 import { gateSupportHandoffC1 } from "./supportHandoffConfirm";
 import {
+  phaseFromGateCode,
+  phaseLabelFr,
+  phaseStatusHintFr,
+  type SupportHandoffPhase,
+} from "./supportHandoffPhase";
+import {
   filterHistoryEntries,
   formatHeavyTimestamp,
   markSupportHandoffRequested,
@@ -52,6 +58,8 @@ export function VulnTrackingView({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [handoffMsg, setHandoffMsg] = useState<string | null>(null);
+  const [handoffPhase, setHandoffPhase] =
+    useState<SupportHandoffPhase>("idle");
 
   const rows = useMemo(
     () =>
@@ -134,14 +142,18 @@ export function VulnTrackingView({
 
   async function askSupportHandoff() {
     setHandoffMsg(null);
+    setHandoffPhase("idle");
     const chosen = store.entries.filter((e) => selected.has(e.fingerprint));
     /* C1 before any egress — phone blocked until ATLAS_API_BASE phone→PC ships */
     const gate = gateSupportHandoffC1();
     if (!gate.ok) {
+      const phase = phaseFromGateCode(gate.code);
+      setHandoffPhase(phase);
       setHandoffMsg(gate.message);
       return;
     }
     setHandoffBusy(true);
+    setHandoffPhase("sending");
     try {
       const result = await requestPragmaSupportHandoff({
         entries: chosen,
@@ -156,8 +168,15 @@ export function VulnTrackingView({
           markSupportHandoffRequested(store, result.fingerprints),
         );
         setSelected(new Set());
-        setHandoffMsg(result.notice);
+        setHandoffPhase("active");
+        const hint = phaseStatusHintFr("active");
+        setHandoffMsg(
+          result.supportSessionId
+            ? `${result.notice} (${hint} · sync ${result.supportSessionId.slice(0, 8)})`
+            : `${result.notice} (${hint})`,
+        );
       } else {
+        setHandoffPhase("error");
         setHandoffMsg(result.message);
       }
     } finally {
@@ -263,11 +282,17 @@ export function VulnTrackingView({
           type="button"
           className="primary-ish"
           disabled={handoffBusy || selected.size === 0}
+          data-handoff-phase={handoffPhase}
           onClick={() => void askSupportHandoff()}
         >
-          {handoffBusy
-            ? "Envoi…"
-            : `Demander une prise en charge${selected.size ? ` (${selected.size})` : ""}`}
+          {phaseLabelFr(
+            handoffBusy
+              ? "sending"
+              : handoffPhase === "active" && selected.size > 0
+                ? "idle"
+                : handoffPhase,
+            selected.size,
+          )}
         </button>
         <span className="muted">
           {selected.size === 0
@@ -276,7 +301,11 @@ export function VulnTrackingView({
         </span>
       </div>
       {handoffMsg && (
-        <p className="handoff-msg" role="status">
+        <p
+          className="handoff-msg"
+          role="status"
+          data-handoff-phase={handoffPhase}
+        >
           {handoffMsg}
         </p>
       )}
