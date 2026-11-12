@@ -11,7 +11,11 @@ import {
   buildVulnArchivePdfMd,
   downloadVulnArchivePdfMd,
 } from "./vulnArchive";
-import { requestPragmaSupportHandoff } from "./supportHandoff";
+import {
+  fetchSupportHandoffStatus,
+  readRememberedSupportSession,
+  requestPragmaSupportHandoff,
+} from "./supportHandoff";
 import { gateSupportHandoffC1 } from "./supportHandoffConfirm";
 import {
   phaseFromGateCode,
@@ -84,6 +88,37 @@ export function VulnTrackingView({
   useEffect(() => {
     setPage(0);
   }, [query, dateFrom, dateTo, risk, status, alpha]);
+
+  /* Restore active handoff état from opaque session (local + optional API status). */
+  useEffect(() => {
+    const remembered = readRememberedSupportSession();
+    if (!remembered) return;
+    let cancelled = false;
+    setHandoffPhase("active");
+    setHandoffMsg(
+      `${phaseStatusHintFr("active")} · sync ${remembered.supportSessionId.slice(0, 8)}`,
+    );
+    void fetchSupportHandoffStatus({
+      apiBase,
+      supportSessionId: remembered.supportSessionId,
+    }).then((st) => {
+      if (cancelled) return;
+      if (st.handoff === "active" && st.supportSessionId) {
+        const counts =
+          typeof st.ticketCount === "number"
+            ? ` · ${st.ticketCount} ticket(s)`
+            : "";
+        setHandoffPhase("active");
+        setHandoffMsg(
+          `${phaseStatusHintFr("active")} · sync ${st.supportSessionId.slice(0, 8)}${counts}`,
+        );
+      }
+      /* API none/fail → keep local active stamp (soft twin); do not invent phone path */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase]);
 
   const [resolveFp, setResolveFp] = useState<string | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");

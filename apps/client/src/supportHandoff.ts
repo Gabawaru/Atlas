@@ -43,6 +43,83 @@ export type SupportHandoffResult =
 /** Opaque support session for multi-device sync (client soft twin). */
 export const SUPPORT_SESSION_KEY = "atlas.support-session.v1";
 
+export type RememberedSupportSession = {
+  supportSessionId: string;
+  at: string;
+};
+
+/** Read opaque session remembered after a successful handoff (no PII). */
+export function readRememberedSupportSession(
+  storage?: Pick<Storage, "getItem"> | null,
+): RememberedSupportSession | null {
+  const store =
+    storage ??
+    (typeof localStorage !== "undefined" ? localStorage : null);
+  if (!store) return null;
+  try {
+    const raw = store.getItem(SUPPORT_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      supportSessionId?: unknown;
+      at?: unknown;
+    };
+    const supportSessionId =
+      typeof parsed.supportSessionId === "string"
+        ? parsed.supportSessionId.trim()
+        : "";
+    if (!supportSessionId) return null;
+    const at =
+      typeof parsed.at === "string" && parsed.at
+        ? parsed.at
+        : new Date(0).toISOString();
+    return { supportSessionId, at };
+  } catch {
+    return null;
+  }
+}
+
+export type SupportPublicStatus = {
+  handoff: "none" | "active";
+  c1Required?: boolean;
+  phoneToPc?: string;
+  supportSessionId?: string;
+  requestedAt?: string;
+  ticketCount?: number;
+  vulnCount?: number;
+  progressCount?: number;
+};
+
+/** GET /v1/support/status — restore/verify active handoff (fail-soft → none). */
+export async function fetchSupportHandoffStatus(args: {
+  apiBase: string;
+  supportSessionId?: string | null;
+  fetchImpl?: typeof fetch;
+}): Promise<SupportPublicStatus> {
+  const fetchImpl = args.fetchImpl ?? fetch;
+  const base = args.apiBase.replace(/\/$/, "");
+  const headers: Record<string, string> = {};
+  const sid = (args.supportSessionId ?? "").trim();
+  if (sid) headers["X-Atlas-Support-Session"] = sid;
+  try {
+    const res = await fetchImpl(`${base}/v1/support/status`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) return { handoff: "none" };
+    const data = (await res.json()) as SupportPublicStatus;
+    if (data?.handoff === "active" && typeof data.supportSessionId === "string") {
+      return data;
+    }
+    return {
+      handoff: "none",
+      c1Required: data?.c1Required,
+      phoneToPc: data?.phoneToPc,
+    };
+  } catch {
+    return { handoff: "none" };
+  }
+}
+
 export type SupportHandoffLogEntry = {
   id: string;
   at: string;

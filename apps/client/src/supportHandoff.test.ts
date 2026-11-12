@@ -1,7 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  SUPPORT_SESSION_KEY,
   buildSupportHandoffReport,
+  fetchSupportHandoffStatus,
+  readRememberedSupportSession,
   requestPragmaSupportHandoff,
 } from "./supportHandoff";
 import {
@@ -61,6 +64,47 @@ describe("supportHandoff", () => {
     });
     assert.equal(r.ok, false);
     if (!r.ok) assert.equal(r.code, "no_selection");
+  });
+
+  it("readRememberedSupportSession parse opaque id", () => {
+    const mem: Record<string, string> = {
+      [SUPPORT_SESSION_KEY]: JSON.stringify({
+        supportSessionId: "sup_restore_test",
+        at: "2026-11-12T16:00:00.000Z",
+      }),
+    };
+    const got = readRememberedSupportSession({
+      getItem: (k) => mem[k] ?? null,
+    });
+    assert.equal(got?.supportSessionId, "sup_restore_test");
+    assert.equal(readRememberedSupportSession({ getItem: () => null }), null);
+  });
+
+  it("fetchSupportHandoffStatus active with session header", async () => {
+    let url = "";
+    let header = "";
+    const st = await fetchSupportHandoffStatus({
+      apiBase: "http://localhost:3001",
+      supportSessionId: "sup_x",
+      fetchImpl: (async (input, init) => {
+        url = String(input);
+        const h = init?.headers as Record<string, string>;
+        header = h["X-Atlas-Support-Session"] ?? "";
+        return new Response(
+          JSON.stringify({
+            handoff: "active",
+            supportSessionId: "sup_x",
+            ticketCount: 1,
+            c1Required: true,
+            phoneToPc: "blocked_until_ATLAS_API_BASE",
+          }),
+          { status: 200 },
+        );
+      }) as typeof fetch,
+    });
+    assert.equal(url, "http://localhost:3001/v1/support/status");
+    assert.equal(header, "sup_x");
+    assert.equal(st.handoff, "active");
   });
 
   it("refus c1_required sans pcConfirmedAt — aucun fetch", async () => {
