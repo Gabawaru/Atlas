@@ -12,6 +12,7 @@ import {
   downloadVulnArchivePdfMd,
 } from "./vulnArchive";
 import { requestPragmaSupportHandoff } from "./supportHandoff";
+import { gateSupportHandoffC1 } from "./supportHandoffConfirm";
 import {
   filterHistoryEntries,
   formatHeavyTimestamp,
@@ -134,6 +135,12 @@ export function VulnTrackingView({
   async function askSupportHandoff() {
     setHandoffMsg(null);
     const chosen = store.entries.filter((e) => selected.has(e.fingerprint));
+    /* C1 before any egress — phone blocked until ATLAS_API_BASE phone→PC ships */
+    const gate = gateSupportHandoffC1();
+    if (!gate.ok) {
+      setHandoffMsg(gate.message);
+      return;
+    }
     setHandoffBusy(true);
     try {
       const result = await requestPragmaSupportHandoff({
@@ -142,6 +149,7 @@ export function VulnTrackingView({
         token,
         // Compte en ligne = clients support ; sans jeton = local strict.
         supportCustomer: Boolean(token),
+        pcConfirmedAt: gate.pcConfirmedAt,
       });
       if (result.ok) {
         onStoreChange(

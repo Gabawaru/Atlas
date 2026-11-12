@@ -32,6 +32,9 @@ export type SupportHandoffResult =
         | "no_selection"
         | "local_only"
         | "auth_required"
+        | "c1_required"
+        | "phone_blocked"
+        | "cancelled"
         | "http_error"
         | "network";
       message: string;
@@ -103,6 +106,11 @@ export async function requestPragmaSupportHandoff(args: {
   token: string | null;
   /** false = mode local-first strict (défaut produit) */
   supportCustomer?: boolean;
+  /**
+   * ISO timestamp from C1 (gateSupportHandoffC1). Required for egress —
+   * API refuse sans pcConfirmedAt (fail-closed, PC-initiated thin slice).
+   */
+  pcConfirmedAt?: string | null;
   fetchImpl?: typeof fetch;
 }): Promise<SupportHandoffResult> {
   if (args.entries.length === 0) {
@@ -135,6 +143,16 @@ export async function requestPragmaSupportHandoff(args: {
     };
   }
 
+  const pcConfirmedAt = (args.pcConfirmedAt ?? "").trim();
+  if (!pcConfirmedAt) {
+    return {
+      ok: false,
+      code: "c1_required",
+      message:
+        "Confirmation locale (C1) requise sur le PC avant toute prise en charge.",
+    };
+  }
+
   const reportMarkdown = buildSupportHandoffReport(args.entries);
   const fingerprints = args.entries.map((e) => e.fingerprint);
   const shortIds = args.entries.map((e) => e.shortId);
@@ -153,6 +171,8 @@ export async function requestPragmaSupportHandoff(args: {
           reportMarkdown,
           fingerprints,
           shortIds,
+          pcConfirmedAt,
+          initiatedFrom: "pc",
           subject: `Prise en charge Atlas (${shortIds.slice(0, 3).join(", ")}${shortIds.length > 3 ? "…" : ""})`,
         }),
       },
