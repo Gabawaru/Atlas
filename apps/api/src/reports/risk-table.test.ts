@@ -253,6 +253,31 @@ describe("risk-table", () => {
     assert.equal(bad!.url, "https://bad.example/");
   });
 
+  it("API JSON — observation CSP/XFO non applicables", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "api.example.com",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "https://api.example.com/",
+          securityHeaders: {
+            missing: ["permissions-policy"],
+            browserOnlySkipped: true,
+          },
+        },
+      },
+    ]);
+    const obs = rows.find((r) => r.control.includes("CSP/XFO non applicables"));
+    assert.ok(obs);
+    assert.equal(obs!.risk, "info");
+    assert.equal(
+      rows.some((r) => r.control.includes("Header CSP absent")),
+      false,
+    );
+  });
+
   it("redirect — http sans upgrade HTTPS → faible ; stuck 3xx → info/low", () => {
     const plain = buildPresenceRiskTable([
       {

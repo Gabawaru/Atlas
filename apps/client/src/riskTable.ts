@@ -53,7 +53,10 @@ type EvidenceLike = {
     status?: number;
     url?: string;
     error?: string;
-    securityHeaders?: { missing?: string[] };
+    securityHeaders?: {
+      missing?: string[];
+      browserOnlySkipped?: boolean;
+    };
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
     cdn?: { provider?: string; originNotAnalyzed?: boolean };
     redirectChain?: Array<{
@@ -382,6 +385,20 @@ export function buildPresenceRiskTable(
     }
 
     pushRedirectRows(out, host, url, ev.http);
+
+    if (ev.http?.securityHeaders?.browserOnlySkipped) {
+      out.push(
+        row({
+          control: "API JSON — CSP/XFO non applicables",
+          host,
+          url,
+          riskCode: "info",
+          compromise:
+            "Observation — headers navigateur (CSP, X-Frame-Options) non scorés pour API JSON",
+          signal: "browserOnlySkipped · api/json",
+        }),
+      );
+    }
 
     const tls = ev.tls;
     if (tls?.error) {
