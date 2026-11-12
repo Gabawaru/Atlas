@@ -23,6 +23,8 @@ export type SupportHandoffResult =
       ticketId: string;
       notice: string;
       fingerprints: string[];
+      /** Opaque multi-device sync key — never email/name */
+      supportSessionId?: string;
     }
   | {
       ok: false;
@@ -34,6 +36,9 @@ export type SupportHandoffResult =
         | "network";
       message: string;
     };
+
+/** Opaque support session for multi-device sync (client soft twin). */
+export const SUPPORT_SESSION_KEY = "atlas.support-session.v1";
 
 export type SupportHandoffLogEntry = {
   id: string;
@@ -174,8 +179,13 @@ export async function requestPragmaSupportHandoff(args: {
       ticketId?: string;
       id?: string;
       notice?: string;
+      supportSessionId?: string;
     };
     const ticketId = data.ticketId ?? data.id ?? "unknown";
+    const supportSessionId =
+      typeof data.supportSessionId === "string" && data.supportSessionId
+        ? data.supportSessionId
+        : undefined;
     const notice =
       data.notice ??
       "Rapport transmis à Pragma. Scan local reste gratuit ; support facturé par abonnement.";
@@ -186,7 +196,17 @@ export async function requestPragmaSupportHandoff(args: {
       egress: "sent",
       detail: notice,
     });
-    return { ok: true, ticketId, notice, fingerprints };
+    if (supportSessionId) {
+      rememberSupportSessionId(supportSessionId);
+      await ingestSupportVulns({
+        apiBase: args.apiBase,
+        supportSessionId,
+        entries: args.entries,
+        ticketId,
+        fetchImpl,
+      });
+    }
+    return { ok: true, ticketId, notice, fingerprints, supportSessionId };
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     const message = formatLocalBridgeNetworkFailure(raw, "api-health");
@@ -220,5 +240,58 @@ function appendHandoffLog(partial: {
     localStorage.setItem(SUPPORT_HANDOFF_LOG_KEY, JSON.stringify(next));
   } catch {
     /* ignore quota */
+  }
+}
+
+function rememberSupportSessionId(supportSessionId: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(
+      SUPPORT_SESSION_KEY,
+      JSON.stringify({ supportSessionId, at: new Date().toISOString() }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Scanner → support vulns only after prise en charge (opaque session).
+ * Titles/risk/fingerprint only — no email/name/session payload.
+ */
+export async function ingestSupportVulns(args: {
+  apiBase: string;
+  supportSessionId: string;
+  entries: VulnTrackEntry[];
+  ticketId?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ ok: boolean }> {
+  if (!args.supportSessionId || args.entries.length === 0) {
+    return { ok: false };
+  }
+  const fetchImpl = args.fetchImpl ?? fetch;
+  const vulns = args.entries.map((e) => ({
+    id: e.shortId,
+    title: e.control,
+    risk: e.risk || e.riskCode,
+    ticketId: args.ticketId,
+    status: "en revue",
+    fingerprint: e.fingerprint,
+  }));
+  try {
+    const res = await fetchImpl(
+      `${args.apiBase.replace(/\/$/, "")}/v1/support/vulns`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Atlas-Support-Session": args.supportSessionId,
+        },
+        body: JSON.stringify({ vulns, source: "scanner-opt-in" }),
+      },
+    );
+    return { ok: res.ok };
+  } catch {
+    return { ok: false };
   }
 }

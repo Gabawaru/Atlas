@@ -9,6 +9,7 @@ import { SignaturesModule } from "./signatures/signatures.module";
 import { MailModule } from "./mail/mail.module";
 import { ConnectorsModule } from "./connectors/connectors.module";
 import { TicketsModule } from "./tickets/tickets.module";
+import { SupportTrackingModule } from "./support-tracking/support-tracking.module";
 import { RemediationModule } from "./remediation/remediation.module";
 import { VulnModule } from "./vuln/vuln.module";
 import { AssistantModule } from "./assistant/assistant.module";
@@ -32,6 +33,7 @@ import { PrismaService } from "./prisma/prisma.service";
     HierarchyModule,
     AssetsModule,
     TicketsModule,
+    SupportTrackingModule,
     RemediationModule,
     VulnModule,
     AssistantModule,

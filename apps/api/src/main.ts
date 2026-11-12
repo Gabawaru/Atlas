@@ -13,6 +13,8 @@ const DEFAULT_CORS_ORIGINS = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3002",
   "http://127.0.0.1:17865",
+  "https://atlas-secu.com",
+  "https://www.atlas-secu.com",
 ].join(",");
 
 /**
