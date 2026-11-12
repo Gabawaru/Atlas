@@ -252,4 +252,69 @@ describe("risk-table", () => {
     assert.equal(bad!.risk, "critique");
     assert.equal(bad!.url, "https://bad.example/");
   });
+
+  it("redirect — http sans upgrade HTTPS → faible ; stuck 3xx → info/low", () => {
+    const plain = buildPresenceRiskTable([
+      {
+        host: "plain.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "http://plain.example/",
+          redirectChain: [{ url: "http://plain.example/", status: 200 }],
+        },
+      },
+    ]);
+    const noHttps = plain.find((r) =>
+      r.control.includes("pas de redirection vers HTTPS"),
+    );
+    assert.ok(noHttps);
+    assert.equal(noHttps!.risk, "faible");
+
+    const stuck = buildPresenceRiskTable([
+      {
+        host: "loop.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: false,
+          status: 302,
+          url: "https://loop.example/a",
+          redirectChain: [
+            {
+              url: "https://loop.example/",
+              status: 302,
+              location: "https://loop.example/a",
+            },
+            {
+              url: "https://loop.example/a",
+              status: 302,
+              location: "https://loop.example/b",
+            },
+            {
+              url: "https://loop.example/b",
+              status: 302,
+              location: "https://loop.example/c",
+            },
+            {
+              url: "https://loop.example/c",
+              status: 302,
+              location: "https://loop.example/d",
+            },
+            {
+              url: "https://loop.example/d",
+              status: 302,
+              location: "https://loop.example/e",
+            },
+          ],
+        },
+      },
+    ]);
+    const unresolved = stuck.find((r) =>
+      r.control.includes("redirection non résolue"),
+    );
+    assert.ok(unresolved);
+    assert.equal(unresolved!.risk, "faible");
+    assert.match(unresolved!.signal, /hops=5/);
+  });
 });

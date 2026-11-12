@@ -304,4 +304,46 @@ describe("client riskTable", () => {
     );
     assert.equal(evidenceTargetUrl("solo.test"), "https://solo.test/");
   });
+
+  it("redirect — http sans HTTPS + stuck 3xx scorés", () => {
+    const plain = buildPresenceRiskTable([
+      {
+        host: "plain.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: true,
+          status: 200,
+          url: "http://plain.example/",
+          redirectChain: [{ url: "http://plain.example/", status: 200 }],
+        },
+      },
+    ]);
+    const noHttps = plain.find((r) =>
+      r.control.includes("pas de redirection vers HTTPS"),
+    );
+    assert.ok(noHttps);
+    assert.equal(noHttps!.risk, "faible");
+
+    const stuck = buildPresenceRiskTable([
+      {
+        host: "loop.example",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        http: {
+          ok: false,
+          status: 302,
+          url: "https://loop.example/e",
+          redirectChain: Array.from({ length: 5 }, (_, i) => ({
+            url: `https://loop.example/${i}`,
+            status: 302,
+            location: `https://loop.example/${i + 1}`,
+          })),
+        },
+      },
+    ]);
+    const unresolved = stuck.find((r) =>
+      r.control.includes("redirection non résolue"),
+    );
+    assert.ok(unresolved);
+    assert.equal(unresolved!.risk, "faible");
+  });
 });

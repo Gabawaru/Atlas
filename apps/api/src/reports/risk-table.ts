@@ -78,6 +78,12 @@ type EvidenceLike = {
     cookies?: Array<{ name?: string; missingFlags?: string[] }>;
     /** CDN edge observé — origine non sondée */
     cdn?: { provider?: string; originNotAnalyzed?: boolean };
+    /** Chaîne de redirect (max 5) — scoring http→https + stuck 3xx */
+    redirectChain?: Array<{
+      url?: string;
+      status?: number;
+      location?: string;
+    }>;
   };
   osint?: {
     ok?: boolean;
@@ -283,6 +289,69 @@ function pushTlsRows(
   }
 }
 
+/**
+ * Redirect depth — evidence was collected but never scored (atl-retours).
+ * - http start without https final → low
+ * - final still 3xx (hop cap / stuck) → info (or low if ≥5 hops)
+ */
+export function pushRedirectRows(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  http: EvidenceLike["http"],
+) {
+  if (!http) return;
+  const chain = http.redirectChain ?? [];
+  const startUrl = (chain[0]?.url || http.url || url || "").trim();
+  const endUrl = (http.url || chain[chain.length - 1]?.url || url || "").trim();
+  const finalStatus =
+    typeof http.status === "number"
+      ? http.status
+      : chain[chain.length - 1]?.status;
+  const hops = chain.length;
+
+  if (
+    typeof finalStatus === "number" &&
+    finalStatus >= 300 &&
+    finalStatus < 400
+  ) {
+    out.push(
+      row({
+        control: "HTTP — redirection non résolue",
+        host,
+        url: endUrl || url,
+        riskCode: hops >= 5 ? "low" : "info",
+        compromise:
+          hops >= 5
+            ? "Exposition faible — chaîne de redirect saturée (limite passive)"
+            : "Observation — réponse encore 3xx après suivi passif",
+        signal: `status=${finalStatus} · hops=${hops || 1}`,
+      }),
+    );
+  }
+
+  try {
+    if (!startUrl) return;
+    const start = new URL(startUrl);
+    const end = new URL(endUrl || startUrl);
+    if (start.protocol === "http:" && end.protocol !== "https:") {
+      out.push(
+        row({
+          control: "HTTP — pas de redirection vers HTTPS",
+          host,
+          url: startUrl,
+          riskCode: "low",
+          compromise:
+            "Exposition faible — trafic clairtext / pas d'upgrade TLS observé",
+          signal: `${start.protocol}// → ${end.protocol}// · hops=${hops}`,
+        }),
+      );
+    }
+  } catch {
+    /* ignore bad URLs */
+  }
+}
+
 function pushDnsHttpRows(
   out: RiskTableRow[],
   host: string,
@@ -464,6 +533,7 @@ export function buildPresenceRiskTable(
     const host = ev.host?.trim() || "(hôte inconnu)";
     const url = evidenceTargetUrl(host, ev.http?.url);
     pushDnsHttpRows(out, host, url, ev);
+    pushRedirectRows(out, host, url, ev.http);
     pushTlsRows(out, host, url, ev.tls);
     pushHeaderRows(out, host, url, ev.http?.securityHeaders?.missing);
     pushCookieRows(out, host, url, ev.http?.cookies);
