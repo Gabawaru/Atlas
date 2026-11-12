@@ -994,6 +994,7 @@ export function App() {
                         <th scope="col">Contrôle</th>
                         <th scope="col">Hôtes</th>
                         <th scope="col">Risque</th>
+                        <th scope="col">Signal</th>
                         <th scope="col">Compromission / exposition</th>
                       </tr>
                     </thead>
@@ -1019,6 +1020,9 @@ export function App() {
                             <span className={`risk-badge risk-${r.riskCode}`}>
                               {r.risk}
                             </span>
+                          </td>
+                          <td className="risk-signal">
+                            {r.signal?.trim() ? r.signal : "—"}
                           </td>
                           <td>{r.compromise}</td>
                         </tr>

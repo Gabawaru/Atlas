@@ -38,4 +38,10 @@ describe("Scanner results FR accents", () => {
     assert.match(cssSrc, /text-overflow:\s*clip/);
     assert.match(cssSrc, /\.export-btn-active/);
   });
+
+  it("findings table exposes Signal column (actionable rows)", () => {
+    assert.match(appSrc, /scope="col">Signal</);
+    assert.match(appSrc, /className="risk-signal"/);
+    assert.match(cssSrc, /\.risk-signal/);
+  });
 });
