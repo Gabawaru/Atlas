@@ -91,8 +91,26 @@ type EvidenceLike = {
     ok?: boolean;
     error?: string;
     source?: string;
+    registrar?: string;
+    events?: Array<{ action?: string; date?: string }>;
   };
 };
+
+/** RDAP signal — registrar + expiry when present (atl-retours depth). */
+export function formatRdapSignal(
+  osint: NonNullable<EvidenceLike["osint"]>,
+): string {
+  if (!osint.ok) return osint.error ?? "échec";
+  const parts: string[] = [osint.source ?? "rdap"];
+  const registrar = osint.registrar?.trim();
+  if (registrar) parts.push(registrar);
+  const exp = (osint.events ?? []).find((e) =>
+    /expir/i.test(e.action ?? ""),
+  );
+  const day = exp?.date?.trim().slice(0, 10);
+  if (day) parts.push(`expiry=${day}`);
+  return parts.join(" · ");
+}
 
 /** Let's Encrypt / ISRG / CDN edge (GTS YE*, Cloudflare) — 90j ACME typique. */
 export function isAutoRenewIssuer(issuerCN?: string | null): boolean {
@@ -580,7 +598,7 @@ function pushOsintRow(
         url,
         riskCode: "info",
         compromise: "Observation — métadonnées domaine publiques",
-        signal: osint.source ?? "rdap",
+        signal: formatRdapSignal(osint),
       }),
     );
   } else {
@@ -591,7 +609,7 @@ function pushOsintRow(
         url,
         riskCode: "info",
         compromise: "Observation — pas d'enrichissement WHOIS passif",
-        signal: osint.error ?? "échec",
+        signal: formatRdapSignal(osint),
       }),
     );
   }

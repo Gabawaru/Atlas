@@ -66,8 +66,30 @@ type EvidenceLike = {
       location?: string;
     }>;
   };
-  osint?: { ok?: boolean; error?: string; source?: string };
+  osint?: {
+    ok?: boolean;
+    error?: string;
+    source?: string;
+    registrar?: string;
+    events?: Array<{ action?: string; date?: string }>;
+  };
 };
+
+/** RDAP signal — registrar + expiry when present (atl-retours depth). */
+export function formatRdapSignal(
+  osint: NonNullable<EvidenceLike["osint"]>,
+): string {
+  if (!osint.ok) return osint.error ?? "échec";
+  const parts: string[] = [osint.source ?? "rdap"];
+  const registrar = osint.registrar?.trim();
+  if (registrar) parts.push(registrar);
+  const exp = (osint.events ?? []).find((e) =>
+    /expir/i.test(e.action ?? ""),
+  );
+  const day = exp?.date?.trim().slice(0, 10);
+  if (day) parts.push(`expiry=${day}`);
+  return parts.join(" · ");
+}
 
 /** 180 j — plancher Mozilla ; pas d'exigence preload. */
 export const HSTS_MAX_AGE_FLOOR_SEC = 15_552_000;
@@ -584,7 +606,7 @@ export function buildPresenceRiskTable(
           compromise: ev.osint.ok
             ? "Observation — métadonnées domaine publiques"
             : "Observation — pas d'enrichissement WHOIS passif",
-          signal: ev.osint.error ?? ev.osint.source ?? "rdap",
+          signal: formatRdapSignal(ev.osint),
         }),
       );
     }

@@ -6,6 +6,7 @@ import {
   buildPresenceRiskTable,
   collapseRiskTableByControl,
   evidenceTargetUrl,
+  formatRdapSignal,
   HSTS_MAX_AGE_FLOOR_SEC,
   isAutoRenewIssuer,
   isHstsMaxAgeWeak,
@@ -78,6 +79,41 @@ describe("risk-table", () => {
     assert.equal(isAutoRenewIssuer("R3"), true);
     assert.equal(isAutoRenewIssuer("Let's Encrypt"), true);
     assert.equal(isAutoRenewIssuer("DigiCert SHA2"), false);
+  });
+
+  it("formatRdapSignal — registrar + expiry", () => {
+    assert.equal(
+      formatRdapSignal({
+        ok: true,
+        source: "rdap",
+        registrar: "Example Registrar",
+        events: [{ action: "expiration", date: "2027-06-01T00:00:00Z" }],
+      }),
+      "rdap · Example Registrar · expiry=2027-06-01",
+    );
+    assert.equal(
+      formatRdapSignal({ ok: false, error: "timeout" }),
+      "timeout",
+    );
+  });
+
+  it("buildPresenceRiskTable — RDAP signal enrichi", () => {
+    const rows = buildPresenceRiskTable([
+      {
+        host: "pragma-serve.com",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          registrar: "Cloudflare, Inc.",
+          events: [{ action: "expiration", date: "2028-01-15T12:00:00Z" }],
+        },
+      },
+    ]);
+    const rdap = rows.find((r) => r.control === "OSINT RDAP");
+    assert.ok(rdap);
+    assert.match(rdap!.signal ?? "", /Cloudflare/);
+    assert.match(rdap!.signal ?? "", /expiry=2028-01-15/);
   });
 
   it("parseHstsMaxAge / isHstsMaxAgeWeak — floor 180j", () => {

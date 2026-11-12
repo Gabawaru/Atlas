@@ -12,6 +12,7 @@ import {
   parseHstsMaxAge,
   partitionRiskTable,
   bilanFromReportExport,
+  formatRdapSignal,
   riskTableFromReportExport,
 } from "./riskTable";
 
@@ -108,6 +109,34 @@ describe("client riskTable", () => {
     assert.ok(findings.length >= 1);
     const bilan = buildBilanSummary(collapsed);
     assert.ok(bilan.priorityActions.length <= 3);
+  });
+
+  it("RDAP signal enrichi — registrar + expiry (parity API)", () => {
+    assert.match(
+      formatRdapSignal({
+        ok: true,
+        source: "rdap",
+        registrar: "Example Registrar",
+        events: [{ action: "expiration", date: "2027-06-01T00:00:00Z" }],
+      }),
+      /Example Registrar.*expiry=2027-06-01/,
+    );
+    const rows = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          registrar: "Cloudflare, Inc.",
+          events: [{ action: "expiration", date: "2028-01-15T12:00:00Z" }],
+        },
+      },
+    ]);
+    const rdap = rows.find((r) => r.control === "OSINT RDAP");
+    assert.ok(rdap);
+    assert.match(rdap!.signal ?? "", /Cloudflare/);
+    assert.match(rdap!.signal ?? "", /expiry=2028-01-15/);
   });
 
   it("HSTS max-age insuffisant — faible + pas all-clear (parity API)", () => {
