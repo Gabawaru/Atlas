@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { isSubscriptionCommerciallyActive } from "@atlas/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { AuthUser } from "../auth/auth.types";
@@ -15,6 +16,9 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number];
 /**
  * SAV / incidents — rôles support/ops/admin.
  * Un approver peut lire mais le SAV ne constitue jamais une approbation de mission.
+ *
+ * Prise en charge client (`requestPragmaHandoff`) : seul egress volontaire
+ * des findings locaux → ticket Pragma (abonnement support, pas de metering domaine).
  */
 @Injectable()
 export class TicketsService {
@@ -98,6 +102,103 @@ export class TicketsService {
       ...ticket,
       notice:
         "Ticket SAV créé. Ceci n'approuve aucune mission et ne remplace pas le Policy Guard.",
+    };
+  }
+
+  /**
+   * Client support → Pragma : crée un ticket SAV à partir du rapport choisi.
+   * Prérequis : tenant + abonnement commercialement actif (facturation Pragma).
+   * Scan local reste gratuit ; aucun compteur de domaines ici.
+   */
+  async requestPragmaHandoff(
+    user: AuthUser,
+    body: {
+      reportMarkdown: string;
+      fingerprints?: string[];
+      shortIds?: string[];
+      subject?: string;
+      missionId?: string;
+    },
+  ) {
+    if (!user.tenantId) {
+      throw new BadRequestException("tenant requis");
+    }
+    const report = (body.reportMarkdown ?? "").trim();
+    if (report.length < 20) {
+      throw new BadRequestException("Rapport de prise en charge trop court");
+    }
+
+    const now = new Date();
+    const subs = await this.prisma.subscription.findMany({
+      where: { tenantId: user.tenantId },
+      include: { plan: true },
+    });
+    const active = subs.find((s) => isSubscriptionCommerciallyActive(s, now));
+    if (!active) {
+      throw new ForbiddenException(
+        "Prise en charge réservée aux clients support (abonnement Pragma actif). Le scan local reste gratuit et les findings restent sur la machine.",
+      );
+    }
+
+    if (body.missionId) {
+      const mission = await this.prisma.mission.findFirst({
+        where: { id: body.missionId, tenantId: user.tenantId },
+      });
+      if (!mission) {
+        throw new BadRequestException(
+          "Mission absente ou hors tenant de la prise en charge",
+        );
+      }
+    }
+
+    const shortIds = (body.shortIds ?? []).filter(
+      (id): id is string => typeof id === "string",
+    );
+    const fingerprints = (body.fingerprints ?? []).filter(
+      (id): id is string => typeof id === "string",
+    );
+    const subject =
+      (body.subject ?? "").trim() ||
+      `Prise en charge Atlas (${shortIds.slice(0, 3).join(", ") || "rapport"})`;
+
+    const ticket = await this.prisma.supportTicket.create({
+      data: {
+        tenantId: user.tenantId,
+        missionId: body.missionId,
+        subject: subject.slice(0, 200),
+        body: report,
+        category: "prise_en_charge",
+        createdByUserId: user.userId,
+        synthetic: true,
+        status: "open",
+      },
+    });
+
+    await this.audit.append({
+      tenantId: user.tenantId,
+      actorId: user.userId,
+      action: "support.handoff",
+      objectType: "support_ticket",
+      objectId: ticket.id,
+      payload: {
+        category: "prise_en_charge",
+        fingerprintCount: fingerprints.length,
+        shortIds: shortIds.slice(0, 20),
+        planCode: active.plan.code,
+        billing: "pragma_support_subscription",
+        domainMetering: false,
+        notice:
+          "Seul egress client vulns → Pragma ; scan local non facturé à la domaine.",
+      },
+    });
+
+    return {
+      ticketId: ticket.id,
+      id: ticket.id,
+      status: ticket.status,
+      category: ticket.category,
+      notice:
+        "Rapport transmis à Pragma (prise en charge). Scan local gratuit ; support facturé par abonnement — pas de metering par domaine.",
     };
   }
 

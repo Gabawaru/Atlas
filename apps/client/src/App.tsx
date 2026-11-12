@@ -879,7 +879,7 @@ export function App() {
               Session locale
             </button>
             <button type="button" className="ghost" onClick={goTracking}>
-              Suivi &amp; archive
+              Historique
             </button>
           </p>
           {/* #118 Demarrer recovery must surface on default post-login hub (parity login/Scanner). */}
@@ -901,6 +901,8 @@ export function App() {
             store={vulnStore}
             onStoreChange={persistVulnStore}
             onBack={goScanner}
+            apiBase={API}
+            token={token}
           />
         </>
       ) : view === "terminal" ? (
@@ -954,13 +956,13 @@ export function App() {
               Session Gabriel
             </button>
             <button type="button" className="ghost" onClick={goTracking}>
-              Suivi &amp; archive
+              Historique
             </button>
             <button type="button" className="ghost" onClick={goTerminal}>
               Session locale
             </button>
             <span className="muted export-hint">
-              Hors hero — suivi vulns · terminal soft local (:17865)
+              Hors hero — historique local · terminal soft local (:17865)
             </span>
           </p>
 

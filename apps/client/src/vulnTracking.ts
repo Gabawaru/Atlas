@@ -1,6 +1,7 @@
 /**
- * Suivi vulnérabilités cross-scan — identité stable (empreinte) + ID court CCV
- * + persistance locale + plage de dates ouverte.
+ * Historique vulnérabilités cross-scan — une table locale (empreinte + ID CCV).
+ * Les findings client restent sur la machine ; seul « Demander une prise en charge »
+ * peut les envoyer à Pragma (voir supportHandoff.ts).
  *
  * FUTURE (ne pas implémenter ici) : propositions de correctifs générées par IA
  * à partir du contexte site — stub uniquement, voir `proposeAiFixStub`.
@@ -12,12 +13,19 @@ export const VULN_TRACKING_STORAGE_KEY = "atlas.vuln-tracking.v1";
 
 export type VulnTrackStatus = "unresolved" | "resolved";
 
+/** Libellés produit Ben — Statut historique. */
+export type VulnStatutLabel = "À corriger" | "Corrigé";
+
+export function statutLabelFr(status: VulnTrackStatus): VulnStatutLabel {
+  return status === "resolved" ? "Corrigé" : "À corriger";
+}
+
 export type VulnTrackEntry = {
   /** Empreinte stable : control + url + host (+ riskCode) */
   fingerprint: string;
   /**
    * Identifiant court style CCV, dérivé de l'empreinte (stable cross-scan).
-   * Ex. CCV-7K2M9A — affiché dans les 3 tables + archive PDF.md.
+   * Ex. CCV-7K2M9A — affiché dans l'historique + archive PDF.md.
    */
   shortId: string;
   control: string;
@@ -28,11 +36,11 @@ export type VulnTrackEntry = {
   compromise: string;
   signal: string;
   status: VulnTrackStatus;
-  /** Début de la plage ouverte (premier constat ISO) */
+  /** Date détection (premier constat ISO) */
   firstSeenAt: string;
   /** Dernier constat encore ouvert / re-vu (ISO) */
   lastSeenAt: string;
-  /** Fin de plage = résolution humaine (ISO) ; null = encore ouvert */
+  /** Date correction (résolution humaine ISO) ; null = encore à corriger */
   resolvedAt: string | null;
   seenCount: number;
   lastMissionId: string | null;
@@ -41,6 +49,8 @@ export type VulnTrackEntry = {
   resolutionNotes: string | null;
   /** Analyse du correctif final (humain) — alimente l'archive PDF.md */
   fixAnalysis: string | null;
+  /** Dernière demande de prise en charge Pragma (ISO) — null = jamais envoyé */
+  supportHandoffAt?: string | null;
 };
 
 export type VulnTrackingStore = {
@@ -57,18 +67,25 @@ export type ResolveVulnInput = {
   resolvedAt?: string;
 };
 
-export type ArchiveFilterOptions = {
-  /** Recherche libre : date (sous-chaîne ISO/affichée) ou nom de vulnérabilité / ID */
+export type HistoryStatusFilter = "all" | "a_corriger" | "corrige";
+
+export type HistoryFilterOptions = {
+  /** Recherche libre : date, nom, ID CCV, hôte… */
   query?: string;
-  /** Filtre début de plage (inclus, YYYY-MM-DD ou ISO) */
+  /** Filtre début de plage (inclus, YYYY-MM-DD ou ISO) — sur date détection */
   dateFrom?: string;
-  /** Filtre fin de plage (inclus) */
+  /** Filtre fin de plage (inclus) — sur date détection / correction */
   dateTo?: string;
   /** Type / sévérité (riskCode) — vide = tous */
   riskCode?: RiskCode | "" | "all";
-  /** Tri alphabétique sur le contrôle (sinon tri par date de résolution desc) */
+  /** Statut produit : À corriger / Corrigé */
+  status?: HistoryStatusFilter;
+  /** Tri alphabétique sur le contrôle (sinon tri par dernier constat desc) */
   alphabetical?: boolean;
 };
+
+/** @deprecated alias — une seule table historique remplace archive. */
+export type ArchiveFilterOptions = HistoryFilterOptions;
 
 /** Clés d'identité alignées sur les lignes riskTable (sans signal/compromise volatils). */
 export function vulnFingerprint(input: {
@@ -275,6 +292,7 @@ export function ingestRiskTableIntoTracking(
       lastReportId: meta.reportId ?? null,
       resolutionNotes: null,
       fixAnalysis: null,
+      supportHandoffAt: null,
     });
   }
 
@@ -357,19 +375,26 @@ export function listResolved(store: VulnTrackingStore): VulnTrackEntry[] {
 }
 
 /**
- * Archive filtrable / triable — 3ᵉ table (rotative + barre de recherche).
+ * Une table historique filtrable — Statut + dates + recherche.
  */
-export function filterArchiveEntries(
+export function filterHistoryEntries(
   store: VulnTrackingStore,
-  options: ArchiveFilterOptions = {},
+  options: HistoryFilterOptions = {},
 ): VulnTrackEntry[] {
   const q = (options.query ?? "").trim().toLowerCase();
   const dateFrom = parseDayBound(options.dateFrom, "start");
   const dateTo = parseDayBound(options.dateTo, "end");
   const riskFilter =
     options.riskCode && options.riskCode !== "all" ? options.riskCode : "";
+  const statusFilter = options.status ?? "all";
 
-  let rows = listResolved(store);
+  let rows = [...store.entries];
+
+  if (statusFilter === "a_corriger") {
+    rows = rows.filter((e) => e.status === "unresolved");
+  } else if (statusFilter === "corrige") {
+    rows = rows.filter((e) => e.status === "resolved");
+  }
 
   if (riskFilter) {
     rows = rows.filter((e) => e.riskCode === riskFilter);
@@ -395,6 +420,7 @@ export function filterArchiveEntries(
         e.host,
         e.risk,
         e.riskCode,
+        statutLabelFr(e.status),
         e.compromise,
         e.signal,
         e.resolutionNotes ?? "",
@@ -418,7 +444,37 @@ export function filterArchiveEntries(
         a.shortId.localeCompare(b.shortId),
     );
   }
-  return rows;
+  return rows.sort(compareEntries);
+}
+
+/** @deprecated — préférer filterHistoryEntries (une table). */
+export function filterArchiveEntries(
+  store: VulnTrackingStore,
+  options: ArchiveFilterOptions = {},
+): VulnTrackEntry[] {
+  return filterHistoryEntries(store, {
+    ...options,
+    status: options.status ?? "corrige",
+  });
+}
+
+/** Marque localement les entrées après envoi Pragma (pas de sync auto). */
+export function markSupportHandoffRequested(
+  store: VulnTrackingStore,
+  fingerprints: string[],
+  at = new Date().toISOString(),
+): VulnTrackingStore {
+  const set = new Set(fingerprints);
+  return {
+    version: 1,
+    updatedAt: at,
+    entries: store.entries
+      .map((e) =>
+        set.has(e.fingerprint) ? { ...e, supportHandoffAt: at } : e,
+      )
+      .sort(compareEntries),
+    ingestedReportIds: store.ingestedReportIds ?? [],
+  };
 }
 
 function parseDayBound(
