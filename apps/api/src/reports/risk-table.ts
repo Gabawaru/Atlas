@@ -436,14 +436,68 @@ export function pushApiPolicyObservation(
   );
 }
 
+/** 180 j — plancher Mozilla ; pas d'exigence preload. */
+export const HSTS_MAX_AGE_FLOOR_SEC = 15_552_000;
+
+/** Parse max-age=N depuis Strict-Transport-Security (null si absent / invalide). */
+export function parseHstsMaxAge(hsts: string | undefined | null): number | null {
+  if (!hsts?.trim()) return null;
+  const m = /(?:^|;)\s*max-age\s*=\s*(\d+)/i.exec(hsts);
+  if (!m) return null;
+  return Number(m[1]);
+}
+
+/** HSTS présent mais max-age manquant ou sous plancher (absence → missing[]). */
+export function isHstsMaxAgeWeak(hsts: string | undefined | null): boolean {
+  if (!hsts?.trim()) return false;
+  const age = parseHstsMaxAge(hsts);
+  if (age === null) return true;
+  return age < HSTS_MAX_AGE_FLOOR_SEC;
+}
+
+function pushHstsMaxAgeRow(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  hsts: string | undefined,
+) {
+  if (!isHstsMaxAgeWeak(hsts)) return;
+  const age = parseHstsMaxAge(hsts);
+  out.push(
+    row({
+      control: "Header HSTS max-age insuffisant",
+      host,
+      url,
+      riskCode: "low",
+      compromise:
+        "Exposition faible — HSTS trop court / sans max-age (downgrade encore possible)",
+      signal:
+        age === null
+          ? `${hsts?.trim() || "?"} · max-age manquant · floor=${HSTS_MAX_AGE_FLOOR_SEC}`
+          : `max-age=${age} · floor=${HSTS_MAX_AGE_FLOOR_SEC}`,
+    }),
+  );
+}
+
 function pushHeaderRows(
   out: RiskTableRow[],
   host: string,
   url: string,
-  missing: string[] | undefined,
+  securityHeaders:
+    | { missing?: string[]; hsts?: string }
+    | undefined,
 ) {
+  const missing = securityHeaders?.missing;
+  const hsts = securityHeaders?.hsts;
+  const hstsListedMissing = (missing ?? []).some(
+    (n) => n.toLowerCase() === "strict-transport-security",
+  );
+  if (!hstsListedMissing) {
+    pushHstsMaxAgeRow(out, host, url, hsts);
+  }
+  const weak = !hstsListedMissing && isHstsMaxAgeWeak(hsts);
   if (!missing?.length) {
-    if (missing) {
+    if (missing && !weak) {
       out.push(
         row({
           control: "Headers de sécurité",
@@ -559,7 +613,7 @@ export function buildPresenceRiskTable(
     pushRedirectRows(out, host, url, ev.http);
     pushTlsRows(out, host, url, ev.tls);
     pushApiPolicyObservation(out, host, url, ev.http);
-    pushHeaderRows(out, host, url, ev.http?.securityHeaders?.missing);
+    pushHeaderRows(out, host, url, ev.http?.securityHeaders);
     pushCookieRows(out, host, url, ev.http?.cookies);
     pushOsintRow(out, host, url, ev.osint);
   }
