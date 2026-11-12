@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { publicStatusActive, publicStatusNone } from "./support-status";
+import {
+  publicStatusActive,
+  publicStatusAwaitingConfirm,
+  publicStatusNone,
+} from "./support-status";
 
 describe("support public status", () => {
   it("none exposes C1 + phone block flag", () => {
@@ -9,6 +13,16 @@ describe("support public status", () => {
     assert.equal(s.c1Required, true);
     assert.equal(s.phoneToPc, "blocked_until_ATLAS_API_BASE");
     assert.equal(s.supportSessionId, undefined);
+  });
+
+  it("awaiting_confirm exposes intent id", () => {
+    const s = publicStatusAwaitingConfirm({
+      handoffIntentId: "hin_x",
+      createdAt: "2026-11-12T16:00:00.000Z",
+      expiresAt: "2026-11-12T16:15:00.000Z",
+    });
+    assert.equal(s.handoff, "awaiting_confirm");
+    assert.equal(s.handoffIntentId, "hin_x");
   });
 
   it("active counts without PII keys", () => {

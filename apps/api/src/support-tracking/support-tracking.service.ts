@@ -5,6 +5,19 @@ import {
 } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import {
+  HANDOFF_INTENT_TTL_MS,
+  findOpenPcIntentBySource,
+  newHandoffIntentId,
+  readHandoffIntent,
+  writeHandoffIntent,
+} from "./handoff-intent.store";
+import {
+  toIntentSnapshot,
+  type HandoffIntentRecord,
+  type HandoffIntentSnapshot,
+} from "./handoff-intent.types";
+import { requirePcConfirmedAt } from "./pc-confirm";
+import {
   newSupportSessionId,
   readSupportSession,
   writeSupportSession,
@@ -241,5 +254,96 @@ export class SupportTrackingService {
     ].slice(-20);
     await writeSupportSession(rec);
     return toSnapshot(rec);
+  }
+
+  /**
+   * PC soft-twin intent (idempotent per source while awaiting_confirm).
+   * Phone callers must be rejected in the controller before this.
+   */
+  async createPcIntent(input: {
+    source?: string;
+    ticket?: Partial<SupportTicketRow>;
+    nowMs?: number;
+  }): Promise<HandoffIntentSnapshot> {
+    const nowMs = input.nowMs ?? Date.now();
+    const source = String(input.source || "atlas-secu-pages").slice(0, 80);
+    const existing = await findOpenPcIntentBySource(source, nowMs);
+    if (existing) return toIntentSnapshot(existing);
+
+    const createdAt = new Date(nowMs).toISOString();
+    const expiresAt = new Date(nowMs + HANDOFF_INTENT_TTL_MS).toISOString();
+    const rec: HandoffIntentRecord = {
+      handoffIntentId: newHandoffIntentId(),
+      status: "awaiting_confirm",
+      initiatedFrom: "pc",
+      source,
+      createdAt,
+      expiresAt,
+      ticket: input.ticket
+        ? {
+            id: input.ticket.id,
+            subject: input.ticket.subject,
+            status: input.ticket.status,
+          }
+        : undefined,
+    };
+    await writeHandoffIntent(rec);
+    return toIntentSnapshot(rec);
+  }
+
+  async getIntent(handoffIntentId: string): Promise<HandoffIntentRecord> {
+    const id = (handoffIntentId || "").trim();
+    if (!id) {
+      throw new BadRequestException("handoffIntentId requis");
+    }
+    const rec = await readHandoffIntent(id);
+    if (!rec) {
+      throw new NotFoundException("Intent handoff introuvable");
+    }
+    return rec;
+  }
+
+  /**
+   * C1 confirm → soft twin session. Idempotent if already active.
+   */
+  async confirmPcIntent(input: {
+    handoffIntentId: string;
+    pcConfirmedAt?: string;
+    nowMs?: number;
+  }): Promise<{
+    intent: HandoffIntentSnapshot;
+    session: SupportSessionSnapshot;
+    already?: boolean;
+  }> {
+    const nowMs = input.nowMs ?? Date.now();
+    const pcConfirmedAt = requirePcConfirmedAt(input.pcConfirmedAt, nowMs);
+    const rec = await this.getIntent(input.handoffIntentId);
+
+    if (rec.status === "active" && rec.supportSessionId) {
+      const session = await this.getSnapshot(rec.supportSessionId);
+      return { intent: toIntentSnapshot(rec), session, already: true };
+    }
+
+    if (Date.parse(rec.expiresAt) <= nowMs) {
+      rec.status = "expired";
+      await writeHandoffIntent(rec);
+      throw new BadRequestException(
+        "Intent C1 expiré — créez un nouvel intent sur le PC.",
+      );
+    }
+
+    if (rec.status !== "awaiting_confirm") {
+      throw new BadRequestException(`Intent non confirmable (${rec.status})`);
+    }
+
+    const session = await this.createSoftHandoff({
+      source: rec.source,
+      ticket: rec.ticket,
+    });
+    rec.status = "active";
+    rec.supportSessionId = session.supportSessionId;
+    rec.pcConfirmedAt = pcConfirmedAt;
+    await writeHandoffIntent(rec);
+    return { intent: toIntentSnapshot(rec), session };
   }
 }
