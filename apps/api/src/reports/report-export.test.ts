@@ -35,9 +35,44 @@ describe("report exports", () => {
     assert.equal(json.bilanDecideur, sample.executiveSummary);
   });
 
+  it("JSON/CSV exposent bilanScore + priorityActions (atl-retours)", () => {
+    const withEvidence = {
+      ...sample,
+      evidence: [
+        {
+          host: "pragma-serve.com",
+          dns: { resolved: true, addresses: ["1.2.3.4"] },
+          http: {
+            ok: true,
+            status: 200,
+            url: "https://pragma-serve.com/",
+            securityHeaders: {
+              missing: ["strict-transport-security", "content-security-policy"],
+            },
+          },
+          tls: {
+            authorized: true,
+            protocol: "TLSv1.3",
+            daysRemaining: 45,
+          },
+        },
+      ],
+    };
+    const json = buildReportJson(withEvidence);
+    assert.equal(typeof json.bilanScore, "number");
+    assert.ok((json.bilanScore as number) < 100);
+    assert.ok(Array.isArray(json.priorityActions));
+    assert.ok((json.priorityActions as string[]).length >= 1);
+    assert.ok((json.priorityActions as string[]).length <= 3);
+    const csv = buildReportCsv(withEvidence);
+    assert.match(csv, /bilan_score/);
+    assert.match(csv, /priority_action/);
+  });
+
   it("CSV contient bilan + findings + marqueur", () => {
     const csv = buildReportCsv(sample);
     assert.match(csv, /bilan_decideur/);
+    assert.match(csv, /bilan_score/);
     assert.match(csv, /finding/);
     assert.match(csv, /FICTIF/);
   });

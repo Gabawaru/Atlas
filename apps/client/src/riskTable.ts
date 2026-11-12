@@ -613,3 +613,25 @@ export function riskTableFromReportExport(
   }
   return aggregateRiskTable(buildPresenceRiskTable(obj.evidence));
 }
+
+/** Prefers structured bilanScore/priorityActions from export (atl-retours). */
+export function bilanFromReportExport(
+  exportJson: unknown,
+): { score: number; priorityActions: string[] } | null {
+  if (!exportJson || typeof exportJson !== "object") return null;
+  const obj = exportJson as {
+    bilanScore?: unknown;
+    priorityActions?: unknown;
+  };
+  const score =
+    typeof obj.bilanScore === "number" && Number.isFinite(obj.bilanScore)
+      ? Math.max(0, Math.min(100, Math.round(obj.bilanScore)))
+      : null;
+  if (score === null) return null;
+  const priorityActions = Array.isArray(obj.priorityActions)
+    ? obj.priorityActions
+        .filter((a): a is string => typeof a === "string" && a.trim().length > 0)
+        .slice(0, 3)
+    : [];
+  return { score, priorityActions };
+}

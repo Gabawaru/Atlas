@@ -31,6 +31,7 @@ import {
 } from "./authorizedLaunch";
 import { formatLocalBridgeNetworkFailure } from "./localShell";
 import {
+  bilanFromReportExport,
   buildBilanSummary,
   collapseRiskTableByControl,
   partitionRiskTable,
@@ -757,6 +758,7 @@ export function App() {
   /** Dernier bilan réel → tableau risque / compromission (un écran). */
   const latestRiskMeta: {
     table: RiskTableRow[];
+    exportBilan: { score: number; priorityActions: string[] } | null;
     missionId: string | null;
     reportId: string | null;
   } = (() => {
@@ -778,21 +780,28 @@ export function App() {
       if (table.length) {
         return {
           table,
+          exportBilan: bilanFromReportExport(r.exportJson),
           missionId: r.missionId,
           reportId: r.id,
         };
       }
     }
-    return { table: [], missionId: null, reportId: null };
+    return {
+      table: [],
+      exportBilan: null,
+      missionId: null,
+      reportId: null,
+    };
   })();
   const latestRiskTable = latestRiskMeta.table;
   /** Densité UI : 1 ligne / contrôle ; info à part ; Suivi garde les lignes hôtes. */
   const displayRisk = useMemo(() => {
     const collapsed = collapseRiskTableByControl(latestRiskTable);
     const { findings, observations } = partitionRiskTable(collapsed);
-    const bilan = buildBilanSummary(collapsed);
+    const bilan =
+      latestRiskMeta.exportBilan ?? buildBilanSummary(collapsed);
     return { findings, observations, bilan };
-  }, [latestRiskTable]);
+  }, [latestRiskTable, latestRiskMeta.exportBilan]);
 
   const ingestSignature = latestRiskMeta.reportId
     ? `${latestRiskMeta.reportId}:${latestRiskTable

@@ -8,7 +8,9 @@ import path from "node:path";
 import PDFDocument from "pdfkit";
 import {
   aggregateRiskTable,
+  buildBilanSummary,
   buildPresenceRiskTable,
+  collapseRiskTableByControl,
   type RiskTableRow,
 } from "./risk-table";
 
@@ -56,8 +58,17 @@ export function resolveRiskTable(input: ReportExportInput): RiskTableRow[] {
   return aggregateRiskTable(buildPresenceRiskTable(evidence));
 }
 
+/** Bilan UI parity — collapse by control then score + ≤3 actions. */
+export function resolveBilan(riskTable: RiskTableRow[]): {
+  score: number;
+  priorityActions: string[];
+} {
+  return buildBilanSummary(collapseRiskTableByControl(riskTable));
+}
+
 export function buildReportJson(input: ReportExportInput): Record<string, unknown> {
   const riskTable = resolveRiskTable(input);
+  const bilan = resolveBilan(riskTable);
   return {
     format: "atlas.report.v1",
     generatedAt: new Date().toISOString(),
@@ -72,12 +83,15 @@ export function buildReportJson(input: ReportExportInput): Record<string, unknow
     detailTechnique: input.technicalDetail,
     findings: input.findings,
     riskTable,
+    bilanScore: bilan.score,
+    priorityActions: bilan.priorityActions,
     evidence: input.evidence ?? null,
   };
 }
 
 export function buildReportCsv(input: ReportExportInput): string {
   const riskTable = resolveRiskTable(input);
+  const bilan = resolveBilan(riskTable);
   const rows: string[][] = [
     [
       "section",
@@ -112,6 +126,28 @@ export function buildReportCsv(input: ReportExportInput): string {
       "",
       String(input.synthetic),
     ],
+    [
+      "bilan_score",
+      "",
+      "Score bilan",
+      String(bilan.score),
+      "",
+      "",
+      "",
+      "",
+      String(input.synthetic),
+    ],
+    ...bilan.priorityActions.map((action) => [
+      "priority_action",
+      "",
+      action.replace(/\n/g, " "),
+      "",
+      "",
+      "",
+      "",
+      "",
+      String(input.synthetic),
+    ]),
     [
       "detail_technique",
       "",
@@ -185,10 +221,21 @@ export async function buildReportPdf(
   doc.fontSize(14).text("Bilan décideur");
   doc.fontSize(11).text(input.executiveSummary, { align: "justify" });
   doc.moveDown();
+  const riskTable = resolveRiskTable(input);
+  const bilan = resolveBilan(riskTable);
+  doc.fontSize(14).text("Bilan score");
+  doc.fontSize(11).text(`Score ${bilan.score} / 100`);
+  if (bilan.priorityActions.length) {
+    doc.moveDown(0.3);
+    doc.fontSize(11).text("Actions prioritaires :");
+    for (const action of bilan.priorityActions) {
+      doc.fontSize(10).text(`• ${action}`);
+    }
+  }
+  doc.moveDown();
   doc.fontSize(14).text("Détail technique");
   doc.fontSize(11).text(input.technicalDetail, { align: "justify" });
   doc.moveDown();
-  const riskTable = resolveRiskTable(input);
   doc.fontSize(14).text("Tableau risque / compromission");
   doc.moveDown(0.3);
   for (const r of riskTable) {
