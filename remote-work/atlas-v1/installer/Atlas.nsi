@@ -1,6 +1,7 @@
 ; Atlas v1 Windows installer (NSIS) — platform UI with Scan.
 ; Directory chooser (default Program Files), app + AppData, desktop/Start Menu
 ; for Atlas.exe, finish-page launch.
+; Silent: Atlas-Setup.exe /S — must exit after files are written (no MessageBox).
 
 !define PRODUCT_NAME "Atlas"
 !define PRODUCT_VERSION "1.3.2"
@@ -15,7 +16,7 @@ InstallDirRegKey HKLM "Software\Atlas" "InstallDir"
 RequestExecutionLevel admin
 Unicode true
 SetCompressor /SOLID lzma
-BrandingText "Atlas v1"
+BrandingText "Atlas ${PRODUCT_VERSION}"
 
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
@@ -24,6 +25,8 @@ BrandingText "Atlas v1"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Atlas.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Lancer Atlas"
 !define MUI_FINISHPAGE_NOAUTOCLOSE
+; Silent (/S): never auto-launch Atlas.exe (would keep the process tree open).
+!define MUI_FINISHPAGE_RUN_NOTCHECKED
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -33,6 +36,16 @@ BrandingText "Atlas v1"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "French"
 !insertmacro MUI_LANGUAGE "English"
+
+; PE Details tab — keep in sync with GitHub release tag v${PRODUCT_VERSION}
+; and atlas-secu-pages /Atlas-Setup.exe.
+VIProductVersion "${PRODUCT_VERSION}.0"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductName" "${PRODUCT_NAME}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "FileDescription" "Atlas Setup"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "FileVersion" "${PRODUCT_VERSION}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductVersion" "${PRODUCT_VERSION}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "CompanyName" "${PRODUCT_PUBLISHER}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "LegalCopyright" "${PRODUCT_PUBLISHER}"
 
 Section "Atlas" SecMain
   SectionIn RO
@@ -68,9 +81,15 @@ Section "Atlas" SecMain
   WriteRegDWORD HKLM "${PRODUCT_UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${PRODUCT_UNINST_KEY}" "NoRepair" 1
 
+  ; Interactive only — MessageBox without IfSilent blocks /S forever after files land.
+  IfSilent skipUninstDesktop
   MessageBox MB_YESNO|MB_ICONQUESTION "Voulez-vous créer une icône pour le désinstalleur ?" IDNO skipUninstDesktop
   CreateShortCut "$DESKTOP\Désinstaller Atlas.lnk" "$INSTDIR\Uninstall.exe"
   skipUninstDesktop:
+
+  ; Ensure silent (/S) closes as soon as the section finishes.
+  IfSilent 0 +2
+  SetAutoClose true
 SectionEnd
 
 Section "Uninstall"
