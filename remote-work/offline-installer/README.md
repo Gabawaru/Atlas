@@ -22,7 +22,7 @@ Updates: Gab pushes to `Gabawaru/Atlas` (phone OK) → installed launcher **`git
 
 **Version lock:** GitHub Release tag `vX.Y.Z`, NSIS `PRODUCT_VERSION` (`remote-work/atlas-v1/installer/Atlas.nsi`), and `atlas-secu-pages` `/Atlas-Setup.exe` must be the **same** bytes + version. After a Setup rebuild, publish the tag **and** copy the PE to Pages in the same cut — do not leave site 1.3.x ahead/behind `releases/latest`.
 
-**Silent install:** `Atlas-Setup.exe /S` must exit after files land (NSIS `IfSilent` skips the uninstall-icon `MessageBox`).
+**Silent install:** `Atlas-Setup.exe /S` must exit after files land (NSIS `IfSilent` skips the uninstall-icon `MessageBox`; `SetAutoClose` + `MUI_FINISHPAGE_RUN_NOTCHECKED`). CI pin: `apps/client/src/windowsNsisSilentPin.test.ts` + release workflow version lock (`PRODUCT_VERSION` == tag `vX.Y.Z`, PE ≥ 2 MiB).
 
 ## On the Windows PC
 
