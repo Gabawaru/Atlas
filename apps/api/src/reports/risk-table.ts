@@ -51,6 +51,7 @@ type EvidenceLike = {
   dns?: {
     resolved?: boolean;
     addresses?: string[];
+    txtSample?: string[];
     error?: string;
   };
   tls?: {
@@ -615,6 +616,49 @@ function pushOsintRow(
   }
 }
 
+/** Apex-only (gated by osint) — SPF in TXT sample, no DMARC/CAA enum. */
+export function hasSpfInTxtSample(txtSample: string[] | undefined): boolean {
+  if (!Array.isArray(txtSample) || txtSample.length === 0) return false;
+  return txtSample.some((t) => /\bv=spf1\b/i.test(t));
+}
+
+function pushSpfPresenceRow(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  ev: EvidenceLike,
+) {
+  // Apex only — RDAP runs on apex; avoid scoring SPF on www/api TXT.
+  if (!ev.osint || ev.dns?.resolved === false) return;
+  if (!Array.isArray(ev.dns?.txtSample)) return;
+  const present = hasSpfInTxtSample(ev.dns.txtSample);
+  if (present) {
+    const hit = ev.dns.txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
+    out.push(
+      row({
+        control: "DNS — SPF présent",
+        host,
+        url,
+        riskCode: "info",
+        compromise: "Observation — politique d'émission mail publiée (TXT)",
+        signal: hit.trim().slice(0, 120),
+      }),
+    );
+    return;
+  }
+  out.push(
+    row({
+      control: "DNS — SPF absent",
+      host,
+      url,
+      riskCode: "low",
+      compromise:
+        "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
+      signal: `txt=${ev.dns.txtSample.length}`,
+    }),
+  );
+}
+
 /** Construit le tableau risque/compromission depuis les preuves Presence. */
 export function buildPresenceRiskTable(
   evidence: EvidenceLike[] | null | undefined,
@@ -634,6 +678,7 @@ export function buildPresenceRiskTable(
     pushHeaderRows(out, host, url, ev.http?.securityHeaders);
     pushCookieRows(out, host, url, ev.http?.cookies);
     pushOsintRow(out, host, url, ev.osint);
+    pushSpfPresenceRow(out, host, url, ev);
   }
 
   return sortRiskTable(out);

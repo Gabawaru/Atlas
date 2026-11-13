@@ -39,7 +39,12 @@ const RISK_RANK: Record<RiskCode, number> = {
 
 type EvidenceLike = {
   host?: string;
-  dns?: { resolved?: boolean; addresses?: string[]; error?: string };
+  dns?: {
+    resolved?: boolean;
+    addresses?: string[];
+    txtSample?: string[];
+    error?: string;
+  };
   tls?: {
     authorized?: boolean;
     protocol?: string;
@@ -609,6 +614,41 @@ export function buildPresenceRiskTable(
           signal: formatRdapSignal(ev.osint),
         }),
       );
+    }
+
+    // Apex-only (osint gate) — SPF from TXT sample, no DMARC/CAA enum.
+    if (
+      ev.osint &&
+      ev.dns?.resolved !== false &&
+      Array.isArray(ev.dns?.txtSample)
+    ) {
+      const present = ev.dns.txtSample.some((t) => /\bv=spf1\b/i.test(t));
+      if (present) {
+        const hit =
+          ev.dns.txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
+        out.push(
+          row({
+            control: "DNS — SPF présent",
+            host,
+            url,
+            riskCode: "info",
+            compromise: "Observation — politique d'émission mail publiée (TXT)",
+            signal: hit.trim().slice(0, 120),
+          }),
+        );
+      } else {
+        out.push(
+          row({
+            control: "DNS — SPF absent",
+            host,
+            url,
+            riskCode: "low",
+            compromise:
+              "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
+            signal: `txt=${ev.dns.txtSample.length}`,
+          }),
+        );
+      }
     }
   }
 

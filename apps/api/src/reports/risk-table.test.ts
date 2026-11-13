@@ -7,6 +7,7 @@ import {
   collapseRiskTableByControl,
   evidenceTargetUrl,
   formatRdapSignal,
+  hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isAutoRenewIssuer,
   isHstsMaxAgeWeak,
@@ -79,6 +80,46 @@ describe("risk-table", () => {
     assert.equal(isAutoRenewIssuer("R3"), true);
     assert.equal(isAutoRenewIssuer("Let's Encrypt"), true);
     assert.equal(isAutoRenewIssuer("DigiCert SHA2"), false);
+  });
+
+  it("SPF apex — présent info / absent faible (osint gate)", () => {
+    assert.equal(hasSpfInTxtSample(["v=spf1 include:_spf.google.com ~all"]), true);
+    assert.equal(hasSpfInTxtSample(["hello"]), false);
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const ok = present.find((r) => r.control === "DNS — SPF présent");
+    assert.ok(ok);
+    assert.equal(ok!.risk, "info");
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"], txtSample: [] },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — SPF absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+    const www = buildPresenceRiskTable([
+      {
+        host: "www.apex.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"], txtSample: [] },
+      },
+    ]);
+    assert.equal(
+      www.some((r) => r.control.includes("SPF")),
+      false,
+      "www without osint must not score SPF",
+    );
   });
 
   it("formatRdapSignal — registrar + expiry", () => {
