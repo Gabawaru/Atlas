@@ -21,6 +21,15 @@ Options (RoE, connecteurs, actifs) sont repliées.
 
 macOS stage : voir `apps/client/src-tauri/README.md` § « macOS (plateforme stage) ».
 
+## Historique (local-first)
+
+Une seule table de suivi des findings actionnables, dans le client :
+
+- Stockage navigateur : clé `localStorage` **`atlas.vuln-tracking.v1`** — pas d’envoi automatique.
+- **Seul egress payant** : bouton **Demander une prise en charge** (abonnement support Pragma ; pas de metering par domaine).
+- Chaque ligne a un **ID court** (CCV) ; après prise en charge, un tampon **Prise en charge** + horodatage apparaît sous le statut.
+- **Effacer le stockage local du site = effacer l’Historique** (pas de sync multi-appareil tant qu’aucune session support n’a été créée).
+
 ## Interdits (honnêtes)
 
 Abonnement ≠ pentest · pas de scan hors scope · pas d’OIDC/e-sign/hiérarchie RH.  
