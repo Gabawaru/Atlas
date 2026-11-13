@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  formatCaaRecord,
   formatRdapSignal,
+  hasCaaInSample,
   hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
@@ -47,5 +49,15 @@ describe("@atlas/risk-table helpers", () => {
   it("DMARC txt sample", () => {
     assert.equal(hasDmarcInTxtSample(["v=DMARC1; p=none"]), true);
     assert.equal(hasDmarcInTxtSample(["v=spf1 -all"]), false);
+  });
+
+  it("CAA sample + format", () => {
+    assert.equal(hasCaaInSample(["issue letsencrypt.org"]), true);
+    assert.equal(hasCaaInSample([]), false);
+    assert.equal(
+      formatCaaRecord({ critical: true, issue: "letsencrypt.org" }),
+      "issue critical letsencrypt.org",
+    );
+    assert.equal(formatCaaRecord({}), null);
   });
 });

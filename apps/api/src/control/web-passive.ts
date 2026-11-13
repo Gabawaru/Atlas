@@ -9,6 +9,7 @@ import {
   evaluateRoeHost,
   isRoeScopeOverrideEnabled,
 } from "@atlas/policy-guard";
+import { formatCaaRecord } from "@atlas/risk-table";
 
 export const WEB_PASSIVE_MODULE_ID = "web.passive.presence.v1";
 
@@ -29,6 +30,8 @@ export interface WebPassiveDnsEvidence {
   txtSample?: string[];
   /** Apex only — TXT `_dmarc.<apex>` (une requête fixe, pas d'enum) */
   dmarcTxtSample?: string[];
+  /** Apex only — enregistrements CAA (issue / iodef) */
+  caaSample?: string[];
   lookupMs?: number;
   error?: string;
 }
@@ -91,6 +94,7 @@ export const WEB_PASSIVE_LIMITS = {
   methods: [
     "dns",
     "dns.dmarc",
+    "dns.caa",
     "tls",
     "http.headers",
     "http.cookies",
@@ -177,6 +181,8 @@ export interface WebPassiveOptions {
     ns?: string[];
     mx?: string[];
     txt?: string[];
+    /** CAA RRs formatted (apex) */
+    caa?: string[];
   }>;
   fetchFn?: (url: string) => Promise<{
     status: number;
@@ -502,9 +508,10 @@ async function realDnsLookup(host: string): Promise<{
   ns?: string[];
   mx?: string[];
   txt?: string[];
+  caa?: string[];
 }> {
   const dns = await import("node:dns/promises");
-  const [a, aaaa, ns, mx, txt] = await Promise.all([
+  const [a, aaaa, ns, mx, txt, caa] = await Promise.all([
     dns.resolve4(host).catch(() => [] as string[]),
     dns.resolve6(host).catch(() => [] as string[]),
     dns.resolveNs(host).catch(() => [] as string[]),
@@ -516,6 +523,15 @@ async function realDnsLookup(host: string): Promise<{
       .resolveTxt(host)
       .then((rows) => rows.map((r) => r.join("")).slice(0, 5))
       .catch(() => [] as string[]),
+    dns
+      .resolveCaa(host)
+      .then((rows) =>
+        rows
+          .map((r) => formatCaaRecord(r))
+          .filter((s): s is string => Boolean(s))
+          .slice(0, 8),
+      )
+      .catch(() => [] as string[]),
   ]);
   if (a.length === 0 && aaaa.length === 0) {
     const all = await dns.lookup(host, { all: true }).catch(() => []);
@@ -525,9 +541,10 @@ async function realDnsLookup(host: string): Promise<{
       ns,
       mx,
       txt,
+      caa,
     };
   }
-  return { a, aaaa, ns, mx, txt };
+  return { a, aaaa, ns, mx, txt, caa };
 }
 
 async function realHttpProbe(
@@ -922,6 +939,7 @@ export async function runWebPassivePresence(
     const t0 = Date.now();
     try {
       const rec = await lookup(host);
+      const apex = isApexInAllowlist(host, opts.allowedHosts);
       entryCore.dns = {
         resolved: rec.a.length + rec.aaaa.length > 0,
         addresses: rec.a,
@@ -929,6 +947,7 @@ export async function runWebPassivePresence(
         ns: rec.ns,
         mx: rec.mx,
         txtSample: rec.txt,
+        ...(apex ? { caaSample: rec.caa ?? [] } : {}),
         lookupMs: Date.now() - t0,
       };
     } catch (e) {
