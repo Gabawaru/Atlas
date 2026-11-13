@@ -10,6 +10,7 @@ Module `web.passive.presence.v1` — **in-scope uniquement**, Policy Guard, pas 
 | TLS certificat | Port 443, pas de fuzzing ; **non tenté** si IP privée ; alerte expiration si **&lt;14 j** ou renouvellement **non** auto (LE/ACME 90 j ≠ medium à 45 j) |
 | Headers sécu (HSTS, CSP, XFO, …) | Lecture seule sur l’**URL finale** après 301 ; `api.*` / JSON : skip CSP+XFO (garder HSTS + X-CTO) ; HSTS présent avec `max-age` &lt; 180 j (ou sans `max-age`) → risque faible |
 | DNS SPF (apex) | Présence `v=spf1` dans TXT apex (hôte RDAP) — info si présent, faible si absent ; pas d’enum DMARC/CAA |
+| RDAP expiry (apex) | Échéance domaine depuis events RDAP : expiré → élevé ; ≤30 j → moyen ; ≤90 j → faible |
 | **Cookies** (`Secure` / `HttpOnly` / `SameSite`) | Flags Set-Cookie seulement |
 | **Redirects** | Max **5** hops ; suivi www→apex ; **arrêt** si Location hors scope |
 | RDAP apex | Bootstrap **IANA dns.json** → serveur TLD (ex. Verisign `.com`) ; pas de WHOIS agressif |

@@ -97,6 +97,32 @@ type EvidenceLike = {
   };
 };
 
+/** RDAP expiration event date (ISO), if any. */
+export function rdapExpiryIso(
+  osint: NonNullable<EvidenceLike["osint"]> | undefined | null,
+): string | null {
+  if (!osint?.ok) return null;
+  const exp = (osint.events ?? []).find((e) =>
+    /expir/i.test(e.action ?? ""),
+  );
+  const raw = exp?.date?.trim();
+  if (!raw) return null;
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t).toISOString();
+}
+
+/** Days until RDAP expiry (negative if past); null if unknown. */
+export function rdapExpiryDaysRemaining(
+  osint: NonNullable<EvidenceLike["osint"]> | undefined | null,
+  nowMs: number = Date.now(),
+): number | null {
+  const iso = rdapExpiryIso(osint);
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Math.floor((t - nowMs) / 86_400_000);
+}
+
 /** RDAP signal — registrar + expiry when present (atl-retours depth). */
 export function formatRdapSignal(
   osint: NonNullable<EvidenceLike["osint"]>,
@@ -105,10 +131,7 @@ export function formatRdapSignal(
   const parts: string[] = [osint.source ?? "rdap"];
   const registrar = osint.registrar?.trim();
   if (registrar) parts.push(registrar);
-  const exp = (osint.events ?? []).find((e) =>
-    /expir/i.test(e.action ?? ""),
-  );
-  const day = exp?.date?.trim().slice(0, 10);
+  const day = rdapExpiryIso(osint)?.slice(0, 10);
   if (day) parts.push(`expiry=${day}`);
   return parts.join(" · ");
 }
@@ -602,6 +625,7 @@ function pushOsintRow(
         signal: formatRdapSignal(osint),
       }),
     );
+    pushRdapExpiryRow(out, host, url, osint);
   } else {
     out.push(
       row({
@@ -611,6 +635,59 @@ function pushOsintRow(
         riskCode: "info",
         compromise: "Observation — pas d'enrichissement WHOIS passif",
         signal: formatRdapSignal(osint),
+      }),
+    );
+  }
+}
+
+/** Domain registration expiry windows from RDAP (apex only). */
+function pushRdapExpiryRow(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  osint: NonNullable<EvidenceLike["osint"]>,
+) {
+  const days = rdapExpiryDaysRemaining(osint);
+  if (days === null) return;
+  const day = rdapExpiryIso(osint)!.slice(0, 10);
+  if (days < 0) {
+    out.push(
+      row({
+        control: "Domaine — enregistrement expiré",
+        host,
+        url,
+        riskCode: "high",
+        compromise:
+          "Exposition élevée — domaine expiré (reprise / interruption possible)",
+        signal: `expiry=${day} · ${days} j`,
+      }),
+    );
+    return;
+  }
+  if (days <= 30) {
+    out.push(
+      row({
+        control: "Domaine — expiration imminente",
+        host,
+        url,
+        riskCode: "medium",
+        compromise:
+          "Exposition moyenne — renouvellement domaine à traiter sous 30 j",
+        signal: `expiry=${day} · ${days} j restants`,
+      }),
+    );
+    return;
+  }
+  if (days <= 90) {
+    out.push(
+      row({
+        control: "Domaine — renouvellement à planifier",
+        host,
+        url,
+        riskCode: "low",
+        compromise:
+          "Exposition faible — échéance domaine dans les 90 j",
+        signal: `expiry=${day} · ${days} j restants`,
       }),
     );
   }
