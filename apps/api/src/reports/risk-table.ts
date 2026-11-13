@@ -629,7 +629,8 @@ function pushSpfPresenceRow(
   ev: EvidenceLike,
 ) {
   // Apex only — RDAP runs on apex; avoid scoring SPF on www/api TXT.
-  if (!ev.osint || ev.dns?.resolved === false) return;
+  // Caller already skips unresolved hosts; do not re-check resolved===false (TS).
+  if (!ev.osint) return;
   if (!Array.isArray(ev.dns?.txtSample)) return;
   const present = hasSpfInTxtSample(ev.dns.txtSample);
   if (present) {

@@ -617,11 +617,8 @@ export function buildPresenceRiskTable(
     }
 
     // Apex-only (osint gate) — SPF from TXT sample, no DMARC/CAA enum.
-    if (
-      ev.osint &&
-      ev.dns?.resolved !== false &&
-      Array.isArray(ev.dns?.txtSample)
-    ) {
+    // unresolved hosts already skipped above (resolved === false continue).
+    if (ev.osint && Array.isArray(ev.dns?.txtSample)) {
       const present = ev.dns.txtSample.some((t) => /\bv=spf1\b/i.test(t));
       if (present) {
         const hit =
