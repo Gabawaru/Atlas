@@ -5,6 +5,7 @@
  */
 export {
   formatRdapSignal,
+  hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
@@ -14,6 +15,7 @@ export {
 } from "@atlas/risk-table";
 import {
   formatRdapSignal,
+  hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
@@ -70,6 +72,8 @@ type EvidenceLike = {
     resolved?: boolean;
     addresses?: string[];
     txtSample?: string[];
+    /** Apex — TXT `_dmarc.<host>` (probe fixe) */
+    dmarcTxtSample?: string[];
     error?: string;
   };
   tls?: {
@@ -691,6 +695,44 @@ function pushSpfPresenceRow(
   );
 }
 
+function pushDmarcPresenceRow(
+  out: RiskTableRow[],
+  host: string,
+  url: string,
+  ev: EvidenceLike,
+) {
+  // Apex only (osint gate) — score from `_dmarc.` TXT probe (not apex TXT).
+  if (!ev.osint) return;
+  if (!Array.isArray(ev.dns?.dmarcTxtSample)) return;
+  const sample = ev.dns.dmarcTxtSample;
+  const present = hasDmarcInTxtSample(sample);
+  if (present) {
+    const hit = sample.find((t) => /\bv=DMARC1\b/i.test(t)) ?? "v=DMARC1";
+    out.push(
+      row({
+        control: "DNS — DMARC présent",
+        host,
+        url,
+        riskCode: "info",
+        compromise: "Observation — politique DMARC publiée (_dmarc TXT)",
+        signal: hit.trim().slice(0, 120),
+      }),
+    );
+    return;
+  }
+  out.push(
+    row({
+      control: "DNS — DMARC absent",
+      host,
+      url,
+      riskCode: "low",
+      compromise:
+        "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
+      signal: `dmarcTxt=${sample.length}`,
+    }),
+  );
+}
+
 /** Construit le tableau risque/compromission depuis les preuves Presence. */
 export function buildPresenceRiskTable(
   evidence: EvidenceLike[] | null | undefined,
@@ -711,6 +753,7 @@ export function buildPresenceRiskTable(
     pushCookieRows(out, host, url, ev.http?.cookies);
     pushOsintRow(out, host, url, ev.osint);
     pushSpfPresenceRow(out, host, url, ev);
+    pushDmarcPresenceRow(out, host, url, ev);
   }
 
   return sortRiskTable(out);

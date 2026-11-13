@@ -27,6 +27,8 @@ export interface WebPassiveDnsEvidence {
   ns?: string[];
   mx?: string[];
   txtSample?: string[];
+  /** Apex only — TXT `_dmarc.<apex>` (une requête fixe, pas d'enum) */
+  dmarcTxtSample?: string[];
   lookupMs?: number;
   error?: string;
 }
@@ -86,7 +88,15 @@ export const WEB_PASSIVE_LIMITS = {
   maxBodySampleBytes: 2048,
   commonSubdomainsOnly: COMMON_IN_SCOPE_SUBDOMAINS,
   noAggressiveScan: true,
-  methods: ["dns", "tls", "http.headers", "http.cookies", "http.redirects", "rdap.apex"],
+  methods: [
+    "dns",
+    "dns.dmarc",
+    "tls",
+    "http.headers",
+    "http.cookies",
+    "http.redirects",
+    "rdap.apex",
+  ],
 } as const;
 
 export interface WebPassiveTlsEvidence {
@@ -934,6 +944,16 @@ export async function runWebPassivePresence(
     if (!entryCore.dns.resolved && !explicitHosts.has(host)) {
       if (i < expanded.length - 1) await sleep(intervalMs);
       continue;
+    }
+
+    // Apex only — one fixed `_dmarc.` TXT (no mailbox/subdomain enum).
+    if (isApexInAllowlist(host, opts.allowedHosts) && !opts.isCancelled()) {
+      try {
+        const dmarcRec = await lookup(`_dmarc.${host}`);
+        entryCore.dns.dmarcTxtSample = dmarcRec.txt ?? [];
+      } catch {
+        entryCore.dns.dmarcTxtSample = [];
+      }
     }
 
     const resolvedIps = [

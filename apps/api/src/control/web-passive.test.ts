@@ -119,13 +119,24 @@ describe("web.passive.presence.v1", () => {
   });
 
   it("OSINT RDAP apex in-scope uniquement (pas hors périmètre)", async () => {
+    const lookedUp: string[] = [];
     const results = await runWebPassivePresence([{ host: "example.com" }], {
       allowedHosts: new Set(["example.com"]),
       enforceRoePlatform: false,
       rateLimitPerMinute: 1000,
       expandCommonSubdomains: false,
       isCancelled: () => false,
-      lookupFn: async () => ({ a: ["93.184.216.34"], aaaa: [] }),
+      lookupFn: async (host) => {
+        lookedUp.push(host);
+        if (host.startsWith("_dmarc.")) {
+          return {
+            a: [],
+            aaaa: [],
+            txt: ["v=DMARC1; p=none"],
+          };
+        }
+        return { a: ["93.184.216.34"], aaaa: [], txt: ["v=spf1 -all"] };
+      },
       fetchFn: async () => ({ status: 200, headers: {} }),
       rdapFn: async (host) => ({
         source: "rdap",
@@ -138,6 +149,8 @@ describe("web.passive.presence.v1", () => {
     });
     assert.equal(results[0]!.osint?.ok, true);
     assert.equal(results[0]!.osint?.registrar, "Mock Registrar");
+    assert.deepEqual(results[0]!.dns.dmarcTxtSample, ["v=DMARC1; p=none"]);
+    assert.ok(lookedUp.includes("_dmarc.example.com"));
     assert.equal(isApexInAllowlist("www.example.com", new Set(["example.com"])), false);
   });
 

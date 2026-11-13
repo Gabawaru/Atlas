@@ -72,3 +72,9 @@ export function hasSpfInTxtSample(txtSample: string[] | undefined): boolean {
   if (!Array.isArray(txtSample) || txtSample.length === 0) return false;
   return txtSample.some((t) => /\bv=spf1\b/i.test(t));
 }
+
+/** Apex TXT DMARC presence (`v=DMARC1`) — no `_dmarc.` enum, sample only. */
+export function hasDmarcInTxtSample(txtSample: string[] | undefined): boolean {
+  if (!Array.isArray(txtSample) || txtSample.length === 0) return false;
+  return txtSample.some((t) => /\bv=DMARC1\b/i.test(t));
+}
