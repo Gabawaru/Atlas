@@ -244,7 +244,11 @@ export function VulnTrackingView({
       <p className="tracking-local-banner" role="note">
         Local-first : pas d’envoi automatique. Seul le bouton{" "}
         <strong>Demander une prise en charge</strong> transmet le rapport choisi
-        à Pragma (abonnement support — pas de metering par domaine).
+        à Pragma (abonnement support — pas de metering par domaine). Les
+        entrées vivent dans ce navigateur (
+        <code>localStorage</code>{" "}
+        <code>atlas.vuln-tracking.v1</code>) — vider le stockage local efface
+        l’Historique.
       </p>
 
       <div className="archive-toolbar history-toolbar" role="search">
@@ -399,9 +403,11 @@ export function VulnTrackingView({
                         {statutLabelFr(entry.status)}
                       </span>
                       {entry.supportHandoffAt && (
-                        <div className="handoff-stamp muted">
+                        <div className="handoff-stamp">
                           Prise en charge{" "}
-                          {formatHeavyTimestamp(entry.supportHandoffAt)}
+                          <strong>
+                            {formatHeavyTimestamp(entry.supportHandoffAt)}
+                          </strong>
                         </div>
                       )}
                     </td>

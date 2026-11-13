@@ -698,8 +698,11 @@ a {
 }
 
 .handoff-stamp {
-  margin-top: 0.25rem;
-  font-size: 0.72rem;
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--teal-deep);
+  letter-spacing: 0.01em;
 }
 
 .history-scroll {
