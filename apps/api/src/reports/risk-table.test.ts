@@ -14,6 +14,7 @@ import {
   mapSeverityToRisk,
   parseHstsMaxAge,
   partitionRiskTable,
+  rdapExpiryDaysRemaining,
   rowsFromFindings,
 } from "./risk-table";
 
@@ -120,6 +121,83 @@ describe("risk-table", () => {
       false,
       "www without osint must not score SPF",
     );
+  });
+
+  it("RDAP expiry windows — élevé / moyen / faible", () => {
+    const now = Date.parse("2026-11-13T00:00:00Z");
+    assert.equal(
+      rdapExpiryDaysRemaining(
+        {
+          ok: true,
+          events: [{ action: "expiration", date: "2026-11-01T00:00:00Z" }],
+        },
+        now,
+      ),
+      -12,
+    );
+    const expired = buildPresenceRiskTable([
+      {
+        host: "gone.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          events: [
+            {
+              action: "expiration",
+              date: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+            },
+          ],
+        },
+      },
+    ]);
+    const high = expired.find((r) =>
+      r.control.includes("enregistrement expiré"),
+    );
+    assert.ok(high);
+    assert.equal(high!.risk, "élevé");
+    const imminent = buildPresenceRiskTable([
+      {
+        host: "soon.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          events: [
+            {
+              action: "expiration",
+              date: new Date(Date.now() + 10 * 86_400_000).toISOString(),
+            },
+          ],
+        },
+      },
+    ]);
+    const mid = imminent.find((r) =>
+      r.control.includes("expiration imminente"),
+    );
+    assert.ok(mid);
+    assert.equal(mid!.risk, "moyen");
+    const plan = buildPresenceRiskTable([
+      {
+        host: "later.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          events: [
+            {
+              action: "expiration",
+              date: new Date(Date.now() + 60 * 86_400_000).toISOString(),
+            },
+          ],
+        },
+      },
+    ]);
+    const low = plan.find((r) =>
+      r.control.includes("renouvellement à planifier"),
+    );
+    assert.ok(low);
+    assert.equal(low!.risk, "faible");
   });
 
   it("formatRdapSignal — registrar + expiry", () => {

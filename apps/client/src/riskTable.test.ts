@@ -13,6 +13,7 @@ import {
   partitionRiskTable,
   bilanFromReportExport,
   formatRdapSignal,
+  rdapExpiryDaysRemaining,
   riskTableFromReportExport,
 } from "./riskTable";
 
@@ -134,6 +135,38 @@ describe("client riskTable", () => {
     const absent = missing.find((r) => r.control === "DNS — SPF absent");
     assert.ok(absent);
     assert.equal(absent!.risk, "faible");
+  });
+
+  it("RDAP expiry windows — moyen / faible (parity API)", () => {
+    assert.equal(
+      rdapExpiryDaysRemaining(
+        {
+          ok: true,
+          events: [{ action: "expiration", date: "2026-11-01T00:00:00Z" }],
+        },
+        Date.parse("2026-11-13T00:00:00Z"),
+      ),
+      -12,
+    );
+    const imminent = buildPresenceRiskTable([
+      {
+        host: "soon.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"] },
+        osint: {
+          ok: true,
+          source: "rdap",
+          events: [
+            {
+              action: "expiration",
+              date: new Date(Date.now() + 10 * 86_400_000).toISOString(),
+            },
+          ],
+        },
+      },
+    ]);
+    assert.ok(
+      imminent.find((r) => r.control.includes("expiration imminente")),
+    );
   });
 
   it("RDAP signal enrichi — registrar + expiry (parity API)", () => {
