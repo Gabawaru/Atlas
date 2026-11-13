@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  caaPresenceSpec,
+  dmarcPresenceSpec,
   formatCaaRecord,
   formatRdapSignal,
   hasCaaInSample,
@@ -10,6 +12,7 @@ import {
   isHstsMaxAgeWeak,
   parseHstsMaxAge,
   rdapExpiryDaysRemaining,
+  spfPresenceSpec,
 } from "./index";
 
 describe("@atlas/risk-table helpers", () => {
@@ -59,5 +62,21 @@ describe("@atlas/risk-table helpers", () => {
       "issue critical letsencrypt.org",
     );
     assert.equal(formatCaaRecord({}), null);
+  });
+
+  it("DNS auth presence specs", () => {
+    assert.equal(spfPresenceSpec(undefined), null);
+    assert.equal(spfPresenceSpec(["v=spf1 -all"])?.control, "DNS — SPF présent");
+    assert.equal(spfPresenceSpec([])?.control, "DNS — SPF absent");
+    assert.equal(
+      dmarcPresenceSpec(["v=DMARC1; p=none"])?.control,
+      "DNS — DMARC présent",
+    );
+    assert.equal(dmarcPresenceSpec([])?.control, "DNS — DMARC absent");
+    assert.equal(
+      caaPresenceSpec(["issue letsencrypt.org"])?.control,
+      "DNS — CAA présent",
+    );
+    assert.equal(caaPresenceSpec([])?.control, "DNS — CAA absent");
   });
 });

@@ -4,6 +4,8 @@
  * Labels FR : critique / élevé / moyen / faible / info.
  */
 export {
+  caaPresenceSpec,
+  dmarcPresenceSpec,
   formatRdapSignal,
   hasCaaInSample,
   hasDmarcInTxtSample,
@@ -13,8 +15,11 @@ export {
   parseHstsMaxAge,
   rdapExpiryDaysRemaining,
   rdapExpiryIso,
+  spfPresenceSpec,
 } from "@atlas/risk-table";
 import {
+  caaPresenceSpec,
+  dmarcPresenceSpec,
   formatRdapSignal,
   hasCaaInSample,
   hasDmarcInTxtSample,
@@ -24,6 +29,7 @@ import {
   parseHstsMaxAge,
   rdapExpiryDaysRemaining,
   rdapExpiryIso,
+  spfPresenceSpec,
 } from "@atlas/risk-table";
 
 export type RiskCode = "critical" | "high" | "medium" | "low" | "info";
@@ -668,35 +674,10 @@ function pushSpfPresenceRow(
   ev: EvidenceLike,
 ) {
   // Apex only — RDAP runs on apex; avoid scoring SPF on www/api TXT.
-  // Caller already skips unresolved hosts; do not re-check resolved===false (TS).
   if (!ev.osint) return;
-  if (!Array.isArray(ev.dns?.txtSample)) return;
-  const present = hasSpfInTxtSample(ev.dns.txtSample);
-  if (present) {
-    const hit = ev.dns.txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
-    out.push(
-      row({
-        control: "DNS — SPF présent",
-        host,
-        url,
-        riskCode: "info",
-        compromise: "Observation — politique d'émission mail publiée (TXT)",
-        signal: hit.trim().slice(0, 120),
-      }),
-    );
-    return;
-  }
-  out.push(
-    row({
-      control: "DNS — SPF absent",
-      host,
-      url,
-      riskCode: "low",
-      compromise:
-        "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
-      signal: `txt=${ev.dns.txtSample.length}`,
-    }),
-  );
+  const spec = spfPresenceSpec(ev.dns?.txtSample);
+  if (!spec) return;
+  out.push(row({ ...spec, host, url }));
 }
 
 function pushDmarcPresenceRow(
@@ -707,34 +688,9 @@ function pushDmarcPresenceRow(
 ) {
   // Apex only (osint gate) — score from `_dmarc.` TXT probe (not apex TXT).
   if (!ev.osint) return;
-  if (!Array.isArray(ev.dns?.dmarcTxtSample)) return;
-  const sample = ev.dns.dmarcTxtSample;
-  const present = hasDmarcInTxtSample(sample);
-  if (present) {
-    const hit = sample.find((t) => /\bv=DMARC1\b/i.test(t)) ?? "v=DMARC1";
-    out.push(
-      row({
-        control: "DNS — DMARC présent",
-        host,
-        url,
-        riskCode: "info",
-        compromise: "Observation — politique DMARC publiée (_dmarc TXT)",
-        signal: hit.trim().slice(0, 120),
-      }),
-    );
-    return;
-  }
-  out.push(
-    row({
-      control: "DNS — DMARC absent",
-      host,
-      url,
-      riskCode: "low",
-      compromise:
-        "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
-      signal: `dmarcTxt=${sample.length}`,
-    }),
-  );
+  const spec = dmarcPresenceSpec(ev.dns?.dmarcTxtSample);
+  if (!spec) return;
+  out.push(row({ ...spec, host, url }));
 }
 
 function pushCaaPresenceRow(
@@ -745,32 +701,9 @@ function pushCaaPresenceRow(
 ) {
   // Apex only (osint gate) — CAA RRs on the apex name (no subdomain enum).
   if (!ev.osint) return;
-  if (!Array.isArray(ev.dns?.caaSample)) return;
-  const sample = ev.dns.caaSample;
-  if (hasCaaInSample(sample)) {
-    out.push(
-      row({
-        control: "DNS — CAA présent",
-        host,
-        url,
-        riskCode: "info",
-        compromise: "Observation — autorité de certification contrainte (CAA)",
-        signal: sample.filter((s) => s.trim()).slice(0, 3).join(" · ").slice(0, 120),
-      }),
-    );
-    return;
-  }
-  out.push(
-    row({
-      control: "DNS — CAA absent",
-      host,
-      url,
-      riskCode: "low",
-      compromise:
-        "Exposition faible — pas d'enregistrement CAA observé sur l'apex",
-      signal: `caa=${sample.length}`,
-    }),
-  );
+  const spec = caaPresenceSpec(ev.dns?.caaSample);
+  if (!spec) return;
+  out.push(row({ ...spec, host, url }));
 }
 
 /** Construit le tableau risque/compromission depuis les preuves Presence. */

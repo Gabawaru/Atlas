@@ -1,6 +1,6 @@
 /**
- * Pure risk-table helpers shared by API + client (atl-retours DRY slice 1).
- * Full buildPresenceRiskTable still mirrored; helpers live here to stop drift.
+ * Pure risk-table helpers shared by API + client (atl-retours DRY).
+ * Full buildPresenceRiskTable still mirrored; helpers + DNS auth specs here.
  */
 
 /** 180 j — plancher Mozilla ; pas d'exigence preload. */
@@ -101,4 +101,85 @@ export function formatCaaRecord(rec: {
     return `iodef${rec.critical ? " critical" : ""} ${rec.iodef.trim()}`;
   }
   return null;
+}
+
+/** Shared control/signal payload for SPF / DMARC / CAA presence rows. */
+export type DnsAuthPresenceSpec = {
+  control: string;
+  riskCode: "info" | "low";
+  compromise: string;
+  signal: string;
+};
+
+/** SPF from apex TXT sample — null if sample missing (legacy skip). */
+export function spfPresenceSpec(
+  txtSample: string[] | undefined,
+): DnsAuthPresenceSpec | null {
+  if (!Array.isArray(txtSample)) return null;
+  if (hasSpfInTxtSample(txtSample)) {
+    const hit = txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
+    return {
+      control: "DNS — SPF présent",
+      riskCode: "info",
+      compromise: "Observation — politique d'émission mail publiée (TXT)",
+      signal: hit.trim().slice(0, 120),
+    };
+  }
+  return {
+    control: "DNS — SPF absent",
+    riskCode: "low",
+    compromise:
+      "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
+    signal: `txt=${txtSample.length}`,
+  };
+}
+
+/** DMARC from `_dmarc.` TXT sample — null if probe missing. */
+export function dmarcPresenceSpec(
+  dmarcTxtSample: string[] | undefined,
+): DnsAuthPresenceSpec | null {
+  if (!Array.isArray(dmarcTxtSample)) return null;
+  if (hasDmarcInTxtSample(dmarcTxtSample)) {
+    const hit =
+      dmarcTxtSample.find((t) => /\bv=DMARC1\b/i.test(t)) ?? "v=DMARC1";
+    return {
+      control: "DNS — DMARC présent",
+      riskCode: "info",
+      compromise: "Observation — politique DMARC publiée (_dmarc TXT)",
+      signal: hit.trim().slice(0, 120),
+    };
+  }
+  return {
+    control: "DNS — DMARC absent",
+    riskCode: "low",
+    compromise:
+      "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
+    signal: `dmarcTxt=${dmarcTxtSample.length}`,
+  };
+}
+
+/** CAA from apex sample — null if probe missing. */
+export function caaPresenceSpec(
+  caaSample: string[] | undefined,
+): DnsAuthPresenceSpec | null {
+  if (!Array.isArray(caaSample)) return null;
+  if (hasCaaInSample(caaSample)) {
+    return {
+      control: "DNS — CAA présent",
+      riskCode: "info",
+      compromise: "Observation — autorité de certification contrainte (CAA)",
+      signal: caaSample
+        .filter((s) => s.trim())
+        .slice(0, 3)
+        .join(" · ")
+        .slice(0, 120),
+    };
+  }
+  return {
+    control: "DNS — CAA absent",
+    riskCode: "low",
+    compromise:
+      "Exposition faible — pas d'enregistrement CAA observé sur l'apex",
+    signal: `caa=${caaSample.length}`,
+  };
 }
