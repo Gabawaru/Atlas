@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+echo "==> Build @atlas/risk-table (client dep types/dist)"
+pnpm --filter @atlas/risk-table run build
+
 echo "==> Build @atlas/client"
 pnpm --filter @atlas/client run build
 

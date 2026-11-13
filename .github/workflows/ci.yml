@@ -161,13 +161,15 @@ jobs:
           path: |
             packages/shared/dist
             packages/policy-guard/dist
-          key: ${{ runner.os }}-pkg-dist-${{ hashFiles('packages/shared/src/**', 'packages/policy-guard/src/**', 'packages/*/package.json', 'packages/*/tsconfig.json') }}
+            packages/risk-table/dist
+          key: ${{ runner.os }}-pkg-dist-${{ hashFiles('packages/shared/src/**', 'packages/policy-guard/src/**', 'packages/risk-table/src/**', 'packages/*/package.json', 'packages/*/tsconfig.json') }}
 
       - name: Build shared packages
         if: steps.cache-pkg-dist.outputs.cache-hit != 'true'
         run: |
           pnpm --filter @atlas/shared build
           pnpm --filter @atlas/policy-guard build
+          pnpm --filter @atlas/risk-table build
 
       - name: Prisma generate + migrate
         run: |
