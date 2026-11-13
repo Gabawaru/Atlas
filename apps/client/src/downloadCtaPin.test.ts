@@ -29,4 +29,17 @@ describe("download CTA atlas-secu.com", () => {
     assert.doesNotMatch(readme, /\best signé\b/i);
     assert.doesNotMatch(readme, /certificat (OV\/EV )?déjà/i);
   });
+
+  it("README pins download provenance tag ↔ PE ↔ Pages", () => {
+    assert.match(readme, /## Téléchargement/);
+    assert.match(readme, /https:\/\/atlas-secu\.com/);
+    assert.match(readme, /v1\.3\.3/);
+    assert.match(readme, /ProductVersion.*1\.3\.2/s);
+    assert.match(
+      readme,
+      /b19d15cdf08074538d48c96c5fbaff682a5671af12d65c05af4dd15fb5a431a1/,
+    );
+    assert.match(readme, /docs\/assets\/console-scanner\.png/);
+    assert.match(readme, /docs\/assets\/console-historique\.png/);
+  });
 });

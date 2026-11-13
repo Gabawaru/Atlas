@@ -6,9 +6,12 @@ Ce dépôt contient le **MVP vertical** : monorepo installable, Policy Guard dé
 
 ![Console Scanner Atlas](docs/assets/console-scanner.png)
 
+![Console Historique Atlas](docs/assets/console-historique.png)
+
 ## Téléchargement
 
 Installateur Windows et site public : [https://atlas-secu.com](https://atlas-secu.com) (`Atlas-Setup.exe`).  
+Release GitHub [`v1.3.3`](https://github.com/Gabawaru/Atlas/releases/tag/v1.3.3) = mêmes octets que Pages et `remote-work/offline-installer/bin/Atlas-Setup.exe` (SHA-256 `b19d15cdf08074538d48c96c5fbaff682a5671af12d65c05af4dd15fb5a431a1`) — PE `ProductVersion` **1.3.2** (NSIS).  
 L’exécutable n’est **pas encore signé** Authenticode — Windows SmartScreen peut avertir jusqu’à l’achat / câblage du certificat (voir `remote-work/atlas-v1/SIGNING.md`).
 
 ## Jalon d’acceptation (figé)
