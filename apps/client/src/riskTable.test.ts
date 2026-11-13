@@ -111,6 +111,31 @@ describe("client riskTable", () => {
     assert.ok(bilan.priorityActions.length <= 3);
   });
 
+  it("SPF apex — présent / absent (parity API, osint gate)", () => {
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    assert.ok(present.find((r) => r.control === "DNS — SPF présent"));
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"], txtSample: [] },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — SPF absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+  });
+
   it("RDAP signal enrichi — registrar + expiry (parity API)", () => {
     assert.match(
       formatRdapSignal({
