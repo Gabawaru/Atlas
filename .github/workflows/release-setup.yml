@@ -25,20 +25,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify PE ship asset
-        run: |
-          set -euo pipefail
-          ASSET=remote-work/offline-installer/bin/Atlas-Setup.exe
-          test -f "$ASSET"
-          # MZ header
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("remote-work/offline-installer/bin/Atlas-Setup.exe")
-          data = p.read_bytes()
-          assert data[:2] == b"MZ", data[:2]
-          print(f"ok size={p.stat().st_size} sha256={__import__('hashlib').sha256(data).hexdigest()}")
-          PY
-
       - name: Resolve tag
         id: tag
         env:
@@ -50,6 +36,35 @@ jobs:
           else
             echo "name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify PE + NSIS version lock + /S guards
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          set -euo pipefail
+          ASSET=remote-work/offline-installer/bin/Atlas-Setup.exe
+          NSI=remote-work/atlas-v1/installer/Atlas.nsi
+          test -f "$ASSET"
+          test -f "$NSI"
+          # MZ + min size (stub PEs are ~tens of KB; ship is ~2 MiB)
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          tag = os.environ["TAG"].lstrip("v")
+          assert re.fullmatch(r"\d+\.\d+\.\d+", tag), tag
+          nsi = Path("remote-work/atlas-v1/installer/Atlas.nsi").read_text(encoding="utf-8")
+          m = re.search(r'!define PRODUCT_VERSION "(\d+\.\d+\.\d+)"', nsi)
+          assert m, "PRODUCT_VERSION missing"
+          assert m.group(1) == tag, f"NSIS {m.group(1)} != tag {tag}"
+          assert "IfSilent skipUninstDesktop" in nsi, "IfSilent MessageBox guard missing"
+          assert "SetAutoClose true" in nsi, "SetAutoClose missing"
+          assert "MUI_FINISHPAGE_RUN_NOTCHECKED" in nsi, "silent auto-run guard missing"
+          p = Path("remote-work/offline-installer/bin/Atlas-Setup.exe")
+          data = p.read_bytes()
+          assert data[:2] == b"MZ", data[:2]
+          assert p.stat().st_size >= 2_000_000, p.stat().st_size
+          print(f"ok tag=v{tag} size={p.stat().st_size} sha256={__import__('hashlib').sha256(data).hexdigest()}")
+          PY
 
       - name: Create or update release + upload asset
         env:
