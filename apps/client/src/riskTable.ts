@@ -1,6 +1,7 @@
 /** Tableau Contrôle → risque → compromission (labels FR). Miroir API. */
 export {
   formatRdapSignal,
+  hasCaaInSample,
   hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
@@ -11,6 +12,7 @@ export {
 } from "@atlas/risk-table";
 import {
   formatRdapSignal,
+  hasCaaInSample,
   hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
@@ -65,6 +67,8 @@ type EvidenceLike = {
     txtSample?: string[];
     /** Apex — TXT `_dmarc.<host>` (probe fixe) */
     dmarcTxtSample?: string[];
+    /** Apex — CAA RRs formatés */
+    caaSample?: string[];
     error?: string;
   };
   tls?: {
@@ -700,6 +704,38 @@ export function buildPresenceRiskTable(
             compromise:
               "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
             signal: `dmarcTxt=${sample.length}`,
+          }),
+        );
+      }
+    }
+    if (ev.osint && Array.isArray(ev.dns?.caaSample)) {
+      const sample = ev.dns.caaSample;
+      if (hasCaaInSample(sample)) {
+        out.push(
+          row({
+            control: "DNS — CAA présent",
+            host,
+            url,
+            riskCode: "info",
+            compromise:
+              "Observation — autorité de certification contrainte (CAA)",
+            signal: sample
+              .filter((s) => s.trim())
+              .slice(0, 3)
+              .join(" · ")
+              .slice(0, 120),
+          }),
+        );
+      } else {
+        out.push(
+          row({
+            control: "DNS — CAA absent",
+            host,
+            url,
+            riskCode: "low",
+            compromise:
+              "Exposition faible — pas d'enregistrement CAA observé sur l'apex",
+            signal: `caa=${sample.length}`,
           }),
         );
       }

@@ -73,8 +73,32 @@ export function hasSpfInTxtSample(txtSample: string[] | undefined): boolean {
   return txtSample.some((t) => /\bv=spf1\b/i.test(t));
 }
 
-/** Apex TXT DMARC presence (`v=DMARC1`) — no `_dmarc.` enum, sample only. */
+/** Apex TXT DMARC presence (`v=DMARC1`) — sample from `_dmarc.` probe. */
 export function hasDmarcInTxtSample(txtSample: string[] | undefined): boolean {
   if (!Array.isArray(txtSample) || txtSample.length === 0) return false;
   return txtSample.some((t) => /\bv=DMARC1\b/i.test(t));
+}
+
+/** Apex CAA presence (formatted issue/iodef lines). */
+export function hasCaaInSample(caaSample: string[] | undefined): boolean {
+  return Array.isArray(caaSample) && caaSample.some((t) => t.trim().length > 0);
+}
+
+/** Format one CAA RR for signal (issue / issuewild / iodef). */
+export function formatCaaRecord(rec: {
+  critical?: boolean;
+  issue?: string;
+  issuewild?: string;
+  iodef?: string;
+}): string | null {
+  if (rec.issue?.trim()) {
+    return `issue${rec.critical ? " critical" : ""} ${rec.issue.trim()}`;
+  }
+  if (rec.issuewild?.trim()) {
+    return `issuewild${rec.critical ? " critical" : ""} ${rec.issuewild.trim()}`;
+  }
+  if (rec.iodef?.trim()) {
+    return `iodef${rec.critical ? " critical" : ""} ${rec.iodef.trim()}`;
+  }
+  return null;
 }

@@ -7,6 +7,7 @@ import {
   collapseRiskTableByControl,
   evidenceTargetUrl,
   formatRdapSignal,
+  hasCaaInSample,
   hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
@@ -121,6 +122,52 @@ describe("risk-table", () => {
       www.some((r) => r.control.includes("SPF")),
       false,
       "www without osint must not score SPF",
+    );
+  });
+
+  it("CAA apex — présent info / absent faible (osint gate)", () => {
+    assert.equal(hasCaaInSample(["issue letsencrypt.org"]), true);
+    assert.equal(hasCaaInSample([]), false);
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          caaSample: ["issue letsencrypt.org", "iodef mailto:sec@apex.test"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const ok = present.find((r) => r.control === "DNS — CAA présent");
+    assert.ok(ok);
+    assert.equal(ok!.risk, "info");
+    assert.match(ok!.signal, /letsencrypt/);
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          caaSample: [],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — CAA absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+    const noProbe = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: { resolved: true, addresses: ["1.1.1.1"], txtSample: [] },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    assert.equal(
+      noProbe.some((r) => r.control.includes("CAA")),
+      false,
+      "legacy evidence without caaSample must not score CAA",
     );
   });
 

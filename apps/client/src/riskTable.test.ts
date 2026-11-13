@@ -137,6 +137,35 @@ describe("client riskTable", () => {
     assert.equal(absent!.risk, "faible");
   });
 
+  it("CAA apex — présent / absent (parity API, osint gate)", () => {
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          caaSample: ["issue pki.goog"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    assert.ok(present.find((r) => r.control === "DNS — CAA présent"));
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          caaSample: [],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — CAA absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+  });
+
   it("DMARC apex — présent / absent (parity API, osint gate)", () => {
     const present = buildPresenceRiskTable([
       {

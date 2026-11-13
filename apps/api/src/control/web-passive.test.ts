@@ -135,7 +135,12 @@ describe("web.passive.presence.v1", () => {
             txt: ["v=DMARC1; p=none"],
           };
         }
-        return { a: ["93.184.216.34"], aaaa: [], txt: ["v=spf1 -all"] };
+        return {
+          a: ["93.184.216.34"],
+          aaaa: [],
+          txt: ["v=spf1 -all"],
+          caa: ["issue letsencrypt.org"],
+        };
       },
       fetchFn: async () => ({ status: 200, headers: {} }),
       rdapFn: async (host) => ({
@@ -150,6 +155,7 @@ describe("web.passive.presence.v1", () => {
     assert.equal(results[0]!.osint?.ok, true);
     assert.equal(results[0]!.osint?.registrar, "Mock Registrar");
     assert.deepEqual(results[0]!.dns.dmarcTxtSample, ["v=DMARC1; p=none"]);
+    assert.deepEqual(results[0]!.dns.caaSample, ["issue letsencrypt.org"]);
     assert.ok(lookedUp.includes("_dmarc.example.com"));
     assert.equal(isApexInAllowlist("www.example.com", new Set(["example.com"])), false);
   });
