@@ -42,6 +42,9 @@ importers:
       '@atlas/policy-guard':
         specifier: workspace:*
         version: link:../../packages/policy-guard
+      '@atlas/risk-table':
+        specifier: workspace:*
+        version: link:../../packages/risk-table
       '@atlas/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -115,6 +118,9 @@ importers:
 
   apps/client:
     dependencies:
+      '@atlas/risk-table':
+        specifier: workspace:*
+        version: link:../../packages/risk-table
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -149,6 +155,18 @@ importers:
       '@atlas/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/risk-table:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
