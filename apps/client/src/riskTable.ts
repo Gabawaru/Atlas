@@ -1,5 +1,7 @@
 /** Tableau Contrôle → risque → compromission (labels FR). Miroir API. */
 export {
+  caaPresenceSpec,
+  dmarcPresenceSpec,
   formatRdapSignal,
   hasCaaInSample,
   hasDmarcInTxtSample,
@@ -9,17 +11,18 @@ export {
   parseHstsMaxAge,
   rdapExpiryDaysRemaining,
   rdapExpiryIso,
+  spfPresenceSpec,
 } from "@atlas/risk-table";
 import {
+  caaPresenceSpec,
+  dmarcPresenceSpec,
   formatRdapSignal,
-  hasCaaInSample,
-  hasDmarcInTxtSample,
-  hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
   parseHstsMaxAge,
   rdapExpiryDaysRemaining,
   rdapExpiryIso,
+  spfPresenceSpec,
 } from "@atlas/risk-table";
 
 export type RiskCode = "critical" | "high" | "medium" | "low" | "info";
@@ -650,95 +653,14 @@ export function buildPresenceRiskTable(
       }
     }
 
-    // Apex-only (osint gate) — SPF from apex TXT; DMARC from `_dmarc.` sample.
-    // unresolved hosts already skipped above (resolved === false continue).
-    if (ev.osint && Array.isArray(ev.dns?.txtSample)) {
-      if (hasSpfInTxtSample(ev.dns.txtSample)) {
-        const hit =
-          ev.dns.txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
-        out.push(
-          row({
-            control: "DNS — SPF présent",
-            host,
-            url,
-            riskCode: "info",
-            compromise: "Observation — politique d'émission mail publiée (TXT)",
-            signal: hit.trim().slice(0, 120),
-          }),
-        );
-      } else {
-        out.push(
-          row({
-            control: "DNS — SPF absent",
-            host,
-            url,
-            riskCode: "low",
-            compromise:
-              "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
-            signal: `txt=${ev.dns.txtSample.length}`,
-          }),
-        );
-      }
-    }
-    if (ev.osint && Array.isArray(ev.dns?.dmarcTxtSample)) {
-      const sample = ev.dns.dmarcTxtSample;
-      if (hasDmarcInTxtSample(sample)) {
-        const hit = sample.find((t) => /\bv=DMARC1\b/i.test(t)) ?? "v=DMARC1";
-        out.push(
-          row({
-            control: "DNS — DMARC présent",
-            host,
-            url,
-            riskCode: "info",
-            compromise: "Observation — politique DMARC publiée (_dmarc TXT)",
-            signal: hit.trim().slice(0, 120),
-          }),
-        );
-      } else {
-        out.push(
-          row({
-            control: "DNS — DMARC absent",
-            host,
-            url,
-            riskCode: "low",
-            compromise:
-              "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
-            signal: `dmarcTxt=${sample.length}`,
-          }),
-        );
-      }
-    }
-    if (ev.osint && Array.isArray(ev.dns?.caaSample)) {
-      const sample = ev.dns.caaSample;
-      if (hasCaaInSample(sample)) {
-        out.push(
-          row({
-            control: "DNS — CAA présent",
-            host,
-            url,
-            riskCode: "info",
-            compromise:
-              "Observation — autorité de certification contrainte (CAA)",
-            signal: sample
-              .filter((s) => s.trim())
-              .slice(0, 3)
-              .join(" · ")
-              .slice(0, 120),
-          }),
-        );
-      } else {
-        out.push(
-          row({
-            control: "DNS — CAA absent",
-            host,
-            url,
-            riskCode: "low",
-            compromise:
-              "Exposition faible — pas d'enregistrement CAA observé sur l'apex",
-            signal: `caa=${sample.length}`,
-          }),
-        );
-      }
+    // Apex-only (osint gate) — shared SPF/DMARC/CAA specs (atl-retours DRY).
+    if (ev.osint) {
+      const spf = spfPresenceSpec(ev.dns?.txtSample);
+      if (spf) out.push(row({ ...spf, host, url }));
+      const dmarc = dmarcPresenceSpec(ev.dns?.dmarcTxtSample);
+      if (dmarc) out.push(row({ ...dmarc, host, url }));
+      const caa = caaPresenceSpec(ev.dns?.caaSample);
+      if (caa) out.push(row({ ...caa, host, url }));
     }
   }
 
