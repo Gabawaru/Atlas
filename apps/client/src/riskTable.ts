@@ -1,6 +1,8 @@
 /** Tableau Contrôle → risque → compromission (labels FR). Miroir API. */
 export {
   formatRdapSignal,
+  hasDmarcInTxtSample,
+  hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
   parseHstsMaxAge,
@@ -9,6 +11,8 @@ export {
 } from "@atlas/risk-table";
 import {
   formatRdapSignal,
+  hasDmarcInTxtSample,
+  hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
   parseHstsMaxAge,
@@ -59,6 +63,8 @@ type EvidenceLike = {
     resolved?: boolean;
     addresses?: string[];
     txtSample?: string[];
+    /** Apex — TXT `_dmarc.<host>` (probe fixe) */
+    dmarcTxtSample?: string[];
     error?: string;
   };
   tls?: {
@@ -640,11 +646,10 @@ export function buildPresenceRiskTable(
       }
     }
 
-    // Apex-only (osint gate) — SPF from TXT sample, no DMARC/CAA enum.
+    // Apex-only (osint gate) — SPF from apex TXT; DMARC from `_dmarc.` sample.
     // unresolved hosts already skipped above (resolved === false continue).
     if (ev.osint && Array.isArray(ev.dns?.txtSample)) {
-      const present = ev.dns.txtSample.some((t) => /\bv=spf1\b/i.test(t));
-      if (present) {
+      if (hasSpfInTxtSample(ev.dns.txtSample)) {
         const hit =
           ev.dns.txtSample.find((t) => /\bv=spf1\b/i.test(t)) ?? "v=spf1";
         out.push(
@@ -667,6 +672,34 @@ export function buildPresenceRiskTable(
             compromise:
               "Exposition faible — pas d'enregistrement SPF observé sur l'apex",
             signal: `txt=${ev.dns.txtSample.length}`,
+          }),
+        );
+      }
+    }
+    if (ev.osint && Array.isArray(ev.dns?.dmarcTxtSample)) {
+      const sample = ev.dns.dmarcTxtSample;
+      if (hasDmarcInTxtSample(sample)) {
+        const hit = sample.find((t) => /\bv=DMARC1\b/i.test(t)) ?? "v=DMARC1";
+        out.push(
+          row({
+            control: "DNS — DMARC présent",
+            host,
+            url,
+            riskCode: "info",
+            compromise: "Observation — politique DMARC publiée (_dmarc TXT)",
+            signal: hit.trim().slice(0, 120),
+          }),
+        );
+      } else {
+        out.push(
+          row({
+            control: "DNS — DMARC absent",
+            host,
+            url,
+            riskCode: "low",
+            compromise:
+              "Exposition faible — pas d'enregistrement DMARC observé (_dmarc)",
+            signal: `dmarcTxt=${sample.length}`,
           }),
         );
       }

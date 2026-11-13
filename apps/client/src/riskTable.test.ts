@@ -137,6 +137,36 @@ describe("client riskTable", () => {
     assert.equal(absent!.risk, "faible");
   });
 
+  it("DMARC apex — présent / absent (parity API, osint gate)", () => {
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          dmarcTxtSample: ["v=DMARC1; p=quarantine"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    assert.ok(present.find((r) => r.control === "DNS — DMARC présent"));
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+          dmarcTxtSample: [],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — DMARC absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+  });
+
   it("RDAP expiry windows — moyen / faible (parity API)", () => {
     assert.equal(
       rdapExpiryDaysRemaining(

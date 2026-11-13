@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   formatRdapSignal,
+  hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isHstsMaxAgeWeak,
@@ -41,5 +42,10 @@ describe("@atlas/risk-table helpers", () => {
   it("SPF txt sample", () => {
     assert.equal(hasSpfInTxtSample(["v=spf1 -all"]), true);
     assert.equal(hasSpfInTxtSample(["hello"]), false);
+  });
+
+  it("DMARC txt sample", () => {
+    assert.equal(hasDmarcInTxtSample(["v=DMARC1; p=none"]), true);
+    assert.equal(hasDmarcInTxtSample(["v=spf1 -all"]), false);
   });
 });

@@ -7,6 +7,7 @@ import {
   collapseRiskTableByControl,
   evidenceTargetUrl,
   formatRdapSignal,
+  hasDmarcInTxtSample,
   hasSpfInTxtSample,
   HSTS_MAX_AGE_FLOOR_SEC,
   isAutoRenewIssuer,
@@ -120,6 +121,73 @@ describe("risk-table", () => {
       www.some((r) => r.control.includes("SPF")),
       false,
       "www without osint must not score SPF",
+    );
+  });
+
+  it("DMARC apex — présent info / absent faible (_dmarc sample, osint gate)", () => {
+    assert.equal(hasDmarcInTxtSample(["v=DMARC1; p=reject"]), true);
+    assert.equal(hasDmarcInTxtSample(["v=spf1 -all"]), false);
+    const present = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+          dmarcTxtSample: ["v=DMARC1; p=none; rua=mailto:d@apex.test"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const ok = present.find((r) => r.control === "DNS — DMARC présent");
+    assert.ok(ok);
+    assert.equal(ok!.risk, "info");
+    assert.match(ok!.signal, /v=DMARC1/i);
+    const missing = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+          dmarcTxtSample: [],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    const absent = missing.find((r) => r.control === "DNS — DMARC absent");
+    assert.ok(absent);
+    assert.equal(absent!.risk, "faible");
+    const noProbe = buildPresenceRiskTable([
+      {
+        host: "apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          txtSample: ["v=spf1 -all"],
+        },
+        osint: { ok: true, source: "rdap" },
+      },
+    ]);
+    assert.equal(
+      noProbe.some((r) => r.control.includes("DMARC")),
+      false,
+      "legacy evidence without dmarcTxtSample must not score DMARC",
+    );
+    const www = buildPresenceRiskTable([
+      {
+        host: "www.apex.test",
+        dns: {
+          resolved: true,
+          addresses: ["1.1.1.1"],
+          dmarcTxtSample: ["v=DMARC1; p=none"],
+        },
+      },
+    ]);
+    assert.equal(
+      www.some((r) => r.control.includes("DMARC")),
+      false,
+      "www without osint must not score DMARC",
     );
   });
 
